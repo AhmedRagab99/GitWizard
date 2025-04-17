@@ -5,13 +5,12 @@ import SwiftUI
 struct RepoInfo: Identifiable {
     let id = UUID()
     var name: String = "MyExampleRepo"
+    var currentBranch: String = "main"
+    var remotes: [(name: String, url: String)] = []
     // Add other repo details if needed
 }
 
-struct Branch: Identifiable, Hashable {
-    let id = UUID()
-    var name: String
-}
+
 
 struct Commit: Identifiable, Hashable {
     let id = UUID()
@@ -61,461 +60,335 @@ enum CommitType: String, Hashable {
 
 // --- Main View Structure ---
 
+struct RepositorySelectionView: View {
+    @ObservedObject var viewModel: GitViewModel
+    @Binding var isShowingFilePicker: Bool
+    @Binding var selectedDirectory: URL?
+
+    var body: some View {
+        VStack(spacing: 20) {
+            if viewModel.isSearchingRepositories {
+                ProgressView("Searching for repositories...")
+            } else if !viewModel.foundRepositories.isEmpty {
+                List(viewModel.foundRepositories, id: \.self) { url in
+                    Button {
+                        viewModel.selectRepository(url)
+                    } label: {
+                        VStack(alignment: .leading) {
+                            Text(url.lastPathComponent)
+                                .font(.headline)
+                            Text(url.path)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Button("Search Another Directory") {
+                    isShowingFilePicker = true
+                }
+            } else {
+                VStack(spacing: 16) {
+                    Text("Welcome to Git Client")
+                        .font(.title)
+
+                    Text("Choose a directory to find Git repositories")
+                        .foregroundColor(.secondary)
+
+                    Button("Choose Directory") {
+                        isShowingFilePicker = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+        .padding()
+    }
+}
+
 struct GitClientView: View {
-    // Use the ViewModel as the source of truth
     @StateObject private var viewModel = GitViewModel()
+    @State private var isShowingFilePicker = false
+    @State private var selectedDirectory: URL?
 
     var body: some View {
         NavigationSplitView {
-            // Pass necessary data/bindings from ViewModel
-            SidebarView(
-                repoName: viewModel.repoInfo.name,
-                branches: viewModel.branches,
-                workspaceCommands: viewModel.workspaceCommands,
-                tags: viewModel.tags,
-                stashes: viewModel.stashes,
-                selection: $viewModel.selectedSidebarItem,
-                // Pass action closures
-                onFetch: viewModel.performFetch,
-                onPull: viewModel.performPull,
-                onPush: viewModel.performPush,
-                onCommit: viewModel.performCommit
-            )
+            SidebarView(viewModel: viewModel)
         } content: {
-            HistoryView(
-                commits: viewModel.commits,
-                selectedCommit: $viewModel.selectedCommit
-            )
+            if let url = viewModel.repositoryURL {
+                HistoryView(viewModel: viewModel)
+            } else {
+                RepositorySelectionView(
+                    viewModel: viewModel,
+                    isShowingFilePicker: $isShowingFilePicker,
+                    selectedDirectory: $selectedDirectory
+                )
+            }
         } detail: {
-            CommitDetailView(
-                commit: viewModel.selectedCommit,
-                selectedFile: $viewModel.selectedFileChange, // Bind selected file
-                diffContent: viewModel.diffContent,      // Pass diff content
-                isLoadingDiff: viewModel.isLoading       // Pass loading state
-            )
+            if let commit = viewModel.selectedCommit {
+                CommitDetailView(commit: commit, details: viewModel.commitDetails)
+            } else {
+                Text("Select a commit to view details")
+                    .foregroundColor(.secondary)
+            }
         }
-        .navigationSplitViewStyle(.balanced)
-        // Display global errors from the ViewModel
-        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil), actions: {
-            Button("OK") { viewModel.errorMessage = nil }
-        }, message: {
-            Text(viewModel.errorMessage ?? "An unknown error occurred.")
-        })
+        .fileImporter(
+            isPresented: $isShowingFilePicker,
+            allowedContentTypes: [.directory],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    selectedDirectory = url
+                    viewModel.searchForRepositories(in: url)
+                }
+            case .failure(let error):
+                viewModel.errorMessage = "Failed to select directory: \(error.localizedDescription)"
+            }
+        }
+        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+            Button("OK") {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            if let error = viewModel.errorMessage {
+                Text(error)
+            }
+        }
     }
 }
 
 // --- Sidebar View ---
 struct SidebarView: View {
-    // Receive data and bindings from parent/ViewModel
-    let repoName: String
-    let branches: [Branch]
-    let workspaceCommands: [WorkspaceCommand]
-    let tags: [Tag]
-    let stashes: [Stash]
-    @Binding var selection: AnyHashable?
-
-    // Actions passed from ViewModel
-    let onFetch: () -> Void
-    let onPull: () -> Void
-    let onPush: () -> Void
-    let onCommit: () -> Void
+    @ObservedObject var viewModel: GitViewModel
 
     var body: some View {
-        List(selection: $selection) {
-            Section("Workspace") {
-                // Convert Labels to Buttons triggering ViewModel actions
-                ForEach(workspaceCommands) { command in
-                    Button {
-                        // Call the appropriate action based on command name
-                        switch command.name {
-                        case "Fetch": onFetch()
-                        case "Pull": onPull()
-                        case "Push": onPush()
-                        case "Commit": onCommit()
-                        default: print("Unknown command: \(command.name)")
-                        }
-                    } label: {
-                        Label(command.name, systemImage: command.icon)
-                    }
-                    .buttonStyle(.plain) // Use plain style for list buttons
-                    .tag(command) // Keep tag for potential selection logic if needed
-                }
+        List {
+            Section("Repository") {
+                Text(viewModel.repoInfo.name)
+                Text("Branch: \(viewModel.repoInfo.currentBranch)")
             }
 
             Section("Branches") {
-                ForEach(branches) { branch in
-                    Label(branch.name, systemImage: "point.3.connected.trianglepath.dotted").tag(branch)
+                ForEach(viewModel.branches) { branch in
+                    HStack {
+                        Text(branch.name)
+                        if branch.isCurrent {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.green)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        viewModel.selectedBranch = branch
+                    }
                 }
             }
 
             Section("Tags") {
-                 ForEach(tags) { tag in
-                    Label(tag.name, systemImage: "tag.fill").tag(tag)
+                ForEach(viewModel.tags) { tag in
+                    Text(tag.name)
                 }
             }
 
-             Section("Stashes") {
-                 ForEach(stashes) { stash in
-                    VStack(alignment: .leading) {
-                         Text(stash.description).font(.headline)
-                         Text(stash.date, style: .relative) + Text(" ago")
+            Section("Stashes") {
+                ForEach(viewModel.stashes) { stash in
+                    Text(stash.description)
+                }
+            }
+
+            Section("Workspace") {
+                ForEach(viewModel.workspaceCommands) { command in
+                    Button {
+                        Task {
+                            switch command.name {
+                            case "Fetch":
+                                await viewModel.performFetch()
+                            case "Pull":
+                                await viewModel.performPull()
+                            case "Push":
+                                await viewModel.performPush()
+                            case "Commit":
+                                await viewModel.performCommit()
+                            default:
+                                break
+                            }
+                        }
+                    } label: {
+                        Label(command.name, systemImage: command.icon)
                     }
-                    .tag(stash)
                 }
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle(repoName)
     }
 }
 
 // --- Commit Graph Row View ---
 struct CommitGraphRowView: View {
     let commit: Commit
-    let index: Int // Index in the displayed list (newest first)
-    let allCommits: [Commit] // Full list for context
-    let isSelected: Bool
-    let graphWidth: CGFloat = 60 // Increased width for branches/labels
-    let nodeSize: CGFloat = 8
-    let laneOffset: CGFloat = 12 // Horizontal offset for simple branching
-
-    // Precompute parent/child indices for drawing
-    private var parentIndices: [Int] {
-        commit.parentHashes.compactMap { pHash in
-            allCommits.firstIndex { $0.hash == pHash }
-        }
-    }
-
-    private var childIndices: [Int] {
-        allCommits.indices.filter { allCommits[$0].parentHashes.contains(commit.hash) }
-    }
-
-    private func commitTypeIcon(_ type: CommitType) -> String {
-        switch type {
-        case .normal: return "circle.fill"
-        case .merge: return "arrow.triangle.merge"
-        case .rebase: return "arrow.triangle.branch"
-        case .cherryPick: return "arrow.triangle.2.circlepath"
-        case .revert: return "arrow.uturn.backward"
-        }
-    }
 
     var body: some View {
-        HStack(spacing: 0) {
-            // --- Graph Canvas ---
-            Canvas { context, size in
-                let nodeCenter = CGPoint(x: size.width / 2, y: size.height / 2)
-                let isMergeCommit = commit.parentHashes.count > 1
+        HStack(spacing: 8) {
+            // Commit graph visualization
+            CommitGraphVisualization(commit: commit)
+                .frame(width: 100)
 
-                // Simplified lane calculation (just use index 0 for main line, offset for others)
-                // A real implementation needs a proper layout algorithm.
-                func xPos(for lane: Int) -> CGFloat {
-                    return nodeCenter.x - (laneOffset * CGFloat(lane))
-                }
-
-                // --- Draw Lines to Parents ---
-                for (parentIndexOffset, parentListIndex) in parentIndices.enumerated() {
-                    let parentRowDiff = parentListIndex - index
-                    let startPoint = CGPoint(x: xPos(for: parentIndexOffset), y: nodeCenter.y + nodeSize / 2)
-                    var endPoint = CGPoint(x: xPos(for: 0), y: size.height * CGFloat(parentRowDiff) + size.height / 2) // Default to parent's main lane
-
-                    // Simple curve/diagonal for merges showing in adjacent row
-                    if parentRowDiff == 1 {
-                         if isMergeCommit {
-                            endPoint.x = xPos(for: parentIndexOffset) // Keep lane for direct parent merge
-                        }
-                        let controlPoint1 = CGPoint(x: startPoint.x, y: startPoint.y + size.height / 3)
-                        let controlPoint2 = CGPoint(x: endPoint.x, y: endPoint.y - size.height / 3)
-
-                        var path = Path()
-                        path.move(to: startPoint)
-                        path.addCurve(to: endPoint, control1: controlPoint1, control2: controlPoint2)
-                        context.stroke(path, with: .color(.gray), lineWidth: 1.5)
-
-                    } else if parentRowDiff > 1 {
-                        // For non-adjacent parents, just draw a straight line down (simplified)
-                         var path = Path()
-                         path.move(to: startPoint)
-                         path.addLine(to: CGPoint(x: startPoint.x, y: size.height))
-                         context.stroke(path, with: .color(.gray.opacity(0.5)), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
-                    }
-                }
-
-                // --- Draw Lines to Children ---
-                // Similar logic to parents, drawing upwards
-                for (childIndexOffset, childListIndex) in childIndices.enumerated() {
-                    let childRowDiff = childListIndex - index // Should be negative
-                    let startPoint = CGPoint(x: xPos(for: 0), y: nodeCenter.y - nodeSize / 2)
-                    var endPoint = CGPoint(x: xPos(for: childIndexOffset), y: size.height * CGFloat(childRowDiff) + size.height/2)
-
-                    if childRowDiff == -1 { // Child is directly above
-                        let controlPoint1 = CGPoint(x: startPoint.x, y: startPoint.y - size.height / 3)
-                        let controlPoint2 = CGPoint(x: endPoint.x, y: endPoint.y + size.height / 3)
-
-                        var path = Path()
-                        path.move(to: startPoint)
-                        path.addCurve(to: endPoint, control1: controlPoint1, control2: controlPoint2)
-                        context.stroke(path, with: .color(.gray), lineWidth: 1.5)
-                    } else if childRowDiff < -1 {
-                        // For non-adjacent children, just draw line up (simplified)
-                        var path = Path()
-                        path.move(to: startPoint)
-                        path.addLine(to: CGPoint(x: startPoint.x, y: 0))
-                        context.stroke(path, with: .color(.gray.opacity(0.5)), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
-                    }
-                }
-
-                // --- Draw Commit Node ---
-                let nodeCircle = Path(ellipseIn: CGRect(x: xPos(for: 0) - nodeSize / 2,
-                                                           y: nodeCenter.y - nodeSize / 2,
-                                                           width: nodeSize,
-                                                           height: nodeSize))
-                // Use different color/stroke for merge commits?
-                context.fill(nodeCircle, with: .color(isMergeCommit ? .purple : .blue))
-                context.stroke(nodeCircle, with: .color(.primary), lineWidth: 1)
-
-            }
-            .frame(width: graphWidth)
-
-            // --- Commit Details & Branch Labels ---
+            // Commit details
             VStack(alignment: .leading, spacing: 4) {
-                // Branch Labels and Commit Type
+                Text(commit.message)
+                    .font(.headline)
+                    .lineLimit(1)
+
                 HStack {
-                    if !commit.branchNames.isEmpty {
-                        ForEach(commit.branchNames, id: \.self) { branchName in
-                            Text(branchName)
-                                .font(.caption.bold())
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(Color.gray.opacity(0.2))
-                                .clipShape(Capsule())
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Image(systemName: commitTypeIcon(commit.commitType))
-                        .foregroundStyle(commit.commitType == .normal ? .blue : .purple)
-                        .help(commit.commitType.rawValue.capitalized)
-                }
-                .padding(.bottom, 2)
-
-                Text(commit.message).font(.headline).lineLimit(1)
-                HStack(spacing: 8) {
-                    Image(systemName: commit.authorAvatar)
-                        .foregroundStyle(.secondary)
                     Text(commit.author)
-                    Text(commit.date, style: .relative)
-                    Spacer()
-                    Text(commit.hash.prefix(7))
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            }
-            .padding(.leading, 8)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
 
-            Spacer() // Pushes content to the left
+                    Text(commit.date.formatted())
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                if !commit.changedFiles.isEmpty {
+                    Text("\(commit.changedFiles.count) files changed")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer()
+
+            // Branch indicators
+            if !commit.branchNames.isEmpty {
+                VStack(alignment: .trailing) {
+                    ForEach(commit.branchNames, id: \.self) { branch in
+                        Text(branch)
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.2))
+                            .cornerRadius(4)
+                    }
+                }
+            }
         }
-        .padding(.vertical, 8) // Increased padding
-        .padding(.horizontal, 10)
-        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
-        .contentShape(Rectangle()) // Make the whole row tappable
+        .padding()
+        .background(Color(.windowBackgroundColor))
+    }
+}
+
+struct CommitGraphVisualization: View {
+    let commit: Commit
+
+    var body: some View {
+        GeometryReader { geometry in
+            let height = geometry.size.height
+            let width = geometry.size.width
+
+            ZStack {
+                // Parent connections
+                ForEach(commit.parentHashes, id: \.self) { parent in
+                    Path { path in
+                        let x = width / 2
+                        path.move(to: CGPoint(x: x, y: height))
+                        path.addLine(to: CGPoint(x: x, y: height / 2))
+                    }
+                    .stroke(Color.gray, lineWidth: 1)
+                }
+
+                // Commit node
+                Circle()
+                    .fill(commit.commitType == .merge ? Color.purple : Color.blue)
+                    .frame(width: 12, height: 12)
+                    .position(x: width / 2, y: height / 2)
+            }
+        }
     }
 }
 
 // --- History View (Main Pane) ---
 struct HistoryView: View {
-    // Receive data/bindings from ViewModel
-    let commits: [Commit]
-    @Binding var selectedCommit: Commit?
+    @ObservedObject var viewModel: GitViewModel
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                ForEach(Array(commits.enumerated()), id: \.element.id) { index, commit in
-                    CommitGraphRowView(commit: commit, index: index, allCommits: commits, isSelected: commit == selectedCommit)
+            LazyVStack(spacing: 0) {
+                ForEach(viewModel.branchCommits) { commit in
+                    CommitGraphRowView(commit: commit)
+                        .contentShape(Rectangle())
                         .onTapGesture {
-                            selectedCommit = commit
+                            viewModel.selectedCommit = commit
                         }
-                    Divider().padding(.leading, 60 + 8)
                 }
             }
         }
-        .navigationTitle("History")
-        .background(Color(NSColor.controlBackgroundColor))
-    }
-}
-
-// --- Diff View (Placeholder) ---
-struct DiffView: View {
-    let diffText: String?
-    let isLoading: Bool
-
-    var body: some View {
-        VStack(alignment: .leading) {
-            Text("Diff")
-                .font(.headline)
-                .padding(.bottom, 2)
-
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-            } else if let diffText = diffText {
-                ScrollView(.vertical) {
-                    Text(diffText)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
-                        .background(Color(NSColor.textBackgroundColor).opacity(0.7))
-                        .cornerRadius(6)
-                        .textSelection(.enabled)
-                }
-            } else {
-                Text("Select a changed file to view the diff.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-            }
-        }
-        .padding(.top, 10)
     }
 }
 
 // --- Commit Detail View ---
 struct CommitDetailView: View {
-    // Receive data/bindings from ViewModel
-    let commit: Commit?
-    @Binding var selectedFile: FileChange?
-    let diffContent: String?
-    let isLoadingDiff: Bool
-
-    // Helper for file status icon and color
-    private func fileStatusIcon(_ status: String) -> (String, Color) {
-        switch status {
-        case "Added":
-            return ("plus.circle.fill", .green)
-        case "Modified":
-            return ("pencil.circle.fill", .orange)
-        case "Deleted":
-            return ("minus.circle.fill", .red)
-        default:
-            return ("questionmark.circle.fill", .gray)
-        }
-    }
-
-    @ViewBuilder
-    private func fileStatusIconView(_ status: String) -> some View {
-        let (iconName, color) = fileStatusIcon(status)
-        Image(systemName: iconName)
-            .foregroundStyle(color)
-            .help(status) // Tooltip for accessibility
-    }
+    let commit: Commit
+    let details: GitViewModel.CommitDetails?
 
     var body: some View {
-        if let commit = commit {
-            HSplitView {
-                // Left Side: Commit Info & File List
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Commit Metadata Group
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Commit Details")
-                                .font(.title2)
-                                .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Commit header
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(commit.message)
+                        .font(.title2)
+                        .bold()
 
-                            HStack {
-                                Image(systemName: "number")
-                                Text(commit.hash)
-                                    .font(.system(.body, design: .monospaced))
-                                    .textSelection(.enabled)
-                            }
+                    HStack {
+                        Text(commit.author)
+                        Text("<\(commit.authorEmail)>")
+                            .foregroundColor(.secondary)
+                    }
 
-                            HStack {
-                                Image(systemName: "person.fill")
-                                Text(commit.author)
-                            }
+                    Text(commit.date.formatted())
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(.windowBackgroundColor))
+                .cornerRadius(8)
 
+                // Changed files
+                if let details = details {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Changed Files")
+                            .font(.headline)
+
+                        ForEach(details.changedFiles, id: \.name) { file in
                             HStack {
-                                Image(systemName: "calendar")
-                                Text(commit.date.formatted(date: .long, time: .shortened))
+                                Text(file.name)
+                                Spacer()
+                                Text(file.status)
+                                    .foregroundColor(.secondary)
                             }
                         }
-                        .padding(.bottom, 8)
-
-                        Divider()
-
-                        // Commit Message Group
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("Message")
-                                .font(.headline)
-                            Text(commit.message)
-                                .textSelection(.enabled)
-                        }
-                        .padding(.vertical, 8)
-
-                        Divider()
-
-                        // Changed Files Group (Now Selectable)
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Changed Files (\(commit.changedFiles.count))")
-                                .font(.headline)
-
-                            if commit.changedFiles.isEmpty {
-                                Text("No files changed in this commit.")
-                                    .foregroundStyle(.secondary)
-                                    .padding(.top, 5)
-                            } else {
-                                // Make file rows selectable
-                                ForEach(commit.changedFiles) { file in
-                                    HStack {
-                                        fileStatusIconView(file.status)
-                                        Text(file.name)
-                                        Spacer()
-                                    }
-                                    .padding(.vertical, 3)
-                                    .padding(.horizontal, 5)
-                                    .background(selectedFile == file ? Color.accentColor.opacity(0.3) : Color.clear)
-                                    .cornerRadius(4)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        selectedFile = file
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.top, 8)
-
-                        Spacer()
                     }
                     .padding()
-                }
-                .frame(minWidth: 300)
+                    .background(Color(.windowBackgroundColor))
+                    .cornerRadius(8)
 
-                // Right Side: Diff View
-                DiffView(diffText: diffContent, isLoading: isLoadingDiff)
-                    .frame(minWidth: 400)
+                    // Diff content
+                    if let diff = details.diffContent {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Changes")
+                                .font(.headline)
+
+                            Text(diff)
+                                .font(.system(.body, design: .monospaced))
+                                .padding()
+                                .background(Color(.textBackgroundColor))
+                                .cornerRadius(8)
+                        }
+                    }
+                }
             }
-        } else {
-            // Placeholder view when no commit is selected
-            VStack {
-                Spacer()
-                Image(systemName: "point.3.connected.trianglepath.dotted")
-                    .font(.system(size: 50))
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 10)
-                Text("Select a commit")
-                    .font(.title)
-                    .foregroundStyle(.secondary)
-                Text("Details about the selected commit and changed files will appear here.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding()
         }
     }
 }
@@ -666,6 +539,270 @@ extension Commit {
                 """
             )
         ]
+    }
+}
+
+struct CloneRepositoryView: View {
+    @ObservedObject var viewModel: GitViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Repository URL") {
+                    TextField("https://github.com/username/repo.git", text: $viewModel.cloneURL)
+                        .textContentType(.URL)
+                }
+
+                Section("Clone Location") {
+                    if let directory = viewModel.cloneDirectory {
+                        Text(directory.path)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("Choose Directory") {
+                        let panel = NSOpenPanel()
+                        panel.canChooseFiles = false
+                        panel.canChooseDirectories = true
+                        panel.allowsMultipleSelection = false
+
+                        if panel.runModal() == .OK, let url = panel.url {
+                            viewModel.cloneDirectory = url
+                        }
+                    }
+                }
+
+                if viewModel.isCloning {
+                    Section {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ProgressView(value: viewModel.cloneProgress)
+                                .progressViewStyle(.linear)
+                            Text(viewModel.cloneStatus)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Clone Repository")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Clone") {
+                        if let directory = viewModel.cloneDirectory {
+                            viewModel.cloneRepository(from: viewModel.cloneURL, to: directory)
+                        } else {
+                            viewModel.errorMessage = "Please select a directory to clone into"
+                        }
+                    }
+                    .disabled(viewModel.cloneURL.isEmpty || viewModel.cloneDirectory == nil || viewModel.isCloning)
+                }
+            }
+        }
+        .frame(minWidth: 400, minHeight: 200)
+    }
+}
+
+struct ImportRepositoryView: View {
+    @ObservedObject var viewModel: GitViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedURL: URL?
+
+    var body: some View {
+        NavigationStack {
+            VStack {
+                if let url = selectedURL {
+                    Text(url.path)
+                        .foregroundStyle(.secondary)
+                        .padding()
+                }
+
+                Button("Choose Repository") {
+                    let panel = NSOpenPanel()
+                    panel.canChooseFiles = false
+                    panel.canChooseDirectories = true
+                    panel.allowsMultipleSelection = false
+
+                    if panel.runModal() == .OK {
+                        selectedURL = panel.url
+                    }
+                }
+                .padding()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("Import Repository")
+//            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Import") {
+                        if let url = selectedURL {
+                            viewModel.importRepository(from: url)
+                        } else {
+                            viewModel.errorMessage = "Please select a Git repository"
+                        }
+                    }
+                    .disabled(selectedURL == nil)
+                }
+            }
+        }
+        .frame(minWidth: 400, minHeight: 200)
+    }
+}
+
+struct AddLocalRepositoryView: View {
+    @ObservedObject var viewModel: GitViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedURL: URL?
+    @State private var isGitRepo: Bool = false
+    @State private var branchInfo: String?
+    @State private var remoteInfo: [String] = []
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    if let url = selectedURL {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "folder.fill")
+                                    .foregroundStyle(.blue)
+                                Text(url.path)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if isGitRepo {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Label("Valid Git Repository", systemImage: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+
+                                    if let branch = branchInfo {
+                                        HStack {
+                                            Image(systemName: "point.3.connected.trianglepath.dotted")
+                                                .foregroundStyle(.secondary)
+                                            Text("Current Branch: \(branch)")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+
+                                    if !remoteInfo.isEmpty {
+                                        Text("Remotes:")
+                                            .font(.headline)
+                                        ForEach(remoteInfo, id: \.self) { remote in
+                                            HStack {
+                                                Image(systemName: "arrow.triangle.branch")
+                                                    .foregroundStyle(.secondary)
+                                                Text(remote)
+                                                    .font(.system(.body, design: .monospaced))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.top, 8)
+                            } else {
+                                Label("Not a Git Repository", systemImage: "xmark.circle.fill")
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                    } else {
+                        Button("Choose Repository") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.allowsMultipleSelection = false
+
+                            if panel.runModal() == .OK {
+                                selectedURL = panel.url
+                                updateRepositoryInfo()
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Add Local Repository")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        if let url = selectedURL {
+                            Task {
+                                await viewModel.addLocalRepository(at: url)
+                            }
+                        }
+                    }
+                    .disabled(selectedURL == nil || viewModel.isImporting || !isGitRepo)
+                }
+            }
+            .overlay {
+                if viewModel.isImporting {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+
+                        if let progress = viewModel.importProgress {
+                            VStack(spacing: 8) {
+                                ProgressView(value: Double(progress.current), total: Double(progress.total))
+                                    .progressViewStyle(.linear)
+
+                                Text(progress.status)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(width: 200)
+                        }
+
+                        Text(viewModel.importStatus)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(.regularMaterial)
+                    .cornerRadius(10)
+                }
+            }
+        }
+        .frame(minWidth: 500, minHeight: 400)
+    }
+
+    private func updateRepositoryInfo() {
+        guard let url = selectedURL else { return }
+
+        Task {
+            // Check if it's a Git repository
+            isGitRepo = await viewModel.isGitRepository(at: url)
+
+            if isGitRepo {
+                // Get current branch
+                if let branchResult = await viewModel.gitService.runGitCommand("rev-parse", "--abbrev-ref", "HEAD", in: url) {
+                    branchInfo = branchResult.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+
+                // Get remote information
+                if let remoteResult = await viewModel.gitService.runGitCommand("remote", "-v", in: url) {
+                    remoteInfo = remoteResult.output.components(separatedBy: "\n")
+                        .filter { !$0.isEmpty }
+                }
+            } else {
+                branchInfo = nil
+                remoteInfo = []
+            }
+        }
     }
 }
 
