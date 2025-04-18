@@ -2,13 +2,7 @@ import SwiftUI
 import Combine
 import Foundation
 
-
-// Update Branch struct to include isCurrent property
-struct Branch: Identifiable, Hashable {
-    let id = UUID()
-    var name: String
-    var isCurrent: Bool = false
-}
+// Remove Branch struct definition since it's now in Models/Branch.swift
 
 // --- Git View Model ---
 @MainActor

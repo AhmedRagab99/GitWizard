@@ -1,62 +1,7 @@
 import SwiftUI
 
-// --- Placeholder Data Models ---
-
-struct RepoInfo: Identifiable {
-    let id = UUID()
-    var name: String = "MyExampleRepo"
-    var currentBranch: String = "main"
-    var remotes: [(name: String, url: String)] = []
-    // Add other repo details if needed
-}
-
-
-
-struct Commit: Identifiable, Hashable {
-    let id = UUID()
-    var hash: String
-    var message: String
-    var author: String
-    var authorEmail: String
-    var authorAvatar: String // URL or system image name
-    var date: Date
-    var changedFiles: [FileChange] = []
-    var parentHashes: [String] = []
-    var branchNames: [String] = []
-    var commitType: CommitType = .normal
-    var diffContent: String? // Store actual diff content
-}
-
-struct FileChange: Identifiable, Hashable {
-    let id = UUID()
-    var name: String
-    var status: String // e.g., "Modified", "Added", "Deleted"
-}
-
-struct WorkspaceCommand: Identifiable, Hashable {
-    let id = UUID()
-    var name: String
-    var icon: String // SF Symbol name
-}
-
-struct Tag: Identifiable, Hashable {
-    let id = UUID()
-    var name: String
-}
-
-struct Stash: Identifiable, Hashable {
-    let id = UUID()
-    var description: String
-    var date: Date
-}
-
-enum CommitType: String, Hashable {
-    case normal
-    case merge
-    case rebase
-    case cherryPick
-    case revert
-}
+// Import all models
+import Foundation
 
 // --- Main View Structure ---
 
@@ -537,6 +482,7 @@ struct CommitGraphVisualization: View {
         case .rebase: return .orange
         case .cherryPick: return .green
         case .revert: return .red
+        default : return .blue
         }
     }
 }
@@ -1662,3 +1608,4 @@ struct ModernButtonStyle: ButtonStyle {
             .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
     }
 }
+
