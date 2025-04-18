@@ -58,6 +58,8 @@ class GitViewModel: ObservableObject {
     @Published var clonedRepositories: [URL] = []
     @Published var importedRepositories: [URL] = []
     @Published var selectedRepository: URL?
+    @Published var stagedChanges: [FileChange] = []
+    @Published var unstagedChanges: [FileChange] = []
 
     struct ImportProgress: Identifiable {
         let id = UUID()
@@ -68,7 +70,7 @@ class GitViewModel: ObservableObject {
 
     struct CommitDetails {
         let hash: String
-        let author: String
+        let authorName: String
         let authorEmail: String
         let date: Date
         let message: String
@@ -79,7 +81,7 @@ class GitViewModel: ObservableObject {
     }
 
     private var cancellables = Set<AnyCancellable>()
-     let gitService = GitService()
+    private let gitService = GitService()
 
     init() {
         setupBindings()
@@ -87,10 +89,14 @@ class GitViewModel: ObservableObject {
         loadRepositoryList()
     }
 
-    func isGitRepository(at: URL) async -> Bool  {
-        return await gitService.isGitRepository(at: at)
+    func isGitRepository(at: URL) async -> Bool {
+        do {
+            return try await gitService.isGitRepository(at: at)
+        } catch {
+            errorMessage = "Error checking repository: \(error.localizedDescription)"
+            return false
+        }
     }
-
 
     private func loadWorkspaceCommands() {
         workspaceCommands = [
@@ -103,59 +109,72 @@ class GitViewModel: ObservableObject {
 
     // --- Public Methods ---
     func loadRepositoryData(from url: URL) async {
-        guard await gitService.isGitRepository(at: url) else {
-            errorMessage = "Selected directory is not a Git repository"
-            return
-        }
-
-        isLoading = true
-        defer { isLoading = false }
-
-        // Load branches
-        branches = await gitService.getBranches(in: url)
-
-        // Set current branch
-        if let currentBranchName = await gitService.getCurrentBranch(in: url) {
-            currentBranch = branches.first { $0.name == currentBranchName }
-            selectedBranch = currentBranch
-
-            // Load commits for current branch
-            if let branch = currentBranch {
-                branchCommits = await gitService.getCommits(for: branch.name, in: url)
+        do {
+            guard try await gitService.isGitRepository(at: url) else {
+                errorMessage = "Selected directory is not a Git repository"
+                return
             }
+
+            isLoading = true
+            defer { isLoading = false }
+
+            // Load branches
+            branches = try await gitService.getBranches(in: url)
+
+            // Set current branch
+            if let currentBranchName = try await gitService.getCurrentBranch(in: url) {
+                currentBranch = branches.first { $0.name == currentBranchName }
+                selectedBranch = currentBranch
+
+                // Load commits for current branch
+                if let branch = currentBranch {
+                    branchCommits = try await gitService.getCommits(for: branch.name, in: url)
+                }
+            }
+
+            // Load other repository data
+            tags = try await gitService.getTags(in: url)
+            stashes = try await gitService.getStashes(in: url)
+
+            // Update repository info
+            repoInfo = await gatherRepositoryInfo(from: url)
+        } catch {
+            errorMessage = "Error loading repository data: \(error.localizedDescription)"
         }
-
-        // Load other repository data
-        tags = await gitService.getTags(in: url)
-        stashes = await gitService.getStashes(in: url)
-
-        // Update repository info
-        repoInfo = await gatherRepositoryInfo(from: url)
     }
 
     private func gatherRepositoryInfo(from url: URL) async -> RepoInfo {
-        // Get repository name
-        let name = url.lastPathComponent
+        do {
+            // Get repository name
+            let name = url.lastPathComponent
 
-        // Get current branch
-        let currentBranch = await gitService.getCurrentBranch(in: url) ?? "main"
+            // Get current branch
+            let currentBranch = try await gitService.getCurrentBranch(in: url) ?? "main"
 
-        // Get remote information
-        let remotes = await gitService.getRemotes(in: url)
+            // Get remote information
+            let remotes = try await gitService.getRemotes(in: url)
 
-        return RepoInfo(
-            name: name,
-            currentBranch: currentBranch,
-            remotes: remotes
-        )
+            return RepoInfo(
+                name: name,
+                currentBranch: currentBranch,
+                remotes: remotes
+            )
+        } catch {
+            errorMessage = "Error gathering repository info: \(error.localizedDescription)"
+            return RepoInfo()
+        }
     }
 
     private func loadCommits(for branch: Branch, in url: URL) {
         Task {
-            isLoading = true
-            defer { isLoading = false }
+            do {
+                isLoading = true
+                defer { isLoading = false }
 
-            branchCommits = await gitService.getCommits(for: branch.name, in: url)
+                branchCommits = try await gitService.getCommits(for: branch.name, in: url)
+            } catch {
+                errorMessage = "Error loading commits: \(error.localizedDescription)"
+            }
         }
     }
 
@@ -173,17 +192,21 @@ class GitViewModel: ObservableObject {
                 defer { self.isLoading = false }
 
                 Task {
-                    if let diff = await self.gitService.getDiff(for: commit.hash, file: fileChange.name, in: url) {
-                        self.diffContent = diff
-                    } else {
-                        self.diffContent = """
-                        diff --git a/\(fileChange.name) b/\(fileChange.name)
-                        index 0000000..1234567
-                        --- a/\(fileChange.name)
-                        +++ b/\(fileChange.name)
-                        @@ -0,0 +1,1 @@
-                        +// Could not load diff for \(fileChange.name)
-                        """
+                    do {
+                        if let diff = try await self.gitService.getDiff(for: commit.hash, file: fileChange.name, in: url) {
+                            self.diffContent = diff
+                        } else {
+                            self.diffContent = """
+                            diff --git a/\(fileChange.name) b/\(fileChange.name)
+                            index 0000000..1234567
+                            --- a/\(fileChange.name)
+                            +++ b/\(fileChange.name)
+                            @@ -0,0 +1,1 @@
+                            +// Could not load diff for \(fileChange.name)
+                            """
+                        }
+                    } catch {
+                        self.errorMessage = "Error loading diff: \(error.localizedDescription)"
                     }
                 }
             }
@@ -216,15 +239,16 @@ class GitViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        if let result = await gitService.runGitCommand("fetch", in: url) {
+        do {
+            let result = try await gitService.runGitCommand("fetch", in: url)
             if result.error.isEmpty {
                 // Refresh repository data
                 await loadRepositoryData(from: url)
             } else {
                 errorMessage = "Fetch failed: \(result.error)"
             }
-        } else {
-            errorMessage = "Failed to execute fetch command"
+        } catch {
+            errorMessage = "Fetch failed: \(error.localizedDescription)"
         }
     }
 
@@ -237,15 +261,16 @@ class GitViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        if let result = await gitService.runGitCommand("pull", in: url) {
+        do {
+            let result = try await gitService.runGitCommand("pull", in: url)
             if result.error.isEmpty {
                 // Refresh repository data
                 await loadRepositoryData(from: url)
             } else {
                 errorMessage = "Pull failed: \(result.error)"
             }
-        } else {
-            errorMessage = "Failed to execute pull command"
+        } catch {
+            errorMessage = "Pull failed: \(error.localizedDescription)"
         }
     }
 
@@ -258,12 +283,13 @@ class GitViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        if let result = await gitService.runGitCommand("push", in: url) {
+        do {
+            let result = try await gitService.runGitCommand("push", in: url)
             if !result.error.isEmpty {
                 errorMessage = "Push failed: \(result.error)"
             }
-        } else {
-            errorMessage = "Failed to execute push command"
+        } catch {
+            errorMessage = "Push failed: \(error.localizedDescription)"
         }
     }
 
@@ -277,7 +303,7 @@ class GitViewModel: ObservableObject {
 
         Task {
             do {
-                foundRepositories = await gitService.findGitRepositories(in: directory)
+                foundRepositories = try await gitService.findGitRepositories(in: directory)
                 if foundRepositories.isEmpty {
                     errorMessage = "No Git repositories found in the selected directory"
                 }
@@ -305,7 +331,7 @@ class GitViewModel: ObservableObject {
 
         Task {
             do {
-                let success = await gitService.cloneRepository(from: url, to: directory)
+                let success = try await gitService.cloneRepository(from: url, to: directory)
 
                 if success {
                     let repoName = url.components(separatedBy: "/").last?.replacingOccurrences(of: ".git", with: "") ?? "repository"
@@ -335,13 +361,17 @@ class GitViewModel: ObservableObject {
 
     func importRepository(from url: URL) {
         Task {
-            if await gitService.isGitRepository(at: url) {
-                addImportedRepository(url)
-                repositoryURL = url
-                isShowingImportSheet = false
-                await loadRepositoryData(from: url)
-            } else {
-                errorMessage = "Selected directory is not a Git repository"
+            do {
+                if try await gitService.isGitRepository(at: url) {
+                    addImportedRepository(url)
+                    repositoryURL = url
+                    isShowingImportSheet = false
+                    await loadRepositoryData(from: url)
+                } else {
+                    errorMessage = "Selected directory is not a Git repository"
+                }
+            } catch {
+                errorMessage = "Error importing repository: \(error.localizedDescription)"
             }
         }
     }
@@ -353,7 +383,7 @@ class GitViewModel: ObservableObject {
         do {
             // Validate Git repository
             importStatus = "Validating Git repository..."
-            guard await gitService.isGitRepository(at: url) else {
+            guard try await gitService.isGitRepository(at: url) else {
                 errorMessage = "Selected directory is not a Git repository"
                 isImporting = false
                 importProgress = nil
@@ -379,9 +409,16 @@ class GitViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        // Get full commit details
-        let details = await gitService.getCommitDetails(for: commit.hash, in: url)
-        commitDetails = details
+        do {
+            // Get full commit details
+            if let details = try await gitService.getCommitDetails(for: commit.hash, in: url) {
+                commitDetails = details
+            } else {
+                errorMessage = "Could not load commit details"
+            }
+        } catch {
+            errorMessage = "Error loading commit details: \(error.localizedDescription)"
+        }
     }
 
     private func saveRepositoryList() {
@@ -430,6 +467,268 @@ class GitViewModel: ObservableObject {
         repositoryURL = url
         Task {
             await loadRepositoryData(from: url)
+        }
+    }
+
+    func loadChanges() async {
+        guard let url = repositoryURL else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            // Get staged changes
+            let stagedResult = try await gitService.runGitCommand("diff", "--cached", "--name-status", in: url)
+            let stagedChanges = parseFileChanges(from: stagedResult.output)
+
+            // Load line changes for each staged file
+            var updatedStagedChanges = stagedChanges
+            for i in updatedStagedChanges.indices {
+                let fileChange = updatedStagedChanges[i]
+                let lineChanges = try await loadLineChanges(for: fileChange.path, in: url)
+                updatedStagedChanges[i].stagedChanges = lineChanges.staged
+                updatedStagedChanges[i].unstagedChanges = lineChanges.unstaged
+            }
+            self.stagedChanges = updatedStagedChanges
+
+            // Get unstaged changes
+            let unstagedResult = try await gitService.runGitCommand("diff", "--name-status", in: url)
+            let unstagedChanges = parseFileChanges(from: unstagedResult.output)
+
+            // Load line changes for each unstaged file
+            var updatedUnstagedChanges = unstagedChanges
+            for i in updatedUnstagedChanges.indices {
+                let fileChange = updatedUnstagedChanges[i]
+                let lineChanges = try await loadLineChanges(for: fileChange.path, in: url)
+                updatedUnstagedChanges[i].stagedChanges = lineChanges.staged
+                updatedUnstagedChanges[i].unstagedChanges = lineChanges.unstaged
+            }
+            self.unstagedChanges = updatedUnstagedChanges
+        } catch {
+            errorMessage = "Error loading changes: \(error.localizedDescription)"
+        }
+    }
+    
+  
+    private func loadLineChanges(for filePath: String, in url: URL) async throws -> (staged: [LineChange], unstaged: [LineChange]) {
+        // Get staged changes
+        let stagedResult = try await gitService.runGitCommand("diff", "--cached", "-U0", filePath, in: url)
+        let stagedChanges = parseLineChanges(from: stagedResult.output)
+
+        // Get unstaged changes
+        let unstagedResult = try await gitService.runGitCommand("diff", "-U0", filePath, in: url)
+        let unstagedChanges = parseLineChanges(from: unstagedResult.output)
+
+        return (staged: stagedChanges, unstaged: unstagedChanges)
+    }
+
+    private func parseFileChanges(from output: String) -> [FileChange] {
+        output.components(separatedBy: .newlines)
+            .filter { !$0.isEmpty }
+            .map { line in
+                let components = line.components(separatedBy: .whitespaces)
+                guard components.count >= 2 else { return nil }
+
+                let status = components[0]
+                let path = components[1...].joined(separator: " ")
+
+                return FileChange(
+                    id: UUID(),
+                    name: (path as NSString).lastPathComponent,
+                    status: status,
+                    path: path,
+                    stagedChanges: [],
+                    unstagedChanges: []
+                )
+            }
+            .compactMap { $0 }
+    }
+
+    private func parseLineChanges(from output: String) -> [LineChange] {
+        var changes: [LineChange] = []
+        var lineNumber = 0
+
+        output.components(separatedBy: .newlines)
+            .forEach { line in
+                if line.hasPrefix("@@") {
+                    // Parse line number from diff header
+                    if let match = line.range(of: #"\+(\d+)"#) {
+                        lineNumber = Int(line[match].dropFirst()) ?? 0
+                    }
+                } else if line.hasPrefix("+") {
+                    changes.append(LineChange(
+                        id: UUID(),
+                        lineNumber: lineNumber,
+                        content: String(line.dropFirst()),
+                        type: .added
+                    ))
+                    lineNumber += 1
+                } else if line.hasPrefix("-") {
+                    changes.append(LineChange(
+                        id: UUID(),
+                        lineNumber: lineNumber,
+                        content: String(line.dropFirst()),
+                        type: .removed
+                    ))
+                } else {
+                    lineNumber += 1
+                }
+            }
+
+        return changes
+    }
+
+    func stageLines(_ lines: Set<UUID>, in file: FileChange) {
+        guard let url = repositoryURL else { return }
+
+        Task {
+            do {
+                for line in lines {
+                    if let change = file.lineChanges.first(where: { $0.id == line }) {
+                        try await gitService.runGitCommand("add", "-p", file.path, in: url)
+                    }
+                }
+                await loadChanges()
+            } catch {
+                errorMessage = "Error staging lines: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func unstageLines(_ lines: Set<UUID>, in file: FileChange) {
+        guard let url = repositoryURL else { return }
+
+        Task {
+            do {
+                for line in lines {
+                    if let change = file.lineChanges.first(where: { $0.id == line }) {
+                        try await gitService.runGitCommand("reset", "-p", file.path, in: url)
+                    }
+                }
+                await loadChanges()
+            } catch {
+                errorMessage = "Error unstaging lines: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func resetLines(_ lines: Set<UUID>, in file: FileChange) {
+        guard let url = repositoryURL else { return }
+
+        Task {
+            do {
+                for line in lines {
+                    if let change = file.lineChanges.first(where: { $0.id == line }) {
+                        try await gitService.runGitCommand("checkout", "--", file.path, in: url)
+                    }
+                }
+                await loadChanges()
+            } catch {
+                errorMessage = "Error resetting lines: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func stageAllChanges() {
+        guard let url = repositoryURL else { return }
+
+        Task {
+            do {
+                try await gitService.runGitCommand("add", ".", in: url)
+                await loadChanges()
+            } catch {
+                errorMessage = "Error staging all changes: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func unstageAllChanges() {
+        guard let url = repositoryURL else { return }
+
+        Task {
+            do {
+                try await gitService.runGitCommand("reset", ".", in: url)
+                await loadChanges()
+            } catch {
+                errorMessage = "Error unstaging all changes: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func commitChanges(message: String) async {
+        guard let url = repositoryURL else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let result = try await gitService.runGitCommand("commit", "-m", message, in: url)
+            if result.error.isEmpty {
+                await loadChanges()
+                await loadRepositoryData(from: url)
+            } else {
+                errorMessage = "Commit failed: \(result.error)"
+            }
+        } catch {
+            errorMessage = "Commit failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func parseCommits(from output: String) -> [Commit] {
+        output.components(separatedBy: .newlines)
+            .filter { !$0.isEmpty }
+            .map { line in
+                let components = line.components(separatedBy: "|")
+                guard components.count >= 6 else { return nil }
+
+                let hash = components[0].trimmingCharacters(in: .whitespaces)
+                let authorName = components[1].trimmingCharacters(in: .whitespaces)
+                let authorEmail = components[2].trimmingCharacters(in: .whitespaces)
+                let dateString = components[3].trimmingCharacters(in: .whitespaces)
+                let message = components[4].trimmingCharacters(in: .whitespaces)
+                let parentHashes = components[5].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+
+                // Determine commit type based on message and parent hashes
+                let commitType = determineCommitType(message: message, parentHashes: parentHashes)
+
+                // Generate avatar URL based on email (using Gravatar)
+                let emailHash = authorEmail.lowercased().md5Hash
+                let authorAvatar = "https://www.gravatar.com/avatar/\(emailHash)?d=identicon&s=40"
+
+                // Parse date
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
+                let date = dateFormatter.date(from: dateString) ?? Date()
+
+                return Commit(
+                    id: UUID(),
+                    hash: hash,
+                    authorName: authorName,
+                    authorEmail: authorEmail,
+                    date: date,
+                    message: message,
+                    parentHashes: parentHashes,
+                    branchNames: [],
+                    commitType: commitType,
+                    authorAvatar: authorAvatar
+                )
+            }
+            .compactMap { $0 }
+    }
+
+    private func determineCommitType(message: String, parentHashes: [String]) -> Commit.CommitType {
+        let lowercasedMessage = message.lowercased()
+
+        if parentHashes.count > 1 {
+            return .merge
+        } else if lowercasedMessage.contains("rebase") {
+            return .rebase
+        } else if lowercasedMessage.contains("cherry-pick") {
+            return .cherryPick
+        } else if lowercasedMessage.contains("revert") {
+            return .revert
+        } else {
+            return .normal
         }
     }
 }
