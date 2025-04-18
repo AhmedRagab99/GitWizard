@@ -21,12 +21,11 @@ struct GitClientView: View {
                         .tabItem {
                             Label("History", systemImage: "clock")
                         }
-                        ChangesView(viewModel: viewModel)
-                            .tabItem {
-                                Label("Changes", systemImage: "list.bullet")
-                            }
-                            
                     
+                    ChangesView(viewModel: viewModel)
+                        .tabItem {
+                            Label("Changes", systemImage: "list.bullet")
+                        }
                 }
             } else {
                 RepositorySelectionView(

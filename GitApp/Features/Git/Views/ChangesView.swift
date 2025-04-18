@@ -32,7 +32,6 @@ struct ChangesView: View {
                 }
                 .listStyle(.sidebar)
             }
-            .frame(minWidth: 200, maxWidth: 300)
 
             // Right side - File content
             if let file = selectedFileChange {
