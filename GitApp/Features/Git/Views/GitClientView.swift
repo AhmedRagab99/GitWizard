@@ -2,20 +2,16 @@ import SwiftUI
 
 // Import all models
 import Foundation
-
-// --- Main View Structure ---
+import AppKit
 
 
 struct GitClientView: View {
-    @StateObject private var viewModel = GitViewModel()
-    @State private var isShowingFilePicker = false
-    @State private var selectedDirectory: URL?
-
+    @ObservedObject  var viewModel: GitViewModel
+    
     var body: some View {
         NavigationSplitView {
             SidebarView(viewModel: viewModel)
-        } content: {
-            if let url = viewModel.repositoryURL {
+        } content: {            
                 TabView {
                     HistoryView(viewModel: viewModel)
                         .tabItem {
@@ -27,13 +23,6 @@ struct GitClientView: View {
                             Label("Changes", systemImage: "list.bullet")
                         }
                 }
-            } else {
-                RepositorySelectionView(
-                    viewModel: viewModel,
-                    isShowingFilePicker: $isShowingFilePicker,
-                    selectedDirectory: $selectedDirectory
-                )
-            }
         } detail: {
             if let commit = viewModel.selectedCommit {
                 CommitDetailView(commit: commit, details: viewModel.commitDetails)
@@ -41,43 +30,9 @@ struct GitClientView: View {
                 Text("Select a commit to view details")
                     .foregroundColor(.secondary)
             }
-        }
-        .fileImporter(
-            isPresented: $isShowingFilePicker,
-            allowedContentTypes: [.directory],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    selectedDirectory = url
-                    viewModel.searchForRepositories(in: url)
-                }
-            case .failure(let error):
-                viewModel.errorMessage = "Failed to select directory: \(error.localizedDescription)"
-            }
-        }
-        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
-            Button("OK") {
-                viewModel.errorMessage = nil
-            }
-        } message: {
-            if let error = viewModel.errorMessage {
-                Text(error)
-            }
-        }
+        }        
     }
 }
-
-
-
-// Helper extension
-
-
-// --- Commit Detail View ---
-
-
-
 
 // Syntax Highlighting Colors
 enum SyntaxTheme {
@@ -89,15 +44,6 @@ enum SyntaxTheme {
     static let normalText = Color(.labelColor)
 }
 
-// Code Line View
-
-// File Type Styling
-
-
-// --- Preview ---
-#Preview {
-    GitClientView()
-}
 
 // Modern UI Constants
 enum ModernUI {

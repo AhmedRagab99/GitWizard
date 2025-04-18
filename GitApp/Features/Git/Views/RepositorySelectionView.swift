@@ -19,6 +19,10 @@ struct RepositorySelectionView: View {
                 List(viewModel.foundRepositories, id: \.self) { url in
                     Button {
                         viewModel.selectRepository(url)
+                        if let url = viewModel.selectedRepository {
+                            // open menu
+                            openNewWindow(with: GitClientView(viewModel: viewModel), id: "gitClientWindow", title: url.lastPathComponent, width: NSScreen.main?.frame.width ?? 0, height: NSScreen.main?.frame.height ?? 0)
+                        }
                     } label: {
                         VStack(alignment: .leading) {
                             Text(url.lastPathComponent)
