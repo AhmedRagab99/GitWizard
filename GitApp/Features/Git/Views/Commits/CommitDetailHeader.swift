@@ -29,12 +29,30 @@ struct CommitDetailHeader: View {
 
     private func navigateToPrevious() {
         guard let index = commitIndex, canGoToPrevious else { return }
-        viewModel.selectedCommit = viewModel.branchCommits[index - 1]
+        let previousCommit = viewModel.branchCommits[index - 1]
+        viewModel.selectedCommit = previousCommit
+        Task {
+            if let repoURL = viewModel.repositoryURL {
+                await viewModel.loadCommitDetails(previousCommit, in: repoURL)
+            }
+        }
     }
 
     private func navigateToNext() {
         guard let index = commitIndex, canGoToNext else { return }
-        viewModel.selectedCommit = viewModel.branchCommits[index + 1]
+        let nextCommit = viewModel.branchCommits[index + 1]
+        viewModel.selectedCommit = nextCommit
+        Task {
+            if let repoURL = viewModel.repositoryURL {
+                await viewModel.loadCommitDetails(nextCommit, in: repoURL)
+            }
+        }
+    }
+
+    private func copyCommitHash() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(commit.hash, forType: .string)
     }
 
     var body: some View {
@@ -46,9 +64,7 @@ struct CommitDetailHeader: View {
                         .font(.system(.title3, design: .monospaced))
                         .foregroundColor(ModernUI.colors.secondaryText)
 
-                    Button {
-                        // Copy hash action
-                    } label: {
+                    Button(action: copyCommitHash) {
                         Image(systemName: "doc.on.doc")
                             .font(.caption)
                     }
