@@ -7,17 +7,17 @@ import AppKit
 
 struct GitClientView: View {
     @ObservedObject  var viewModel: GitViewModel
-    
+
     var body: some View {
         NavigationSplitView {
             SidebarView(viewModel: viewModel)
-        } content: {            
+        } content: {
                 TabView {
                     HistoryView(viewModel: viewModel)
                         .tabItem {
                             Label("History", systemImage: "clock")
                         }
-                    
+
                     ChangesView(viewModel: viewModel)
                         .tabItem {
                             Label("Changes", systemImage: "list.bullet")
@@ -30,7 +30,7 @@ struct GitClientView: View {
                 Text("Select a commit to view details")
                     .foregroundColor(.secondary)
             }
-        }        
+        }
     }
 }
 

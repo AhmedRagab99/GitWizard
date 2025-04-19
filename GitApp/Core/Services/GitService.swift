@@ -1,5 +1,5 @@
 import Foundation
-
+import Combine
 actor GitService {
     private var cloneProgress: Double = 0.0
     private var cloneStatus: String = ""
@@ -77,14 +77,16 @@ actor GitService {
                     let message = components[2]
                     let date = ISO8601DateFormatter().date(from: components[3]) ?? Date()
 
+                    // Get upstream branch if available
+                    let upstream = components.count > 4 ? components[4] : nil
+
                     return Branch(
-                        id: UUID(),
                         name: name,
                         isCurrent: name.hasPrefix("*"),
                         isRemote: name.contains("/"),
-                        lastCommit: hash,
-                        lastCommitMessage: message,
-                        lastCommitDate: date
+                        upstream: upstream,
+                        lastCommitDate: date,
+                        lastCommitMessage: message
                     )
                 }
         } catch {

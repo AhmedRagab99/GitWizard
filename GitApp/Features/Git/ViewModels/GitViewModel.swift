@@ -508,8 +508,8 @@ class GitViewModel: ObservableObject {
             errorMessage = "Error loading changes: \(error.localizedDescription)"
         }
     }
-    
-  
+
+
     private func loadLineChanges(for filePath: String, in url: URL) async throws -> (staged: [LineChange], unstaged: [LineChange]) {
         // Get staged changes
         let stagedResult = try await gitService.runGitCommand("diff", "--cached", "-U0", filePath, in: url)
@@ -729,6 +729,59 @@ class GitViewModel: ObservableObject {
             return .revert
         } else {
             return .normal
+        }
+    }
+
+    func checkoutBranch(_ branch: Branch) async {
+        guard let url = repositoryURL else {
+            errorMessage = "No repository selected"
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let result = try await gitService.runGitCommand("checkout", branch.name, in: url)
+
+            // Check if the output contains Git LFS warning
+            if result.output.contains("Git LFS") {
+                // The checkout was successful, but there's an LFS warning
+                // Refresh repository data
+                await loadRepositoryData(from: url)
+
+                // Show a more user-friendly message about Git LFS
+                errorMessage = """
+                Branch checked out successfully!
+
+                Note: This repository uses Git LFS (Large File Storage) but it's not installed.
+                To install Git LFS:
+                1. Visit https://git-lfs.com/
+                2. Download and install Git LFS
+                3. Run 'git lfs install' in your terminal
+
+                Until then, you can still work with the repository, but LFS files won't be downloaded.
+                """
+            } else if result.error.isEmpty {
+                // Regular successful checkout
+                // Update current branch
+                currentBranch = branch
+
+                // Refresh all repository data
+                await loadRepositoryData(from: url)
+
+                // Load changes for the new branch
+                await loadChanges()
+
+                // Load commits for the new branch
+                if let branch = currentBranch {
+                    await loadCommits(for: branch, in: url)
+                }
+            } else {
+                errorMessage = "Checkout failed: \(result.error)"
+            }
+        } catch {
+            errorMessage = "Checkout failed: \(error.localizedDescription)"
         }
     }
 }

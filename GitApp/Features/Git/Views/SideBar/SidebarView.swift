@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-
+import Foundation
 
 struct SidebarView: View {
     @ObservedObject var viewModel: GitViewModel
@@ -80,7 +80,8 @@ struct SidebarView: View {
                             SidebarBranchView(
                                 branch: branch,
                                 isExpanded: false,
-                                hasSubbranches: false
+                                hasSubbranches: false,
+                                viewModel: viewModel
                             )
                             .tag(SidebarItem.branch(branch))
                         }
@@ -99,7 +100,8 @@ struct SidebarView: View {
                                     SidebarBranchView(
                                         branch: branch,
                                         isExpanded: false,
-                                        hasSubbranches: false
+                                        hasSubbranches: false,
+                                        viewModel: viewModel
                                     )
                                     .tag(SidebarItem.branch(branch))
                                 }
