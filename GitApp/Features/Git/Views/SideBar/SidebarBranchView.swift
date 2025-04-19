@@ -7,6 +7,10 @@
 
 
 import SwiftUI
+import Foundation
+
+// Import models and view models
+@preconcurrency import GitApp
 
 struct SidebarBranchView: View {
     let branch: Branch
@@ -15,20 +19,24 @@ struct SidebarBranchView: View {
     @ObservedObject var viewModel: GitViewModel
     @State private var isHovered = false
 
+    private let selectedBackgroundColor = Color(red: 0.32, green: 0.48, blue: 0.96)
+    private let hoverBackgroundColor = Color(.unemphasizedSelectedContentBackgroundColor)
+
     var body: some View {
         HStack(spacing: 6) {
             if hasSubbranches {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(branch.isCurrent ? .white : .secondary)
             }
 
             Image(systemName: branch.isHead ? "point.3.connected.trianglepath.dotted" : "arrow.triangle.branch")
-                .foregroundColor(branch.isCurrent ? .blue : .secondary)
+                .foregroundColor(branch.isCurrent ? .white : .secondary)
+                .frame(width: 16)
 
             Text(branch.displayName)
                 .lineLimit(1)
-                .foregroundColor(branch.isCurrent ? .blue : .primary)
+                .foregroundColor(branch.isCurrent ? .white : .primary)
 
             if branch.isCurrent {
                 Spacer()
@@ -36,36 +44,31 @@ struct SidebarBranchView: View {
                     .font(.system(size: 11, weight: .medium))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.blue.opacity(0.2))
-                    .foregroundColor(.blue)
+                    .background(Color.white.opacity(0.2))
+                    .foregroundColor(.white)
                     .cornerRadius(4)
             }
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(branch.isCurrent ? Color.blue.opacity(0.15) : (isHovered ? Color.secondary.opacity(0.1) : Color.clear))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(branch.isCurrent ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(branch.isCurrent ? selectedBackgroundColor : (isHovered ? hoverBackgroundColor : Color.clear))
         )
         .onHover { hovering in
             isHovered = hovering
         }
         .onTapGesture(count: 2) {
-            Task {
-                await viewModel.checkoutBranch(branch)
-            }
+            checkoutBranch()
         }
         .contextMenu {
-            Button(action: {
-                Task {
-                    await viewModel.checkoutBranch(branch)
-                }
-            }) {
+            Button(action: checkoutBranch) {
                 Label("Checkout", systemImage: "arrow.triangle.branch")
+            }
+
+            Button(action: pullBranch) {
+                Label("Pull from origin", systemImage: "arrow.down")
             }
 
             if !branch.isCurrent {
@@ -75,6 +78,18 @@ struct SidebarBranchView: View {
                     Label("Delete", systemImage: "trash")
                 }
             }
+        }
+    }
+
+    private func checkoutBranch() {
+        Task { @MainActor in
+            await viewModel.checkoutBranch(branch)
+        }
+    }
+
+    private func pullBranch() {
+        Task { @MainActor in
+            await viewModel.performPullBranch(branch)
         }
     }
 }

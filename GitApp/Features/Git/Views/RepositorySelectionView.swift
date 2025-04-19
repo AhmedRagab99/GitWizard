@@ -9,123 +9,115 @@ import AppKit
 
 struct RepositorySelectionView: View {
     @ObservedObject var viewModel: GitViewModel
-    @State private var isShowingFilePicker = false
-    @State private var selectedDirectory: URL?
     @State private var selectedRepository: URL?
-    @State private var isOpeningRepository = false
-    @State private var searchText = ""    
-
-    var filteredRepositories: [URL] {
-        if searchText.isEmpty {
-            return viewModel.foundRepositories
-        } else {
-            return viewModel.foundRepositories.filter { url in
-                url.lastPathComponent.localizedCaseInsensitiveContains(searchText) ||
-                url.path.localizedCaseInsensitiveContains(searchText)
-            }
-        }
-    }
+    @State private var isShowingFilePicker = false
+    @State private var isShowingCloneSheet = false
+    @State private var isShowingErrorAlert = false
+    @State private var errorMessage = ""
 
     var body: some View {
-        VStack(spacing: 20) {
-            HStack {
-                Text("Select Git Repository")
-                    .font(.title2)
-                    .fontWeight(.bold)
+        NavigationSplitView {
+            VStack(spacing: 0) {
+                // Modern header section
+                VStack(spacing: 16) {
+                    Text("Git Client")
+                        .font(.title2)
+                        .fontWeight(.semibold)
 
-                Spacer()
-
-                Button(action: {
-                    isShowingFilePicker = true
-                }) {
-                    Label("Choose Directory", systemImage: "folder")
-                        .fileImporter(
-                            isPresented: $isShowingFilePicker,
-                            allowedContentTypes: [.directory],
-                            allowsMultipleSelection: false
-                        ) { result in
-                            switch result {
-                            case .success(let urls):
-                                if let url = urls.first {
-                                    selectedDirectory = url
-                                    viewModel.searchForRepositories(in: url)
-                                }
-                            case .failure(let error):
-                                viewModel.errorMessage = "Failed to select directory: \(error.localizedDescription)"
-                            }
-                        }
-                        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
-                            Button("OK") {
-                                viewModel.errorMessage = nil
-                            }
-                        } message: {
-                            if let error = viewModel.errorMessage {
-                                Text(error)
-                            }
-                        }
-                }
-                .buttonStyle(.bordered)
-                .disabled(isOpeningRepository)
-            }
-            .padding(.horizontal)
-
-            if viewModel.isSearchingRepositories {
-                ProgressView("Searching for repositories...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if !viewModel.foundRepositories.isEmpty {
-                VStack(spacing: 12) {
-                    TextField("Search repositories...", text: $searchText)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .padding(.horizontal)
-
-                    List(filteredRepositories, id: \.self) { url in
+                    HStack(spacing: 12) {
                         Button {
-                            selectedRepository = url
-                            openRepository(url)
+                            isShowingFilePicker = true
                         } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Image(systemName: "folder.fill")
-                                        .foregroundColor(.blue)
-                                    Text(url.lastPathComponent)
-                                        .font(.headline)
-                                }
-                                Text(url.path)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
+                            HStack {
+                                Image(systemName: "folder.badge.plus")
+                                Text("Open")
                             }
-                            .padding(.vertical, 4)
+                            .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(isOpeningRepository)
+                        .buttonStyle(.borderedProminent)
+
+                        Button {
+                            isShowingCloneSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.down.doc")
+                                Text("Clone")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .controlSize(.large)
+                }
+                .padding()
+                .background(Color(.windowBackgroundColor))
+
+                // Repository List
+                List(selection: $selectedRepository) {
+                    if viewModel.recentRepositories.isEmpty {
+                        ContentUnavailableView {
+                            Label("No Recent Repositories", systemImage: "folder.badge.questionmark")
+                        } description: {
+                            Text("Open a local repository or clone from remote to get started")
+                        }
+                    } else {
+                        Section("Recent Repositories") {
+                            ForEach(viewModel.recentRepositories, id: \.self) { url in
+                                NavigationLink(value: url) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(url.lastPathComponent)
+                                            .font(.headline)
+                                        Text(url.path)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 8)
+                                }
+                                .listRowBackground(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(url == viewModel.selectedRepository ?
+                                            Color.accentColor.opacity(0.15) :
+                                            Color.clear)
+                                )
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        viewModel.removeFromRecentRepositories(url)
+                                        if url == selectedRepository {
+                                            selectedRepository = nil
+                                        }
+                                    } label: {
+                                        Label("Remove from Recent", systemImage: "trash")
+                                    }
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        viewModel.removeFromRecentRepositories(url)
+                                        if url == selectedRepository {
+                                            selectedRepository = nil
+                                        }
+                                    } label: {
+                                        Label("Remove", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+            }
+        } detail: {
+            if let selectedRepo = selectedRepository {
+                GitClientView(viewModel: viewModel)
             } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "folder.badge.questionmark")
-                        .font(.system(size: 48))
-                        .foregroundColor(.secondary)
-
-                    Text("No Git repositories found")
-                        .font(.headline)
-
-                    Text("Choose a directory to search for Git repositories")
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
+                ContentUnavailableView {
+                    Label("No Repository Selected", systemImage: "folder.badge.questionmark")
+                } description: {
+                    Text("Select a repository from the sidebar or open a new one")
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .padding()
-        .frame(minWidth: 500, minHeight: 400)
-        .overlay {
-            if isOpeningRepository {
-                ProgressView("Opening repository...")
-                    .padding()
-                    .background(Color(.windowBackgroundColor))
-                    .cornerRadius(8)
-            }
+        .sheet(isPresented: $isShowingCloneSheet) {
+            CloneRepositoryView(viewModel: viewModel)
         }
         .fileImporter(
             isPresented: $isShowingFilePicker,
@@ -135,44 +127,39 @@ struct RepositorySelectionView: View {
             switch result {
             case .success(let urls):
                 if let url = urls.first {
-                    selectedDirectory = url
-                    viewModel.searchForRepositories(in: url)
+                    Task {
+                        do {
+                            try await viewModel.openRepository(at: url)
+                            selectedRepository = url
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            isShowingErrorAlert = true
+                        }
+                    }
                 }
             case .failure(let error):
-                print("Error selecting directory: \(error.localizedDescription)")
+                errorMessage = error.localizedDescription
+                isShowingErrorAlert = true
+            }
+        }
+        .alert("Error", isPresented: $isShowingErrorAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+        .onAppear {
+            Task {
+                await viewModel.loadRecentRepositories()
+            }
+        }
+        .onChange(of: selectedRepository) { newValue in
+            if let url = newValue {
+                viewModel.selectRepository(url)
             }
         }
     }
+}
 
-    private func openRepository(_ url: URL) {
-        isOpeningRepository = true
-
-        Task {
-            // Select the repository in the view model
-            viewModel.selectRepository(url)
-
-            // Wait a moment for the repository to be loaded
-            try? await Task.sleep(nanoseconds: 500_000_000)
-
-            // Create and show the GitClientView window
-            if let window = NSApplication.shared.windows.first(where: { $0.title == url.lastPathComponent }) {
-                // If window already exists, bring it to front
-                window.makeKeyAndOrderFront(nil)
-            } else {
-                // Create new window
-                let window = NSWindow(
-                    contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
-                    styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-                    backing: .buffered,
-                    defer: false
-                )
-                window.title = url.lastPathComponent
-                window.center()
-                window.contentView = NSHostingView(rootView: GitClientView(viewModel: viewModel))
-                window.makeKeyAndOrderFront(nil)
-            }
-
-            isOpeningRepository = false
-        }
-    }
+#Preview {
+    RepositorySelectionView(viewModel: GitViewModel())
 }

@@ -9,18 +9,9 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = GitViewModel()
-    
+
     var body: some View {
-        RepositorySelectionView(
-            viewModel: viewModel
-        )       
-//        VStack {
-//            Image(systemName: "globe")
-//                .imageScale(.large)
-//                .foregroundStyle(.tint)
-//            Text("Hello, world!")
-//        }
-//        .padding()
+        RepositorySelectionView(viewModel: viewModel)
     }
 }
 

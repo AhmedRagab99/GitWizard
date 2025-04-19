@@ -60,6 +60,7 @@ class GitViewModel: ObservableObject {
     @Published var selectedRepository: URL?
     @Published var stagedChanges: [FileChange] = []
     @Published var unstagedChanges: [FileChange] = []
+    @Published var recentRepositories: [URL] = []
 
     struct ImportProgress: Identifiable {
         let id = UUID()
@@ -274,6 +275,31 @@ class GitViewModel: ObservableObject {
         }
     }
 
+    func performPullBranch(_ branch: Branch) async {
+        guard let url = repositoryURL else {
+            errorMessage = "No repository selected"
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let result = try await gitService.runGitCommand("pull", "origin", branch.name, in: url)
+            if result.error.isEmpty {
+                // Refresh repository data
+                await loadRepositoryData(from: url)
+
+                // Show success message
+                errorMessage = "Successfully pulled changes from origin/\(branch.name)"
+            } else {
+                errorMessage = "Pull failed: \(result.error)"
+            }
+        } catch {
+            errorMessage = "Pull failed: \(error.localizedDescription)"
+        }
+    }
+
     func performPush() async {
         guard let url = repositoryURL else {
             errorMessage = "No repository selected"
@@ -319,43 +345,63 @@ class GitViewModel: ObservableObject {
         }
     }
 
-    func cloneRepository(from url: String, to directory: URL) {
+    func removeFromRecentRepositories(_ url: URL) {
+        recentRepositories.removeAll { $0 == url }
+        saveRecentRepositories()
+    }
+
+    func cloneRepository(from url: String, to directory: URL) async throws -> Bool {
         guard !url.isEmpty else {
             errorMessage = "Please enter a repository URL"
-            return
+            return false
         }
 
         isCloning = true
         cloneProgress = 0.0
         cloneStatus = "Starting clone..."
 
-        Task {
-            do {
-                let success = try await gitService.cloneRepository(from: url, to: directory)
-
-                if success {
-                    let repoName = url.components(separatedBy: "/").last?.replacingOccurrences(of: ".git", with: "") ?? "repository"
-                    let repoPath = directory.appendingPathComponent(repoName)
-                    addClonedRepository(repoPath)
-                    repositoryURL = repoPath
-                    isShowingCloneSheet = false
-                }
-            } catch {
-                errorMessage = "Clone failed: \(error.localizedDescription)"
-            }
-
+        defer {
             isCloning = false
             cloneProgress = 0.0
             cloneStatus = ""
         }
 
-        // Start progress monitoring
-        Task {
-            while isCloning {
-                cloneProgress = await gitService.progress
-                cloneStatus = await gitService.status
-                try await Task.sleep(nanoseconds: 100_000_000)
+        do {
+            let success = try await gitService.cloneRepository(from: url, to: directory)
+
+            if success {
+                let repoName = url.components(separatedBy: "/").last?.replacingOccurrences(of: ".git", with: "") ?? "repository"
+                let repoPath = directory.appendingPathComponent(repoName)
+
+                // Add to cloned repositories
+                addClonedRepository(repoPath)
+
+                // Set as current repository and selected repository
+                repositoryURL = repoPath
+                selectedRepository = repoPath
+
+                // Add to recent repositories
+                if !recentRepositories.contains(repoPath) {
+                    recentRepositories.insert(repoPath, at: 0)
+                    if recentRepositories.count > 10 {
+                        recentRepositories.removeLast()
+                    }
+                    saveRecentRepositories()
+                }
+
+                // Load repository data
+                await loadRepositoryData(from: repoPath)
+
+                // Update progress
+                cloneProgress = 1.0
+                cloneStatus = "Clone completed successfully"
+
+                return true
             }
+            return false
+        } catch {
+            errorMessage = "Clone failed: \(error.localizedDescription)"
+            return false
         }
     }
 
@@ -742,35 +788,40 @@ class GitViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
+            // First check if git-lfs is installed
+            let lfsCheckResult = try await gitService.runGitCommand("lfs", "version", in: url)
+            let hasLFS = !lfsCheckResult.error.contains("not found")
+
+            // Perform the checkout
             let result = try await gitService.runGitCommand("checkout", branch.name, in: url)
 
-            // Check if the output contains Git LFS warning
-            if result.output.contains("Git LFS") {
-                // The checkout was successful, but there's an LFS warning
-                // Refresh repository data
-                await loadRepositoryData(from: url)
-
-                // Show a more user-friendly message about Git LFS
-                errorMessage = """
-                Branch checked out successfully!
-
-                Note: This repository uses Git LFS (Large File Storage) but it's not installed.
-                To install Git LFS:
-                1. Visit https://git-lfs.com/
-                2. Download and install Git LFS
-                3. Run 'git lfs install' in your terminal
-
-                Until then, you can still work with the repository, but LFS files won't be downloaded.
-                """
-            } else if result.error.isEmpty {
-                // Regular successful checkout
-                // Update current branch
+            if result.error.isEmpty && !result.output.contains("error") {
+                // Successful checkout
                 currentBranch = branch
 
-                // Refresh all repository data
-                await loadRepositoryData(from: url)
+                // If LFS is not installed but repository uses it, show installation instructions
+                let term = try await isUsingGitLFS(in: url)
+                if !hasLFS && term == true {
+                    errorMessage = """
+                    Branch checked out successfully, but this repository uses Git LFS.
 
-                // Load changes for the new branch
+                    To fully download LFS files, please install Git LFS:
+
+                    macOS (using Homebrew):
+                    1. brew install git-lfs
+                    2. git lfs install
+
+                    Manual installation:
+                    1. Download from https://git-lfs.com
+                    2. Run 'git lfs install'
+
+                    After installing, run:
+                    git lfs pull
+                    """
+                }
+
+                // Refresh repository data
+                await loadRepositoryData(from: url)
                 await loadChanges()
 
                 // Load commits for the new branch
@@ -778,10 +829,83 @@ class GitViewModel: ObservableObject {
                     await loadCommits(for: branch, in: url)
                 }
             } else {
-                errorMessage = "Checkout failed: \(result.error)"
+                errorMessage = "Checkout failed: \(result.error.isEmpty ? result.output : result.error)"
             }
         } catch {
             errorMessage = "Checkout failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func isUsingGitLFS(in directory: URL) async throws -> Bool {
+        // Check for .gitattributes file
+        let attributesResult = try await gitService.runGitCommand("ls-files", ".gitattributes", in: directory)
+        if !attributesResult.output.isEmpty {
+            let catResult = try await gitService.runGitCommand("cat-file", "-p", "HEAD:.gitattributes", in: directory)
+            return catResult.output.contains("filter=lfs")
+        }
+
+        // Check for Git LFS hooks
+        let hooksResult = try await gitService.runGitCommand("config", "--get", "core.hookspath", in: directory)
+        let hooksPath = hooksResult.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hooksDirPath = hooksPath.isEmpty ? ".git/hooks" : hooksPath
+
+        let lfsHookPath = (directory.path as NSString).appendingPathComponent("\(hooksDirPath)/post-checkout")
+        return FileManager.default.fileExists(atPath: lfsHookPath)
+    }
+
+    func openRepository(at url: URL) async throws {
+        do {
+            guard try await gitService.isGitRepository(at: url) else {
+                throw NSError(domain: "GitApp", code: 1, userInfo: [NSLocalizedDescriptionKey: "Selected directory is not a Git repository"])
+            }
+
+            // Add to recent repositories if not already present
+            if !recentRepositories.contains(url) {
+                recentRepositories.insert(url, at: 0)
+                // Keep only the last 10 repositories
+                if recentRepositories.count > 10 {
+                    recentRepositories.removeLast()
+                }
+                saveRecentRepositories()
+            }
+
+            // Set as current repository
+            repositoryURL = url
+
+            // Load repository data
+            await loadRepositoryData(from: url)
+        } catch {
+            throw error
+        }
+    }
+
+    func loadRecentRepositories() async {
+        if let data = UserDefaults.standard.data(forKey: "recentRepositories") {
+            do {
+                let paths = try JSONDecoder().decode([String].self, from: data)
+                recentRepositories = paths.map { URL(fileURLWithPath: $0) }
+
+                // Validate repositories still exist and are valid
+                recentRepositories = recentRepositories.filter { url in
+                    var isDirectory: ObjCBool = false
+                    let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                    return exists && isDirectory.boolValue
+                }
+
+                saveRecentRepositories()
+            } catch {
+                print("Error loading recent repositories: \(error)")
+            }
+        }
+    }
+
+    private func saveRecentRepositories() {
+        do {
+            let paths = recentRepositories.map { $0.path }
+            let data = try JSONEncoder().encode(paths)
+            UserDefaults.standard.set(data, forKey: "recentRepositories")
+        } catch {
+            print("Error saving recent repositories: \(error)")
         }
     }
 }

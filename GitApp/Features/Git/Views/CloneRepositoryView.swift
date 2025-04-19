@@ -12,6 +12,18 @@ struct CloneRepositoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var cloneURL: String = ""
     @State private var selectedDirectory: URL?
+    @State private var isShowingErrorAlert = false
+    @State private var errorMessage = ""
+    @State private var extractedRepoName: String?
+
+    private var isValidURL: Bool {
+        guard !cloneURL.isEmpty else { return false }
+        return cloneURL.hasPrefix("https://") || cloneURL.hasPrefix("git@")
+    }
+
+    private var canClone: Bool {
+        isValidURL && selectedDirectory != nil && !viewModel.isCloning
+    }
 
     var body: some View {
         NavigationStack {
@@ -19,12 +31,26 @@ struct CloneRepositoryView: View {
                 Section("Repository URL") {
                     TextField("https://github.com/username/repo.git", text: $cloneURL)
                         .textContentType(.URL)
+                        .autocorrectionDisabled()
+//                        .textInputAutocapitalization(.never)
+                        .onChange(of: cloneURL) { _ in
+                            extractRepoName()
+                        }
+
+                    if let repoName = extractedRepoName {
+                        Label("Repository: \(repoName)", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
                 }
 
                 Section("Clone Location") {
                     if let directory = selectedDirectory {
-                        Text(directory.path)
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Image(systemName: "folder.fill")
+                                .foregroundStyle(.blue)
+                            Text(directory.path)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Button("Choose Directory") {
@@ -61,17 +87,52 @@ struct CloneRepositoryView: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Clone") {
-                        if let directory = selectedDirectory {
-                            viewModel.cloneRepository(from: cloneURL, to: directory)
-                        } else {
-                            viewModel.errorMessage = "Please select a directory to clone into"
-                        }
+                        cloneRepository()
                     }
-                    .disabled(cloneURL.isEmpty || selectedDirectory == nil || viewModel.isCloning)
+                    .disabled(!canClone)
                 }
+            }
+            .alert("Error", isPresented: $isShowingErrorAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
             }
         }
         .frame(minWidth: 400, minHeight: 200)
+    }
+
+    private func extractRepoName() {
+        guard isValidURL else {
+            extractedRepoName = nil
+            return
+        }
+
+        // Extract repository name from URL
+        if let lastComponent = cloneURL.components(separatedBy: "/").last?
+            .replacingOccurrences(of: ".git", with: "") {
+            extractedRepoName = lastComponent
+        }
+    }
+
+    private func cloneRepository() {
+        guard let directory = selectedDirectory else {
+            errorMessage = "Please select a directory to clone into"
+            isShowingErrorAlert = true
+            return
+        }
+
+        Task {
+            do {
+                if try await viewModel.cloneRepository(from: cloneURL, to: directory) {
+                    // Show success feedback
+                    viewModel.errorMessage = "Repository cloned successfully"
+                    dismiss()
+                }
+            } catch {
+                errorMessage = "Clone failed: \(error.localizedDescription)"
+                isShowingErrorAlert = true
+            }
+        }
     }
 }
 
@@ -262,7 +323,7 @@ struct AddLocalRepositoryView: View {
 //                // Get remote information
                  let remotes =  viewModel.repoInfo
                     remoteInfo = remotes.remotes.map({return $0.name})
-                
+
             } else {
                 branchInfo = nil
                 remoteInfo = []
