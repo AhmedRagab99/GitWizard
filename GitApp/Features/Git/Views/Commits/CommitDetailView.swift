@@ -12,9 +12,14 @@ struct CommitDetailView: View {
     @State private var expandedFile: FileChange?
     @State private var isLoading = true
     @ObservedObject var viewModel: GitViewModel
+    @State private var detailHeight: CGFloat = 300 // Default height
+    @State private var isDragging = false
 
     var body: some View {
         VStack(spacing: 0) {
+            // Drag Handle
+            DragHandle(height: $detailHeight, isDragging: $isDragging)
+
             if isLoading {
                 VStack(spacing: ModernUI.spacing) {
                     ProgressView()
@@ -26,26 +31,25 @@ struct CommitDetailView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(ModernUI.colors.background)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: ModernUI.spacing, pinnedViews: [.sectionHeaders]) {
-                        CommitDetailHeader(
-                            commit: commit,
-                            refs: details?.branchNames ?? [],
-                            viewModel: viewModel
-                        )
+                VStack(spacing: 0) {
+                    // Header Section with Commit Info
+                    CommitDetailHeader(
+                        commit: commit,
+                        refs: details?.branchNames ?? [],
+                        viewModel: viewModel
+                    )
+                    .padding(ModernUI.padding)
+                    .background(ModernUI.colors.background)
+                    .modernShadow(.small)
 
-                        // Commit message
-                        Text(commit.message)
-                            .font(.system(.body))
-                            .padding(ModernUI.padding)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(ModernUI.colors.background)
-                            .cornerRadius(ModernUI.cornerRadius)
-                            .modernShadow(.small)
+                    // Divider
+                    Divider()
+                        .background(ModernUI.colors.border)
 
+                    // Changes Section
+                    ScrollView {
                         if let details = details {
-                            // Changed files section
-                            Section {
+                            VStack(alignment: .leading, spacing: ModernUI.spacing) {
                                 ForEach(details.changedFiles) { file in
                                     FileChangeSection(
                                         fileChange: file,
@@ -53,29 +57,59 @@ struct CommitDetailView: View {
                                         expandedFile: $expandedFile
                                     )
                                 }
-                            } header: {
-                                HStack {
-                                    Text("Changed Files")
-                                        .font(.headline)
-                                    Text("(\(details.changedFiles.count))")
-                                        .foregroundColor(ModernUI.colors.secondaryText)
-                                    Spacer()
-                                }
-                                .padding(ModernUI.padding)
-                                .background(ModernUI.colors.background)
                             }
+                            .padding(ModernUI.padding)
                         }
                     }
-                    .padding(ModernUI.padding)
                 }
             }
         }
+        .frame(height: detailHeight)
         .background(ModernUI.colors.background)
+        .animation(isDragging ? nil : .easeOut(duration: 0.2), value: detailHeight)
+        .animation(.easeOut(duration: 0.1), value: isDragging)
         .onAppear {
             withAnimation(ModernUI.animation.delay(0.3)) {
                 isLoading = false
             }
         }
+    }
+}
+
+struct DragHandle: View {
+    @Binding var height: CGFloat
+    @Binding var isDragging: Bool
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Rectangle()
+                .fill(ModernUI.colors.border)
+                .frame(width: 36, height: 4)
+                .cornerRadius(2)
+        }
+        .frame(height: 20)
+        .frame(maxWidth: .infinity)
+        .background(isDragging ? ModernUI.colors.secondaryBackground : Color.clear)
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    isDragging = true
+                    let newHeight = height - value.translation.height
+                    // Clamp the height between min and max values
+                    height = max(150, min(newHeight, NSScreen.main?.frame.height ?? 800 * 0.8))
+                }
+                .onEnded { _ in
+                    isDragging = false
+                    // Snap to common heights if close
+                    let snapPoints: [CGFloat] = [200, 300, 400, 500]
+                    if let snapHeight = snapPoints.min(by: { abs($0 - height) < abs($1 - height) }),
+                       abs(snapHeight - height) < 30 {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            height = snapHeight
+                        }
+                    }
+                }
+        )
     }
 }
 

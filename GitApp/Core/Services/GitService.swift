@@ -247,15 +247,15 @@ actor GitService {
         }
     }
 
-    func getRemotes(in directory: URL) async -> [(name: String, url: String)] {
+    func getRemotes(in directory: URL) async -> [Remote] {
         do {
             let result = try await runGitCommand("remote", "-v", in: directory)
             return result.output.components(separatedBy: .newlines)
                 .filter { !$0.isEmpty }
-                .compactMap { line -> (name: String, url: String)? in
+                .compactMap { line -> Remote? in
                     let components = line.components(separatedBy: .whitespaces)
                     guard components.count >= 2 else { return nil }
-                    return (name: components[0], url: components[1])
+                    return Remote(name: components[0], url: components[1])
                 }
         } catch {
             return []

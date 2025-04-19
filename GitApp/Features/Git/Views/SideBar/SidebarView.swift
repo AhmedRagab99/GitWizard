@@ -127,7 +127,7 @@ struct SidebarView: View {
                 // Remotes section
                 if !viewModel.repoInfo.remotes.isEmpty {
                     Section("Remotes") {
-                        ForEach(viewModel.repoInfo.remotes, id: \.name) { remote in
+                        ForEach(viewModel.repoInfo.remotes) { remote in
                             HStack {
                                 Image(systemName: "network")
                                     .foregroundColor(.blue)
