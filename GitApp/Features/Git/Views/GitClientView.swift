@@ -4,33 +4,63 @@ import SwiftUI
 import Foundation
 import AppKit
 
-
 struct GitClientView: View {
-    @ObservedObject  var viewModel: GitViewModel
+    @ObservedObject var viewModel: GitViewModel
+    @State private var selectedTab: Tab = .history
+
+    enum Tab {
+        case history
+        case changes
+    }
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView(viewModel: viewModel)
-        } content: {
-                TabView {
-                    HistoryView(viewModel: viewModel)
-                        .tabItem {
-                            Label("History", systemImage: "clock")
-                        }
+        VStack(spacing: 0) {
+            // Top section - Sidebar and content
+            HStack(spacing: 0) {
+                // Sidebar
+                SidebarView(viewModel: viewModel)
+                    .frame(minWidth: 250, maxWidth: 300)
 
-                    ChangesView(viewModel: viewModel)
-                        .tabItem {
-                            Label("Changes", systemImage: "list.bullet")
+                // Main content
+                VStack(spacing: 0) {
+                    // Tab bar
+                    HStack {
+                        Button(action: { selectedTab = .history }) {
+                            Label("History", systemImage: "clock")
+                                .foregroundStyle(selectedTab == .history ? .tertiary : .secondary)
                         }
+                        .buttonStyle(.plain)
+
+                        Button(action: { selectedTab = .changes }) {
+                            Label("Changes", systemImage: "list.bullet")
+                                .foregroundStyle(selectedTab == .changes ? .tertiary : .secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+                    }
+                    .padding()
+                    .background(ModernUI.colors.background)
+
+                    // Content area
+                    if selectedTab == .history {
+                        HistoryView(viewModel: viewModel)
+                    } else {
+                        ChangesView(viewModel: viewModel)
+                    }
                 }
-        } detail: {
+            }
+
+            // Bottom section - Commit details
             if let commit = viewModel.selectedCommit {
-                CommitDetailView(commit: commit, details: viewModel.commitDetails)
-            } else {
-                Text("Select a commit to view details")
-                    .foregroundColor(.secondary)
+                VStack(spacing: 0) {
+                    Divider()
+                    CommitDetailView(commit: commit, details: viewModel.commitDetails, viewModel: viewModel)
+                }
+                .frame(height: 300)
             }
         }
+        .background(ModernUI.colors.background)
     }
 }
 
@@ -44,32 +74,57 @@ enum SyntaxTheme {
     static let normalText = Color(.labelColor)
 }
 
-
 // Modern UI Constants
 enum ModernUI {
-    static let cornerRadius: CGFloat = 8
+    static let spacing: CGFloat = 8
     static let padding: CGFloat = 16
-    static let spacing: CGFloat = 12
+    static let cornerRadius: CGFloat = 8
     static let animation: Animation = .spring(response: 0.3, dampingFraction: 0.7)
 
-    static let colors = (
-        background: Color(.windowBackgroundColor),
-        secondaryBackground: Color(.controlBackgroundColor),
-        accent: Color.blue,
-        text: Color(.labelColor),
-        secondaryText: Color(.secondaryLabelColor),
-        border: Color(.separatorColor),
-        selection: Color.blue.opacity(0.15)
-    )
+    enum colors {
+        static let background = Color(.windowBackgroundColor)
+        static let secondaryBackground = Color(.controlBackgroundColor)
+        static let selection = Color(.selectedContentBackgroundColor)
+        static let border = Color(.separatorColor)
+        static let secondaryText = Color(.secondaryLabelColor)
+    }
 
-    struct ShadowStyle {
-        let color: Color
-        let radius: CGFloat
-        let x: CGFloat
-        let y: CGFloat
+    enum shadow {
+        case small, medium, large
 
-        static let small = ShadowStyle(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-        static let medium = ShadowStyle(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
-        static let large = ShadowStyle(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+        var radius: CGFloat {
+            switch self {
+            case .small: return 2
+            case .medium: return 4
+            case .large: return 8
+            }
+        }
+        var colors: Color {
+            switch self {
+                case .small: return Color.black.opacity(0.1)
+                case .medium: return Color.black.opacity(0.2)
+            case .large: return Color.black.opacity(0.3)
+            }
+        }
+       
+
+        var offset: CGFloat {
+            switch self {
+            case .small: return 1
+            case .medium: return 2
+            case .large: return 4
+            }
+        }
     }
 }
+//
+//extension View {
+//    func modernShadow(_ style: ModernUI.shadow) -> some View {
+//        self.shadow(
+//            color: .black.opacity(0.1),
+//            radius: style.radius,
+//            x: 0,
+//            y: style.offset
+//        )
+//    }
+//}

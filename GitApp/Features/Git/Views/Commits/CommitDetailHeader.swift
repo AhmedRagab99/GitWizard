@@ -10,6 +10,8 @@ struct CommitDetailHeader: View {
     let commit: Commit
     let refs: [String]
     @State private var isExpanded = false
+    @State private var showingCheckoutAlert = false
+    @ObservedObject var viewModel: GitViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: ModernUI.spacing) {
@@ -26,7 +28,7 @@ struct CommitDetailHeader: View {
                         Image(systemName: "doc.on.doc")
                             .font(.caption)
                     }
-                    .buttonStyle(ModernButtonStyle(style: .ghost))
+                    .buttonStyle(.modern(.primary, size: .small))
                 }
 
                 Spacer()
@@ -35,12 +37,12 @@ struct CommitDetailHeader: View {
                     Button(action: {}) {
                         Image(systemName: "chevron.left")
                     }
-                    .buttonStyle(ModernButtonStyle(style: .ghost))
+                    .buttonStyle(.modern(.primary, size: .small))
 
                     Button(action: {}) {
                         Image(systemName: "chevron.right")
                     }
-                    .buttonStyle(ModernButtonStyle(style: .ghost))
+                    .buttonStyle(.modern(.primary, size: .small))
 
                     Menu {
                         Button("Changeset", action: {})
@@ -51,7 +53,7 @@ struct CommitDetailHeader: View {
                             Image(systemName: "chevron.down")
                         }
                     }
-                    .buttonStyle(ModernButtonStyle(style: .secondary))
+                    .buttonStyle(.modern(.secondary, size: .small))
                 }
             }
 
@@ -108,8 +110,42 @@ struct CommitDetailHeader: View {
             .padding(ModernUI.padding)
             .background(ModernUI.colors.secondaryBackground)
             .cornerRadius(ModernUI.cornerRadius)
+
+            HStack {
+                Text(commit.message)
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .lineLimit(2)
+
+                Spacer()
+
+                Button(action: { showingCheckoutAlert = true }) {
+                    Label("Checkout", systemImage: "arrow.triangle.branch")
+                }
+                .buttonStyle(.modern(.secondary, size: .small))
+            }
+
+            HStack {
+                Text(commit.authorName)
+                    .foregroundStyle(.secondary)
+                Text("•")
+                    .foregroundStyle(.secondary)
+                Text(commit.date.formatted(date: .abbreviated, time: .shortened))
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
         }
         .padding(ModernUI.padding)
         .background(ModernUI.colors.background)
+        .alert("Checkout Commit", isPresented: $showingCheckoutAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Checkout") {
+                Task {
+                    await viewModel.checkoutCommit(commit.hash)
+                }
+            }
+        } message: {
+            Text("This will detach your HEAD. Are you sure you want to checkout this commit?")
+        }
     }
 }

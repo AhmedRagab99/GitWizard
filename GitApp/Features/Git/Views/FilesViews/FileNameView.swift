@@ -41,8 +41,8 @@ struct FileNameView: View {
 
             // File name
             Text(name)
-                .foregroundColor(ModernUI.colors.text)
-                .font(.system(size: 14, weight: .medium))
+                .font(.headline)
+                .foregroundColor(ModernUI.colors.secondaryText)
 
             // File type badge
             Text(fileType.label)

@@ -908,4 +908,58 @@ class GitViewModel: ObservableObject {
             print("Error saving recent repositories: \(error)")
         }
     }
+
+    func refreshState() async {
+        guard let url = repositoryURL else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            // Refresh repository data
+            await loadRepositoryData(from: url)
+
+            // Refresh changes
+            await loadChanges()
+
+            // Refresh current branch
+            if let currentBranchName = try await gitService.getCurrentBranch(in: url) {
+                currentBranch = branches.first { $0.name == currentBranchName }
+                selectedBranch = currentBranch
+
+                // Load commits for current branch
+                if let branch = currentBranch {
+                    branchCommits = try await gitService.getCommits(for: branch.name, in: url)
+                }
+            }
+        } catch {
+            errorMessage = "Error refreshing state: \(error.localizedDescription)"
+        }
+    }
+
+    func checkoutCommit(_ hash: String) async {
+        guard let repoURL = selectedRepository else {
+            errorMessage = "No repository selected"
+            return
+        }
+
+        do {
+            let (output, error) = try await gitService.runGitCommand("checkout", hash, in: repoURL)
+
+            if !error.isEmpty {
+                throw NSError(domain: "GitApp", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
+            }
+
+            // Refresh the state
+            await refreshState()
+
+            // Update commit details if needed
+            if let details = try await gitService.getCommitDetails(for: hash, in: repoURL) {
+                commitDetails = details
+            }
+
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }

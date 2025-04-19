@@ -11,6 +11,7 @@ struct CommitDetailView: View {
     let details: GitViewModel.CommitDetails?
     @State private var expandedFile: FileChange?
     @State private var isLoading = true
+    @ObservedObject var viewModel: GitViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,7 +30,8 @@ struct CommitDetailView: View {
                     LazyVStack(alignment: .leading, spacing: ModernUI.spacing, pinnedViews: [.sectionHeaders]) {
                         CommitDetailHeader(
                             commit: commit,
-                            refs: details?.branchNames ?? []
+                            refs: details?.branchNames ?? [],
+                            viewModel: viewModel
                         )
 
                         // Commit message
@@ -73,6 +75,49 @@ struct CommitDetailView: View {
             withAnimation(ModernUI.animation.delay(0.3)) {
                 isLoading = false
             }
+        }
+    }
+}
+
+struct FileChangeRow: View {
+    let file: FileChange
+
+    var body: some View {
+        HStack {
+            Image(systemName: statusIcon)
+                .foregroundStyle(statusColor)
+
+            Text(file.name)
+                .lineLimit(1)
+
+            Spacer()
+
+            Text("\(file.stagedChanges.count + file.unstagedChanges.count)")
+                .font(.caption)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.secondary.opacity(0.2))
+                .clipShape(Capsule())
+        }
+        .padding(.horizontal, ModernUI.padding)
+        .padding(.vertical, 4)
+    }
+
+    private var statusIcon: String {
+        switch file.status {
+        case "Added": return "plus.circle.fill"
+        case "Modified": return "pencil.circle.fill"
+        case "Deleted": return "minus.circle.fill"
+        default: return "doc.circle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch file.status {
+        case "Added": return .green
+        case "Modified": return .blue
+        case "Deleted": return .red
+        default: return .secondary
         }
     }
 }
