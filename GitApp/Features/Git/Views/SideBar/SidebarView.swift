@@ -7,11 +7,23 @@
 
 import SwiftUI
 import Foundation
+import GitApp
 
 struct SidebarView: View {
     @ObservedObject var viewModel: GitViewModel
     @State private var filterText: String = ""
     @State private var expandedBranches: Set<String> = ["feature"]
+    @FocusState private var isSearchFocused: Bool
+
+    private var filteredBranches: [Branch] {
+        if filterText.isEmpty {
+            return viewModel.branches
+        }
+        return viewModel.branches.filter { branch in
+            branch.name.localizedCaseInsensitiveContains(filterText) ||
+            branch.displayName.localizedCaseInsensitiveContains(filterText)
+        }
+    }
 
     private func toggleBranch(_ branch: String) {
         if expandedBranches.contains(branch) {
@@ -72,7 +84,7 @@ struct SidebarView: View {
 
                 // Branches section
                 Section("Branches") {
-                    let branchGroups = groupBranches(viewModel.branches)
+                    let branchGroups = groupBranches(filteredBranches)
 
                     // Main branches
                     if let mainBranches = branchGroups[""] {
@@ -89,28 +101,26 @@ struct SidebarView: View {
 
                     // Grouped branches
                     ForEach(Array(branchGroups.keys.sorted().filter { $0 != "" }), id: \.self) { group in
-                        if let groupBranches = branchGroups[group] {
-                            DisclosureGroup(
-                                isExpanded: Binding(
-                                    get: { expandedBranches.contains(group) },
-                                    set: { _ in toggleBranch(group) }
+                        DisclosureGroup(
+                            isExpanded: Binding(
+                                get: { expandedBranches.contains(group) },
+                                set: { _ in toggleBranch(group) }
+                            )
+                        ) {
+                            ForEach(branchGroups[group] ?? []) { branch in
+                                SidebarBranchView(
+                                    branch: branch,
+                                    isExpanded: false,
+                                    hasSubbranches: false,
+                                    viewModel: viewModel
                                 )
-                            ) {
-                                ForEach(groupBranches) { branch in
-                                    SidebarBranchView(
-                                        branch: branch,
-                                        isExpanded: false,
-                                        hasSubbranches: false,
-                                        viewModel: viewModel
-                                    )
-                                    .tag(SidebarItem.branch(branch))
-                                }
-                            } label: {
-                                HStack {
-                                    Image(systemName: "folder.fill")
-                                        .foregroundColor(.blue)
-                                    Text(group)
-                                }
+                                .tag(SidebarItem.branch(branch))
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "folder.fill")
+                                    .foregroundColor(.blue)
+                                Text(group)
                             }
                         }
                     }
@@ -140,9 +150,47 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
 
-            // Filter bar at bottom
-            FilterBarView(filterText: $filterText) {
-                // Add button action
+            // Modern search field at bottom
+            VStack(spacing: 0) {
+                Divider()
+                    .padding(.bottom, 8)
+
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(isSearchFocused ? .blue : .secondary)
+                        .font(.system(size: 14))
+
+                    TextField("Search branches...", text: $filterText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .focused($isSearchFocused)
+
+                    if !filterText.isEmpty {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                filterText = ""
+                            }
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 14))
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(.windowBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(isSearchFocused ? Color.blue.opacity(0.5) : Color.clear, lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
             }
             .background(Color(.windowBackgroundColor))
         }
