@@ -106,7 +106,7 @@ enum ModernUI {
             case .large: return Color.black.opacity(0.3)
             }
         }
-       
+
 
         var offset: CGFloat {
             switch self {
