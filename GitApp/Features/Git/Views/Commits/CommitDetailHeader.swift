@@ -13,6 +13,30 @@ struct CommitDetailHeader: View {
     @State private var showingCheckoutAlert = false
     @ObservedObject var viewModel: GitViewModel
 
+    private var commitIndex: Int? {
+        viewModel.branchCommits.firstIndex(where: { $0.hash == commit.hash })
+    }
+
+    private var canGoToPrevious: Bool {
+        guard let index = commitIndex else { return false }
+        return index > 0
+    }
+
+    private var canGoToNext: Bool {
+        guard let index = commitIndex else { return false }
+        return index < viewModel.branchCommits.count - 1
+    }
+
+    private func navigateToPrevious() {
+        guard let index = commitIndex, canGoToPrevious else { return }
+        viewModel.selectedCommit = viewModel.branchCommits[index - 1]
+    }
+
+    private func navigateToNext() {
+        guard let index = commitIndex, canGoToNext else { return }
+        viewModel.selectedCommit = viewModel.branchCommits[index + 1]
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: ModernUI.spacing) {
             // Top bar with hash and actions
@@ -34,15 +58,17 @@ struct CommitDetailHeader: View {
                 Spacer()
 
                 HStack(spacing: ModernUI.spacing) {
-                    Button(action: {}) {
+                    Button(action: navigateToPrevious) {
                         Image(systemName: "chevron.left")
                     }
                     .buttonStyle(.modern(.primary, size: .small))
+                    .disabled(!canGoToPrevious)
 
-                    Button(action: {}) {
+                    Button(action: navigateToNext) {
                         Image(systemName: "chevron.right")
                     }
                     .buttonStyle(.modern(.primary, size: .small))
+                    .disabled(!canGoToNext)
 
                     Menu {
                         Button("Changeset", action: {})
