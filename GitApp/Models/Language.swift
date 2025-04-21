@@ -10,163 +10,138 @@ import Foundation
 import Sourceful
 import SwiftUI
 
-enum Language: String {
-    
-    case swift, python, javascript, typescript, java, kotlin, c, cpp, csharp, ruby, php, go, rust, shell, perl, html, css, markdown, ocaml, gitignore,other
+enum Language: String, CaseIterable {
+    case swift = "swift"
+    case objectiveC = "m"
+    case java = "java"
+    case kotlin = "kt"
+    case python = "py"
+    case javascript = "js"
+    case typescript = "ts"
+    case c = "c"
+    case cpp = "cpp"
+    case csharp = "cs"
+    case go = "go"
+    case rust = "rs"
+    case ruby = "rb"
+    case php = "php"
+    case html = "html"
+    case css = "css"
+    case json = "json"
+    case yaml = "yaml"
+    case xml = "xml"
+    case markdown = "md"
+    case shell = "sh"
+    case other = "other"
 
-    private static func detect(filePath: String) -> Language? {
-        let ext = URL(fileURLWithPath: String(filePath)).pathExtension.lowercased()
-
-        switch ext {
-        case "swift": return .swift
-        case "py": return .python
-        case "js": return .javascript
-        case "ts": return .typescript
-        case "java": return .java
-        case "kt": return .kotlin
-        case "c": return .c
-        case "cpp", "cc", "cxx": return .cpp
-        case "cs": return .csharp
-        case "rb": return .ruby
-        case "php": return .php
-        case "go": return .go
-        case "rs": return .rust
-        case "sh", "bash", "zsh": return .shell
-        case "pl": return .perl
-        case "html": return .html
-        case "css": return .css
-        case "md": return .markdown
-        case "ml": return .ocaml
-        case "gitigonre" : return .gitignore
-        default: return .other
+    var displayName: String {
+        switch self {
+        case .swift: return "Swift"
+        case .objectiveC: return "Objective-C"
+        case .java: return "Java"
+        case .kotlin: return "Kotlin"
+        case .python: return "Python"
+        case .javascript: return "JavaScript"
+        case .typescript: return "TypeScript"
+        case .c: return "C"
+        case .cpp: return "C++"
+        case .csharp: return "C#"
+        case .go: return "Go"
+        case .rust: return "Rust"
+        case .ruby: return "Ruby"
+        case .php: return "PHP"
+        case .html: return "HTML"
+        case .css: return "CSS"
+        case .json: return "JSON"
+        case .yaml: return "YAML"
+        case .xml: return "XML"
+        case .markdown: return "Markdown"
+        case .shell: return "Shell"
+        case .other: return "Other"
         }
     }
 
-    static func lexer(filePath: String) -> Lexer {
-        switch detect(filePath: filePath) {
-        case .java:
-            return JavaLexer()
+    var icon: String {
+        switch self {
+        case .swift: return "swift"
+        case .objectiveC: return "c.circle"
+        case .java: return "j.circle"
+        case .kotlin: return "k.circle"
+        case .python: return "p.circle"
+        case .javascript: return "js.circle"
+        case .typescript: return "ts.circle"
+        case .c: return "c.circle"
+        case .cpp: return "cpp.circle"
+        case .csharp: return "csharp.circle"
+        case .go: return "g.circle"
+        case .rust: return "r.circle"
+        case .ruby: return "ruby.circle"
+        case .php: return "php.circle"
+        case .html: return "html.circle"
+        case .css: return "css.circle"
+        case .json: return "json.circle"
+        case .yaml: return "yaml.circle"
+        case .xml: return "xml.circle"
+        case .markdown: return "markdown.circle"
+        case .shell: return "terminal.circle"
+        case .other: return "doc.circle"
+        }
+    }
+
+
+    func color(for line: String) -> SwiftUI.Color {
+        let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Common keywords and patterns
+        if trimmedLine.isEmpty {
+            return .clear
+        }
+
+        // Comments
+        if trimmedLine.hasPrefix("//") || trimmedLine.hasPrefix("#") || trimmedLine.hasPrefix("/*") {
+            return .gray
+        }
+
+        // Strings
+        if trimmedLine.contains("\"") || trimmedLine.contains("'") {
+            return .green
+        }
+
+        // Numbers
+        if trimmedLine.range(of: #"^\d+$"#, options: .regularExpression) != nil {
+            return .blue
+        }
+
+        // Keywords (language-specific)
+        switch self {
+        case .swift:
+            let swiftKeywords = ["func", "class", "struct", "enum", "protocol", "extension", "var", "let", "if", "else", "for", "while", "return", "import"]
+            if swiftKeywords.contains(where: { trimmedLine.contains($0) }) {
+                return .purple
+            }
+        case .python:
+            let pythonKeywords = ["def", "class", "if", "else", "for", "while", "return", "import", "from", "as"]
+            if pythonKeywords.contains(where: { trimmedLine.contains($0) }) {
+                return .purple
+            }
         case .javascript, .typescript:
-            return JavaScriptLexer()
-        case .python:
-            return Python3Lexer()
-        case .swift:
-            return SwiftLexer()
-        case .ocaml:
-            return OCamlLexer()
+            let jsKeywords = ["function", "class", "const", "let", "var", "if", "else", "for", "while", "return", "import", "export"]
+            if jsKeywords.contains(where: { trimmedLine.contains($0) }) {
+                return .purple
+            }
+        case .java, .kotlin:
+            let javaKeywords = ["public", "private", "protected", "class", "interface", "void", "int", "String", "if", "else", "for", "while", "return", "import"]
+            if javaKeywords.contains(where: { trimmedLine.contains($0) }) {
+                return .purple
+            }
         default:
-            return PlainLexer()
+            break
         }
-    }
-    static func label(filePath: String) -> String? {        
-        switch detect(filePath: filePath) {
-        case .swift:
-            return "Swift"
-        case .javascript:
-            return "JavaScript"
-        case .python:
-            return "Python"
-        case .ocaml:
-            return "OCaml"
-        case .java:
-            return "Java"
-        case .typescript:
-            return "TypeScript"
-        case .markdown:
-            return "Markdown"
-        case .ruby:
-            return "Ruby"
-        case .rust:
-            return "Rust"
-        case .gitignore:
-            return "GitIgnore"
-        case .other:
-            let ext = URL(fileURLWithPath: String(filePath)).pathExtension.lowercased()
-            return filePath
-        default:
-            let ext = URL(fileURLWithPath: String(filePath)).pathExtension.lowercased()
-            return nil
-        }
+
+        return .primary
     }
 
-    static func assetName(filePath: String) -> String? {
-        switch detect(filePath: filePath) {
-        case .swift:
-            return "Swift"
-        case .python:
-            return "python"
-        case .ruby:
-            return "ruby"
-        case .rust:
-            return "rust"
-        case .javascript:
-            return "js"
-        case .ocaml:
-            return "ocaml"
-        default:
-            return nil
-            
-        }
+    static func language(for fileExtension: String) -> Language {
+        return Language(rawValue: fileExtension.lowercased()) ?? .other
     }
 }
-//import Foundation
-//import SwiftUI
-//
-//enum FileType {
-//    case swift
-//    case markdown
-//    case json
-//    case yaml
-//    case gitignore
-//    case other(String)
-//
-//    init(from filename: String) {
-//        let ext = (filename as NSString).pathExtension.lowercased()
-//        switch ext {
-//        case "swift": self = .swift
-//        case "md": self = .markdown
-//        case "json": self = .json
-//        case "yml", "yaml": self = .yaml
-//        case "":
-//            if filename.lowercased() == ".gitignore" {
-//                self = .gitignore
-//            } else {
-//                self = .other("")
-//            }
-//        default: self = .other(ext)
-//        }
-//    }
-//
-//    var icon: String {
-//        switch self {
-//        case .swift: return "swift"
-//        case .markdown: return "doc.text"
-//        case .json: return "curlybraces"
-//        case .yaml: return "list.bullet.indent"
-//        case .gitignore: return "eye.slash"
-//        case .other: return "doc"
-//        }
-//    }
-//
-//    var color: Color {
-//        switch self {
-//        case .swift: return .orange
-//        case .markdown: return .blue
-//        case .json: return .yellow
-//        case .yaml: return .green
-//        case .gitignore: return .gray
-//        case .other: return .secondary
-//        }
-//    }
-//
-//    var label: String {
-//        switch self {
-//        case .swift: return "Swift"
-//        case .markdown: return "Markdown"
-//        case .json: return "JSON"
-//        case .yaml: return "YAML"
-//        case .gitignore: return "GitIgnore"
-//        case .other(let ext): return ext.uppercased()
-//        }
-//    }
-//}

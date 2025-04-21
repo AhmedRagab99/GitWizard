@@ -26,7 +26,7 @@ struct CodeLineView: View {
             switch self {
             case .added: return SyntaxTheme.addedText
             case .removed: return SyntaxTheme.removedText
-            case .normal: return SyntaxTheme.normalText
+            case .normal: return .clear
             }
         }
 
@@ -62,6 +62,6 @@ struct CodeLineView: View {
         }
         .padding(.vertical, 2)
         .padding(.horizontal, 8)
-        .background(type.background)
+//        .background(type.background)
     }
 }

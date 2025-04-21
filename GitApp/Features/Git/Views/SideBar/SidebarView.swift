@@ -120,6 +120,7 @@ struct BranchRowView: View {
     let branch: Branch
     let isCurrent: Bool
     let onSelect: () -> Void
+    @State private var showContextMenu = false
 
     var body: some View {
         HStack {
@@ -131,7 +132,17 @@ struct BranchRowView: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
-        .onTapGesture(perform: onSelect)
+        .onTapGesture(count: 2) {
+            onSelect()
+        }
+        .contextMenu {
+            Button(action: onSelect) {
+                Label("Checkout", systemImage: "arrow.triangle.branch")
+            }
+            .disabled(isCurrent)
+        }
+        .background(isCurrent ? Color.accentColor.opacity(0.1) : Color.clear)
+        .cornerRadius(4)
     }
 }
 

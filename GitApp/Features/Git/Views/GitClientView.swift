@@ -71,7 +71,7 @@ enum SyntaxTheme {
     static let lineNumber = Color.gray.opacity(0.5)
     static let addedText = Color.green
     static let removedText = Color.red
-    static let normalText = Color(.labelColor)
+    static let normalText = Color.clear
 }
 
 // Modern UI Constants

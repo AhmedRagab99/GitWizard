@@ -39,7 +39,7 @@ struct FileDiffView: View {
                 }
             }
         }
-        .background(theme == .light ? Color(.textBackgroundColor) : Color(.windowBackgroundColor))
+//        .background(Color.clear)
         .environment(\.colorScheme, theme.colorScheme)
     }
 
@@ -119,7 +119,7 @@ struct FileDiffView: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 4)
-            .background(Color(.controlBackgroundColor))
+            .background(Color(.clear))
 
             // Diff content
             HStack(spacing: 0) {
@@ -182,7 +182,7 @@ struct FileDiffView: View {
         } else if line.hasPrefix("@@") {
             return .blue
         }
-        return .primary
+        return .clear
     }
 
     private func lineBackground(for line: String) -> Color {
