@@ -23,16 +23,27 @@ struct CommitRowView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 // Commit message
-                Text(commit.body)
+                Text(commit.title)
                     .font(.headline)
                     .lineLimit(1)
 
                 // Commit metadata
                 HStack {
+                    AsyncImage(url: URL(string:commit.authorAvatar)!) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Image(systemName: "person.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(width: 20, height: 20)
+                    .clipShape(Circle())
+                    
                     Text(commit.author)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text(commit.authorDate)
+                    Text(commit.authorDateDisplay)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
