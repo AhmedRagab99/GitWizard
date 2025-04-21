@@ -1,10 +1,5 @@
 import Foundation
 
-struct Remote: Identifiable, Hashable {
-    let id = UUID()
-    let name: String
-    let url: String
-}
 
 struct RepoInfo: Identifiable {
     let id = UUID()

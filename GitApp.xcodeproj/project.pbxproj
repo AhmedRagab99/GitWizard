@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D076FB262DB590BD00EABEF7 /* Sourceful in Frameworks */ = {isa = PBXBuildFile; productRef = D076FB252DB590BD00EABEF7 /* Sourceful */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		D0675CAC2DB0925D00B190C3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D076FB262DB590BD00EABEF7 /* Sourceful in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = GitApp;
 			packageProductDependencies = (
+				D076FB252DB590BD00EABEF7 /* Sourceful */,
 			);
 			productName = GitApp;
 			productReference = D0675C9A2DB0925C00B190C3 /* GitApp.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = D0675C912DB0925C00B190C3;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D076FB242DB590BD00EABEF7 /* XCRemoteSwiftPackageReference "Sourceful" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D0675C9B2DB0925C00B190C3 /* Products */;
 			projectDirPath = "";
@@ -549,6 +558,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D076FB242DB590BD00EABEF7 /* XCRemoteSwiftPackageReference "Sourceful" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/maoyama/Sourceful";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D076FB252DB590BD00EABEF7 /* Sourceful */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D076FB242DB590BD00EABEF7 /* XCRemoteSwiftPackageReference "Sourceful" */;
+			productName = Sourceful;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D0675C922DB0925C00B190C3 /* Project object */;
 }

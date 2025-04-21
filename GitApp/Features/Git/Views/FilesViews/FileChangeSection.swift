@@ -5,118 +5,116 @@
 //  Created by Ahmed Ragab on 18/04/2025.
 //
 import SwiftUI
+import Foundation
 
 struct FileChangeSection: View {
-    let fileChange: FileChange
-    let diffContent: String?
-    @Binding var expandedFile: FileChange?
-    @State private var isLoading = false
-
-    private var isExpanded: Bool {
-        expandedFile?.id == fileChange.id
-    }
+    let fileDiff: FileDiff
+    let viewModel: GitViewModel
 
     private var statusColor: Color {
-        switch fileChange.status {
-        case "Added": return .green
-        case "Modified": return .yellow
-        case "Deleted": return .red
-        case "Renamed": return .blue
-        default: return .gray
-        }
+        return fileDiff.status.color
     }
 
-    private func parseLines(_ content: String) -> [(line: String, type: CodeLineView.LineType)] {
-        return content.components(separatedBy: .newlines).map { line in
-            if line.hasPrefix("+") {
-                return (String(line.dropFirst()), .added)
-            } else if line.hasPrefix("-") {
-                return (String(line.dropFirst()), .removed)
-            } else {
-                return (line, .normal)
-            }
-        }
+    private var statusIcon: String {
+        return fileDiff.status.icon
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             // File header
-            Button(action: {
-                withAnimation(ModernUI.animation) {
-                    if isExpanded {
-                        expandedFile = nil
-                    } else {
-                        expandedFile = fileChange
-                        isLoading = true
-                        // Simulate loading delay
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            isLoading = false
-                        }
-                    }
-                }
-            }) {
-                HStack(spacing: ModernUI.spacing) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .foregroundColor(ModernUI.colors.secondaryText)
-                        .frame(width: 20)
-
-                    Image(systemName: fileChange.status == "Added" ? "plus.circle.fill" :
-                            fileChange.status == "Modified" ? "pencil.circle.fill" :
-                            fileChange.status == "Deleted" ? "minus.circle.fill" :
-                            "arrow.triangle.2.circlepath.circle.fill")
-                        .foregroundColor(statusColor)
-
-                    FileNameView(filename: fileChange.name)
-
-                    Spacer()
-
-                    Text(fileChange.status)
-                        .font(.caption)
-                        .foregroundColor(ModernUI.colors.secondaryText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(statusColor.opacity(0.1))
-                        .cornerRadius(8)
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, ModernUI.padding)
-                .background(isExpanded ? ModernUI.colors.selection : Color.clear)
-                .contentShape(Rectangle())
+            HStack {
+                Image(systemName: statusIcon)
+                    .foregroundColor(statusColor)
+                Text(fileDiff.filePathDisplay)
+                    .font(.headline)
+                Spacer()
+                Text(fileDiff.status.rawValue)
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(statusColor.opacity(0.2))
+                    .foregroundColor(statusColor)
+                    .cornerRadius(4)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal)
+            .padding(.top, 8)
 
-            // Expanded content
-            if isExpanded {
-                if isLoading {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .padding()
-                        Spacer()
-                    }
-                    .background(ModernUI.colors.secondaryBackground)
-                } else if let diffContent = diffContent {
-                    ScrollView([.horizontal, .vertical]) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(parseLines(diffContent).enumerated()), id: \.offset) { index, line in
-                                CodeLineView(
-                                    line: line.line,
-                                    lineNumber: index + 1,
-                                    type: line.type
-                                )
-                            }
-                        }
-                        .padding(.vertical, ModernUI.padding)
-                    }
-                    .background(ModernUI.colors.secondaryBackground)
-                    .transition(.opacity)
-                }
+            // Chunks
+            ForEach(fileDiff.chunks) { chunk in
+                ChunkView(
+                    chunk: chunk,
+                    onStage: { viewModel.stageChunk(chunk, in: fileDiff) },
+                    onUnstage: { viewModel.unstageChunk(chunk, in: fileDiff) },
+                    onReset: { viewModel.resetChunk(chunk, in: fileDiff) }
+                )
             }
         }
-        .background(ModernUI.colors.background)
-        .cornerRadius(ModernUI.cornerRadius)
-        .modernShadow(.small)
+        .background(Color.white)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+struct ChunkView: View {
+    let chunk: Chunk
+    let onStage: () -> Void
+    let onUnstage: () -> Void
+    let onReset: () -> Void
+
+    private var enumeratedLines: [(offset: Int, element: Chunk.Line)] {
+        Array(chunk.lines.enumerated())
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Chunk header
+            HStack {
+                Text(chunk.stageString)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.secondary)
+                Spacer()
+                HStack(spacing: 8) {
+                    Button(action: onStage) {
+                        Label("Stage", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: onUnstage) {
+                        Label("Unstage", systemImage: "minus.circle")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: onReset) {
+                        Label("Reset", systemImage: "arrow.uturn.backward.circle")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            // Lines
+            ForEach(enumeratedLines, id: \.element.id) { index, line in
+                HStack(alignment: .top, spacing: 0) {
+                    // Line number
+                    Text(line.toFileLineNumber != nil ? "\(line.toFileLineNumber!)" : "")
+                        .frame(width: 40, alignment: .trailing)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+
+                    // Line content
+                    Text(line.raw)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(line.kind == .added ? .green : line.kind == .removed ? .red : .primary)
+                        .padding(.leading, 8)
+                }
+                .padding(.horizontal)
+            }
+        }
+        .padding(.bottom, 8)
     }
 }
 

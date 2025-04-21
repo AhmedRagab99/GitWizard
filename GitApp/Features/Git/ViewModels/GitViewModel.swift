@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import Foundation
 
+
 // Remove Branch struct definition since it's now in Models/Branch.swift
 
 // --- Git View Model ---
@@ -10,13 +11,14 @@ class GitViewModel: ObservableObject {
     // --- Published Properties (State) ---
     @Published var repoInfo: RepoInfo = RepoInfo()
     @Published var branches: [Branch] = []
+    @Published var remotebranches: [Branch] = []
     @Published var tags: [Tag] = []
     @Published var stashes: [Stash] = []
     @Published var workspaceCommands: [WorkspaceCommand] = []
     @Published var selectedSidebarItem: AnyHashable?
     @Published var selectedCommit: Commit?
-    @Published var selectedFileChange: FileChange?
-    @Published var diffContent: String?
+    @Published var selectedFileDiff: FileDiff?
+    @Published var diffContent: Diff?
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
     @Published var repositoryURL: URL? {
@@ -53,32 +55,24 @@ class GitViewModel: ObservableObject {
         }
     }
     @Published var currentBranch: Branch?
-    @Published var branchCommits: [Commit] = []
     @Published var commitDetails: CommitDetails?
     @Published var clonedRepositories: [URL] = []
     @Published var importedRepositories: [URL] = []
     @Published var selectedRepository: URL?
-    @Published var stagedChanges: [FileChange] = []
-    @Published var unstagedChanges: [FileChange] = []
+    @Published var stagedDiff: Diff?
+    @Published var unstagedDiff: Diff?
+    @Published var untrackedFiles: [String] = []
     @Published var recentRepositories: [URL] = []
+    var syncState = SyncState()
+
+    // Add LogStore
+    let logStore = LogStore()
 
     struct ImportProgress: Identifiable {
         let id = UUID()
         var current: Int
         var total: Int
         var status: String
-    }
-
-    struct CommitDetails {
-        let hash: String
-        let authorName: String
-        let authorEmail: String
-        let date: Date
-        let message: String
-        let changedFiles: [FileChange]
-        let diffContent: String?
-        let parentHashes: [String]
-        let branchNames: [String]
     }
 
     private var cancellables = Set<AnyCancellable>()
@@ -111,7 +105,7 @@ class GitViewModel: ObservableObject {
     // --- Public Methods ---
     func loadRepositoryData(from url: URL) async {
         do {
-            guard try await gitService.isGitRepository(at: url) else {
+            guard  await gitService.isGitRepository(at: url) else {
                 errorMessage = "Selected directory is not a Git repository"
                 return
             }
@@ -119,26 +113,52 @@ class GitViewModel: ObservableObject {
             isLoading = true
             defer { isLoading = false }
 
-            // Load branches
-            branches = try await gitService.getBranches(in: url)
+            // Load data in parallel where possible
+            async let branchesTask = gitService.getBranches(in: url)
+            async let currentBranchTask = gitService.getCurrentBranch(in: url)
+            async let tagsTask = gitService.getTags(in: url)
+            async let stashesTask = gitService.getStashes(in: url)
+            async let remotesTask = gitService.getRemotes(in: url)
 
-            // Set current branch
-            if let currentBranchName = try await gitService.getCurrentBranch(in: url) {
+            // Wait for all parallel tasks to complete
+            let (branches, currentBranchName, tags, stashes, remotes) = try await (
+                branchesTask,
+                currentBranchTask,
+                tagsTask,
+                stashesTask,
+                remotesTask
+            )
+
+            // Update branches
+            self.branches = branches
+
+            // Set current branch and update related state
+            if let currentBranchName = currentBranchName {
                 currentBranch = branches.first { $0.name == currentBranchName }
                 selectedBranch = currentBranch
+                syncState.branch = currentBranch
+                syncState.folderURL = url
 
-                // Load commits for current branch
-                if let branch = currentBranch {
-                    branchCommits = try await gitService.getCommits(for: branch.name, in: url)
-                }
+                // Update LogStore with current branch
+                logStore.directory = url
+                logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
+                await logStore.refresh()
             }
 
-            // Load other repository data
-            tags = try await gitService.getTags(in: url)
-            stashes = try await gitService.getStashes(in: url)
+            // Update other repository data
+            self.tags = tags
+            self.stashes = stashes
 
             // Update repository info
-            repoInfo = await gatherRepositoryInfo(from: url)
+            repoInfo = RepoInfo(
+                name: url.lastPathComponent,
+                currentBranch: currentBranchName ?? "main",
+                remotes: remotes
+            )
+
+            // Check sync state
+            try await syncState.sync()
+
         } catch {
             errorMessage = "Error loading repository data: \(error.localizedDescription)"
         }
@@ -172,7 +192,9 @@ class GitViewModel: ObservableObject {
                 isLoading = true
                 defer { isLoading = false }
 
-                branchCommits = try await gitService.getCommits(for: branch.name, in: url)
+                // Update LogStore with branch
+                logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
+                await logStore.refresh()
             } catch {
                 errorMessage = "Error loading commits: \(error.localizedDescription)"
             }
@@ -181,11 +203,11 @@ class GitViewModel: ObservableObject {
 
     // --- Bindings Setup ---
     private func setupBindings() {
-        $selectedFileChange
+        $selectedFileDiff
             .dropFirst()
-            .sink { [weak self] fileChange in
+            .sink { [weak self] fileDiff in
                 guard let self = self,
-                      let fileChange = fileChange,
+                      let fileDiff = fileDiff,
                       let commit = self.selectedCommit,
                       let url = self.repositoryURL else { return }
 
@@ -194,18 +216,9 @@ class GitViewModel: ObservableObject {
 
                 Task {
                     do {
-                        if let diff = try await self.gitService.getDiff(for: commit.hash, file: fileChange.name, in: url) {
-                            self.diffContent = diff
-                        } else {
-                            self.diffContent = """
-                            diff --git a/\(fileChange.name) b/\(fileChange.name)
-                            index 0000000..1234567
-                            --- a/\(fileChange.name)
-                            +++ b/\(fileChange.name)
-                            @@ -0,0 +1,1 @@
-                            +// Could not load diff for \(fileChange.name)
-                            """
-                        }
+                        let diff = try await self.gitService.getDiff(in: url)
+                        self.diffContent = diff
+
                     } catch {
                         self.errorMessage = "Error loading diff: \(error.localizedDescription)"
                     }
@@ -218,7 +231,7 @@ class GitViewModel: ObservableObject {
             .sink { [weak self] commit in
                 guard let self = self else { return }
                 if commit == nil {
-                    self.selectedFileChange = nil
+                    self.selectedFileDiff = nil
                     self.diffContent = nil
                     self.commitDetails = nil
                 } else if let commit = commit, let url = self.repositoryURL {
@@ -241,13 +254,9 @@ class GitViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let result = try await gitService.runGitCommand("fetch", in: url)
-            if result.error.isEmpty {
-                // Refresh repository data
-                await loadRepositoryData(from: url)
-            } else {
-                errorMessage = "Fetch failed: \(result.error)"
-            }
+            try await gitService.fetch(in: url)
+            // Refresh repository data
+            await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Fetch failed: \(error.localizedDescription)"
         }
@@ -263,42 +272,14 @@ class GitViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let result = try await gitService.runGitCommand("pull", in: url)
-            if result.error.isEmpty {
-                // Refresh repository data
-                await loadRepositoryData(from: url)
-            } else {
-                errorMessage = "Pull failed: \(result.error)"
-            }
+            try await gitService.pull(in: url)
+            // Refresh repository data
+            await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Pull failed: \(error.localizedDescription)"
         }
     }
 
-    func performPullBranch(_ branch: Branch) async {
-        guard let url = repositoryURL else {
-            errorMessage = "No repository selected"
-            return
-        }
-
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            let result = try await gitService.runGitCommand("pull", "origin", branch.name, in: url)
-            if result.error.isEmpty {
-                // Refresh repository data
-                await loadRepositoryData(from: url)
-
-                // Show success message
-                errorMessage = "Successfully pulled changes from origin/\(branch.name)"
-            } else {
-                errorMessage = "Pull failed: \(result.error)"
-            }
-        } catch {
-            errorMessage = "Pull failed: \(error.localizedDescription)"
-        }
-    }
 
     func performPush() async {
         guard let url = repositoryURL else {
@@ -310,10 +291,7 @@ class GitViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let result = try await gitService.runGitCommand("push", in: url)
-            if !result.error.isEmpty {
-                errorMessage = "Push failed: \(result.error)"
-            }
+            try await gitService.push(in: url)
         } catch {
             errorMessage = "Push failed: \(error.localizedDescription)"
         }
@@ -457,11 +435,9 @@ class GitViewModel: ObservableObject {
 
         do {
             // Get full commit details
-            if let details = try await gitService.getCommitDetails(for: commit.hash, in: url) {
+             let details = try await gitService.getCommitDetails(commit.hash, in: url)
                 commitDetails = details
-            } else {
-                errorMessage = "Could not load commit details"
-            }
+
         } catch {
             errorMessage = "Error loading commit details: \(error.localizedDescription)"
         }
@@ -518,172 +494,81 @@ class GitViewModel: ObservableObject {
 
     func loadChanges() async {
         guard let url = repositoryURL else { return }
-
-        isLoading = true
-        defer { isLoading = false }
-
         do {
-            // Get staged changes
-            let stagedResult = try await gitService.runGitCommand("diff", "--cached", "--name-status", in: url)
-            let stagedChanges = parseFileChanges(from: stagedResult.output)
+            let status = try await gitService.getStatus(in: url)
 
-            // Load line changes for each staged file
-            var updatedStagedChanges = stagedChanges
-            for i in updatedStagedChanges.indices {
-                let fileChange = updatedStagedChanges[i]
-                let lineChanges = try await loadLineChanges(for: fileChange.path, in: url)
-                updatedStagedChanges[i].stagedChanges = lineChanges.staged
-                updatedStagedChanges[i].unstagedChanges = lineChanges.unstaged
-            }
-            self.stagedChanges = updatedStagedChanges
+            // Get staged changes
+            let stagedDiff = try await gitService.getDiff(in: url, cached: true)
+            self.stagedDiff = stagedDiff
 
             // Get unstaged changes
-            let unstagedResult = try await gitService.runGitCommand("diff", "--name-status", in: url)
-            let unstagedChanges = parseFileChanges(from: unstagedResult.output)
+            let unstagedDiff = try await gitService.getDiff(in: url, cached: false)
+            self.unstagedDiff = unstagedDiff
 
-            // Load line changes for each unstaged file
-            var updatedUnstagedChanges = unstagedChanges
-            for i in updatedUnstagedChanges.indices {
-                let fileChange = updatedUnstagedChanges[i]
-                let lineChanges = try await loadLineChanges(for: fileChange.path, in: url)
-                updatedUnstagedChanges[i].stagedChanges = lineChanges.staged
-                updatedUnstagedChanges[i].unstagedChanges = lineChanges.unstaged
+            // Update untracked files
+            self.untrackedFiles = status.untrackedFiles
+
+            // Update selected file diff if needed
+            if let selectedPath = selectedFileDiff?.fromFilePath {
+                if let stagedFile = stagedDiff.fileDiffs.first(where: { $0.fromFilePath == selectedPath }) {
+                    selectedFileDiff = stagedFile
+                } else if let unstagedFile = unstagedDiff.fileDiffs.first(where: { $0.fromFilePath == selectedPath }) {
+                    selectedFileDiff = unstagedFile
+                }
             }
-            self.unstagedChanges = updatedUnstagedChanges
         } catch {
-            errorMessage = "Error loading changes: \(error.localizedDescription)"
+            print("Error loading changes: \(error)")
         }
     }
 
-
-    private func loadLineChanges(for filePath: String, in url: URL) async throws -> (staged: [LineChange], unstaged: [LineChange]) {
-        // Get staged changes
-        let stagedResult = try await gitService.runGitCommand("diff", "--cached", "-U0", filePath, in: url)
-        let stagedChanges = parseLineChanges(from: stagedResult.output)
-
-        // Get unstaged changes
-        let unstagedResult = try await gitService.runGitCommand("diff", "-U0", filePath, in: url)
-        let unstagedChanges = parseLineChanges(from: unstagedResult.output)
-
-        return (staged: stagedChanges, unstaged: unstagedChanges)
-    }
-
-    private func parseFileChanges(from output: String) -> [FileChange] {
-        output.components(separatedBy: .newlines)
-            .filter { !$0.isEmpty }
-            .map { line in
-                let components = line.components(separatedBy: .whitespaces)
-                guard components.count >= 2 else { return nil }
-
-                let status = components[0]
-                let path = components[1...].joined(separator: " ")
-
-                return FileChange(
-                    id: UUID(),
-                    name: (path as NSString).lastPathComponent,
-                    status: status,
-                    path: path,
-                    stagedChanges: [],
-                    unstagedChanges: []
-                )
-            }
-            .compactMap { $0 }
-    }
-
-    private func parseLineChanges(from output: String) -> [LineChange] {
-        var changes: [LineChange] = []
-        var lineNumber = 0
-
-        output.components(separatedBy: .newlines)
-            .forEach { line in
-                if line.hasPrefix("@@") {
-                    // Parse line number from diff header
-                    if let match = line.range(of: #"\+(\d+)"#) {
-                        lineNumber = Int(line[match].dropFirst()) ?? 0
-                    }
-                } else if line.hasPrefix("+") {
-                    changes.append(LineChange(
-                        id: UUID(),
-                        lineNumber: lineNumber,
-                        content: String(line.dropFirst()),
-                        type: .added
-                    ))
-                    lineNumber += 1
-                } else if line.hasPrefix("-") {
-                    changes.append(LineChange(
-                        id: UUID(),
-                        lineNumber: lineNumber,
-                        content: String(line.dropFirst()),
-                        type: .removed
-                    ))
-                } else {
-                    lineNumber += 1
-                }
-            }
-
-        return changes
-    }
-
-    func stageLines(_ lines: Set<UUID>, in file: FileChange) {
+    func stageChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
         guard let url = repositoryURL else { return }
 
         Task {
             do {
-                for line in lines {
-                    if let change = file.lineChanges.first(where: { $0.id == line }) {
-                        try await gitService.runGitCommand("add", "-p", file.path, in: url)
-                    }
-                }
+                try await gitService.stageChunk(chunk, in: fileDiff, directory: url)
                 await loadChanges()
             } catch {
-                errorMessage = "Error staging lines: \(error.localizedDescription)"
+                errorMessage = "Error staging chunk: \(error.localizedDescription)"
             }
         }
     }
 
-    func unstageLines(_ lines: Set<UUID>, in file: FileChange) {
+    func unstageChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
         guard let url = repositoryURL else { return }
 
         Task {
             do {
-                for line in lines {
-                    if let change = file.lineChanges.first(where: { $0.id == line }) {
-                        try await gitService.runGitCommand("reset", "-p", file.path, in: url)
-                    }
-                }
+                try await gitService.unstageChunk(chunk, in: fileDiff, directory: url)
                 await loadChanges()
             } catch {
-                errorMessage = "Error unstaging lines: \(error.localizedDescription)"
+                errorMessage = "Error unstaging chunk: \(error.localizedDescription)"
             }
         }
     }
 
-    func resetLines(_ lines: Set<UUID>, in file: FileChange) {
+    func resetChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
         guard let url = repositoryURL else { return }
 
         Task {
             do {
-                for line in lines {
-                    if let change = file.lineChanges.first(where: { $0.id == line }) {
-                        try await gitService.runGitCommand("checkout", "--", file.path, in: url)
-                    }
-                }
+                try await gitService.resetChunk(chunk, in: fileDiff, directory: url)
                 await loadChanges()
             } catch {
-                errorMessage = "Error resetting lines: \(error.localizedDescription)"
+                errorMessage = "Error resetting chunk: \(error.localizedDescription)"
             }
         }
     }
 
     func stageAllChanges() {
-        guard let url = repositoryURL else { return }
-
         Task {
             do {
-                try await gitService.runGitCommand("add", ".", in: url)
-                await loadChanges()
+                guard let url = repositoryURL else { return }
+                try await gitService.unstageAllChanges(in: url)
+//                stageAllChanges(in: url)
+                await loadRepositoryData(from: url)
             } catch {
-                errorMessage = "Error staging all changes: \(error.localizedDescription)"
+                errorMessage = "Error staging changes: \(error.localizedDescription)"
             }
         }
     }
@@ -693,7 +578,7 @@ class GitViewModel: ObservableObject {
 
         Task {
             do {
-                try await gitService.runGitCommand("reset", ".", in: url)
+                try await gitService.unstageAllChanges(in: url)
                 await loadChanges()
             } catch {
                 errorMessage = "Error unstaging all changes: \(error.localizedDescription)"
@@ -703,78 +588,16 @@ class GitViewModel: ObservableObject {
 
     func commitChanges(message: String) async {
         guard let url = repositoryURL else { return }
-
-        isLoading = true
-        defer { isLoading = false }
-
         do {
-            let result = try await gitService.runGitCommand("commit", "-m", message, in: url)
-            if result.error.isEmpty {
-                await loadChanges()
-                await loadRepositoryData(from: url)
-            } else {
-                errorMessage = "Commit failed: \(result.error)"
-            }
+            isLoading = true
+            defer { isLoading = false }
+
+            try await gitService.commitChanges(in: url, message: message)
+
+            // Reload repository data
+            await loadRepositoryData(from: url)
         } catch {
-            errorMessage = "Commit failed: \(error.localizedDescription)"
-        }
-    }
-
-    private func parseCommits(from output: String) -> [Commit] {
-        output.components(separatedBy: .newlines)
-            .filter { !$0.isEmpty }
-            .map { line in
-                let components = line.components(separatedBy: "|")
-                guard components.count >= 6 else { return nil }
-
-                let hash = components[0].trimmingCharacters(in: .whitespaces)
-                let authorName = components[1].trimmingCharacters(in: .whitespaces)
-                let authorEmail = components[2].trimmingCharacters(in: .whitespaces)
-                let dateString = components[3].trimmingCharacters(in: .whitespaces)
-                let message = components[4].trimmingCharacters(in: .whitespaces)
-                let parentHashes = components[5].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-
-                // Determine commit type based on message and parent hashes
-                let commitType = determineCommitType(message: message, parentHashes: parentHashes)
-
-                // Generate avatar URL based on email (using Gravatar)
-                let emailHash = authorEmail.lowercased().md5Hash
-                let authorAvatar = "https://www.gravatar.com/avatar/\(emailHash)?d=identicon&s=40"
-
-                // Parse date
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
-                let date = dateFormatter.date(from: dateString) ?? Date()
-
-                return Commit(
-                    id: UUID(),
-                    hash: hash,
-                    authorName: authorName,
-                    authorEmail: authorEmail,
-                    date: date,
-                    message: message,
-                    parentHashes: parentHashes,
-                    branchNames: [],
-                    commitType: commitType,
-                    authorAvatar: authorAvatar
-                )
-            }
-            .compactMap { $0 }
-    }
-
-    private func determineCommitType(message: String, parentHashes: [String]) -> Commit.CommitType {
-        let lowercasedMessage = message.lowercased()
-
-        if parentHashes.count > 1 {
-            return .merge
-        } else if lowercasedMessage.contains("rebase") {
-            return .rebase
-        } else if lowercasedMessage.contains("cherry-pick") {
-            return .cherryPick
-        } else if lowercasedMessage.contains("revert") {
-            return .revert
-        } else {
-            return .normal
+            errorMessage = "Error committing changes: \(error.localizedDescription)"
         }
     }
 
@@ -788,69 +611,20 @@ class GitViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            // First check if git-lfs is installed
-            let lfsCheckResult = try await gitService.runGitCommand("lfs", "version", in: url)
-            let hasLFS = !lfsCheckResult.error.contains("not found")
+            try await gitService.switchBranch(to: branch.name, in: url)
+            currentBranch = branch
+            selectedBranch = branch
+            syncState.branch = branch
 
-            // Perform the checkout
-            let result = try await gitService.runGitCommand("checkout", branch.name, in: url)
+            // Update LogStore with new branch
+            logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
+            await logStore.refresh()
 
-            if result.error.isEmpty && !result.output.contains("error") {
-                // Successful checkout
-                currentBranch = branch
-
-                // If LFS is not installed but repository uses it, show installation instructions
-                let term = try await isUsingGitLFS(in: url)
-                if !hasLFS && term == true {
-                    errorMessage = """
-                    Branch checked out successfully, but this repository uses Git LFS.
-
-                    To fully download LFS files, please install Git LFS:
-
-                    macOS (using Homebrew):
-                    1. brew install git-lfs
-                    2. git lfs install
-
-                    Manual installation:
-                    1. Download from https://git-lfs.com
-                    2. Run 'git lfs install'
-
-                    After installing, run:
-                    git lfs pull
-                    """
-                }
-
-                // Refresh repository data
-                await loadRepositoryData(from: url)
-                await loadChanges()
-
-                // Load commits for the new branch
-                if let branch = currentBranch {
-                    await loadCommits(for: branch, in: url)
-                }
-            } else {
-                errorMessage = "Checkout failed: \(result.error.isEmpty ? result.output : result.error)"
-            }
+            // Check sync state
+            try await syncState.sync()
         } catch {
             errorMessage = "Checkout failed: \(error.localizedDescription)"
         }
-    }
-
-    private func isUsingGitLFS(in directory: URL) async throws -> Bool {
-        // Check for .gitattributes file
-        let attributesResult = try await gitService.runGitCommand("ls-files", ".gitattributes", in: directory)
-        if !attributesResult.output.isEmpty {
-            let catResult = try await gitService.runGitCommand("cat-file", "-p", "HEAD:.gitattributes", in: directory)
-            return catResult.output.contains("filter=lfs")
-        }
-
-        // Check for Git LFS hooks
-        let hooksResult = try await gitService.runGitCommand("config", "--get", "core.hookspath", in: directory)
-        let hooksPath = hooksResult.output.trimmingCharacters(in: .whitespacesAndNewlines)
-        let hooksDirPath = hooksPath.isEmpty ? ".git/hooks" : hooksPath
-
-        let lfsHookPath = (directory.path as NSString).appendingPathComponent("\(hooksDirPath)/post-checkout")
-        return FileManager.default.fileExists(atPath: lfsHookPath)
     }
 
     func openRepository(at url: URL) async throws {
@@ -927,10 +701,9 @@ class GitViewModel: ObservableObject {
                 currentBranch = branches.first { $0.name == currentBranchName }
                 selectedBranch = currentBranch
 
-                // Load commits for current branch
-                if let branch = currentBranch {
-                    branchCommits = try await gitService.getCommits(for: branch.name, in: url)
-                }
+                // Update LogStore
+                logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
+                await logStore.refresh()
             }
         } catch {
             errorMessage = "Error refreshing state: \(error.localizedDescription)"
@@ -944,22 +717,120 @@ class GitViewModel: ObservableObject {
         }
 
         do {
-            let (output, error) = try await gitService.runGitCommand("checkout", hash, in: repoURL)
-
-            if !error.isEmpty {
-                throw NSError(domain: "GitApp", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
-            }
-
+            try await gitService.checkoutCommit(hash, in: repoURL)
             // Refresh the state
             await refreshState()
-
-            // Update commit details if needed
-            if let details = try await gitService.getCommitDetails(for: hash, in: repoURL) {
-                commitDetails = details
-            }
-
         } catch {
             errorMessage = error.localizedDescription
         }
     }
+
+    // MARK: - Branch Operations
+    func switchBranch(to branch: Branch) async {
+        guard let url = repositoryURL else { return }
+        do {
+            isLoading = true
+            defer { isLoading = false }
+
+            try await gitService.switchBranch(to: branch.name, in: url)
+            currentBranch = branch
+            selectedBranch = branch
+            syncState.branch = branch
+
+            // Update LogStore with new branch
+            logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
+            await logStore.refresh()
+
+            // Check sync state
+            try await syncState.sync()
+        } catch {
+            errorMessage = "Error switching branch: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Sync Operations
+    func pull() async {
+        guard let url = repositoryURL else { return }
+        do {
+            isLoading = true
+            defer { isLoading = false }
+
+            try await gitService.pull(in: url)
+            try await syncState.sync()
+
+            // Reload repository data
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Error pulling changes: \(error.localizedDescription)"
+        }
+    }
+
+    func push() async {
+        guard let url = repositoryURL else { return }
+        do {
+            isLoading = true
+            defer { isLoading = false }
+
+            try await gitService.push(in: url)
+            try await syncState.sync()
+        } catch {
+            errorMessage = "Error pushing changes: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - File Operations
+    func getStatus() async {
+        guard let url = repositoryURL else { return }
+        do {
+            isLoading = true
+            defer { isLoading = false }
+
+            let status = try await gitService.getStatus(in: url)
+
+        } catch {
+            errorMessage = "Error getting status: \(error.localizedDescription)"
+        }
+    }
+
+    func addFiles(pathspec: String? = nil) async {
+        guard let url = repositoryURL else { return }
+        do {
+            isLoading = true
+            defer { isLoading = false }
+
+            try await gitService.addFiles(in: url, pathspec: pathspec)
+            await getStatus()
+        } catch {
+            errorMessage = "Error adding files: \(error.localizedDescription)"
+        }
+    }
+
+    func copyCommitHash(_ hash: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(hash, forType: .string)
+    }
+
+    func checkoutCommit(_ commit: Commit) {
+        Task {
+            do {
+                guard let url = repositoryURL else { return }
+                try await gitService.checkoutCommit(commit.hash, in: url)
+                await loadRepositoryData(from: url)
+            } catch {
+                errorMessage = "Error checking out commit: \(error.localizedDescription)"
+            }
+        }
+    }
+
+
+
+    func loadCommitDetails(_ commit: Commit) {
+        Task {
+            guard let url = repositoryURL else { return }
+            await loadCommitDetails(commit, in: url)
+        }
+    }
+
+
 }

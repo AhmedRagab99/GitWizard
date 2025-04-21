@@ -5,11 +5,12 @@
 //  Created by Ahmed Ragab on 18/04/2025.
 //
 import SwiftUI
+import Foundation
 
 struct CommitDetailView: View {
     let commit: Commit
-    let details: GitViewModel.CommitDetails?
-    @State private var expandedFile: FileChange?
+    let details: CommitDetails?
+    @State private var expandedFile: FileDiff?
     @State private var isLoading = true
     @ObservedObject var viewModel: GitViewModel
     @State private var detailHeight: CGFloat = 300 // Default height
@@ -35,7 +36,7 @@ struct CommitDetailView: View {
                     // Header Section with Commit Info
                     CommitDetailHeader(
                         commit: commit,
-                        refs: details?.branchNames ?? [],
+                        refs: commit.branches ?? [],
                         viewModel: viewModel
                     )
                     .padding(ModernUI.padding)
@@ -50,11 +51,10 @@ struct CommitDetailView: View {
                     ScrollView {
                         if let details = details {
                             VStack(alignment: .leading, spacing: ModernUI.spacing) {
-                                ForEach(details.changedFiles) { file in
+                                ForEach(details.diff.fileDiffs) { file in
                                     FileChangeSection(
-                                        fileChange: file,
-                                        diffContent: details.diffContent,
-                                        expandedFile: $expandedFile
+                                        fileDiff: file,
+                                        viewModel: viewModel
                                     )
                                 }
                             }
@@ -110,48 +110,5 @@ struct DragHandle: View {
                     }
                 }
         )
-    }
-}
-
-struct FileChangeRow: View {
-    let file: FileChange
-
-    var body: some View {
-        HStack {
-            Image(systemName: statusIcon)
-                .foregroundStyle(statusColor)
-
-            Text(file.name)
-                .lineLimit(1)
-
-            Spacer()
-
-            Text("\(file.stagedChanges.count + file.unstagedChanges.count)")
-                .font(.caption)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.secondary.opacity(0.2))
-                .clipShape(Capsule())
-        }
-        .padding(.horizontal, ModernUI.padding)
-        .padding(.vertical, 4)
-    }
-
-    private var statusIcon: String {
-        switch file.status {
-        case "Added": return "plus.circle.fill"
-        case "Modified": return "pencil.circle.fill"
-        case "Deleted": return "minus.circle.fill"
-        default: return "doc.circle.fill"
-        }
-    }
-
-    private var statusColor: Color {
-        switch file.status {
-        case "Added": return .green
-        case "Modified": return .blue
-        case "Deleted": return .red
-        default: return .secondary
-        }
     }
 }

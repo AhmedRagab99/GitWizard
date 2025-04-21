@@ -30,11 +30,11 @@ struct SidebarBranchView: View {
                     .foregroundColor(branch.isCurrent ? .white : .secondary)
             }
 
-            Image(systemName: branch.isHead ? "point.3.connected.trianglepath.dotted" : "arrow.triangle.branch")
+            Image(systemName: branch.isCurrent ? "point.3.connected.trianglepath.dotted" : "arrow.triangle.branch")
                 .foregroundColor(branch.isCurrent ? .white : .secondary)
                 .frame(width: 16)
 
-            Text(branch.displayName)
+            Text(branch.name)
                 .lineLimit(1)
                 .foregroundColor(branch.isCurrent ? .white : .primary)
 
@@ -89,7 +89,7 @@ struct SidebarBranchView: View {
 
     private func pullBranch() {
         Task { @MainActor in
-            await viewModel.performPullBranch(branch)
+            await viewModel.pull()
         }
     }
 }

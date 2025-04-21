@@ -1,97 +1,89 @@
 import SwiftUI
+import Foundation
 
 struct ChangesView: View {
     @ObservedObject var viewModel: GitViewModel
-    @State private var commitMessage: String = ""
-    @State private var selectedFile: FileChange?
-    @State private var selectedFileChange: FileChange?
-    @State private var showingCommitSheet = false
-    @State private var isExpanded = true
+    @State private var selectedTab: Int = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top section - File list
-            VStack(spacing: 0) {
-                // Toolbar
-                HStack {
-                    Button(action: { showingCommitSheet = true }) {
-                        Label("Commit", systemImage: "checkmark.circle")
-                    }
-                    .disabled(viewModel.stagedChanges.isEmpty)
-
-                    Spacer()
-
-                    Button(action: { viewModel.stageAllChanges() }) {
-                        Label("Stage All", systemImage: "plus.circle")
-                    }
-                    .disabled(viewModel.unstagedChanges.isEmpty)
-
-                    Button(action: { viewModel.unstageAllChanges() }) {
-                        Label("Unstage All", systemImage: "minus.circle")
-                    }
-                    .disabled(viewModel.stagedChanges.isEmpty)
-                }
-                .padding()
-                .background(ModernUI.colors.background)
-
-                // File list
-                List(selection: $selectedFile) {
-                    if !viewModel.stagedChanges.isEmpty {
-                        Section("Staged Changes") {
-                            ForEach(viewModel.stagedChanges) { file in
-                                FileChangeRow(file: file)
-                                    .onTapGesture {
-                                        selectedFileChange = file
-                                    }
-                            }
-                        }
-                    }
-
-                    if !viewModel.unstagedChanges.isEmpty {
-                        Section("Unstaged Changes") {
-                            ForEach(viewModel.unstagedChanges) { file in
-                                FileChangeRow(file: file)
-                                    .onTapGesture {
-                                        selectedFileChange = file
-                                    }
-                            }
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
+            // Tab selector
+            Picker("Changes", selection: $selectedTab) {
+                Text("Staged").tag(0)
+                Text("Unstaged").tag(1)
             }
-            .frame(minHeight: 200)
+            .pickerStyle(.segmented)
+            .padding()
 
-            // Bottom section - File content
-            if let file = selectedFileChange {
-                VStack(spacing: 0) {
-                    // File header
-                    HStack {
-                        Text(file.name)
-                            .font(.headline)
-                        Spacer()
-                        Text("\(file.stagedChanges.count + file.unstagedChanges.count) changes")
-                            .foregroundStyle(.secondary)
+            // Content
+            if viewModel.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if selectedTab == 0 {
+                            stagedChangesView
+                        } else {
+                            unstagedChangesView
+                        }
                     }
                     .padding()
-                    .background(ModernUI.colors.background)
-
-                    // File content
-                    FileContentView(file: file, viewModel: viewModel)
                 }
-                .frame(minHeight: 200)
-            } else {
-                Text("Select a file to view changes")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(ModernUI.colors.background)
             }
         }
-        .task {
-            await viewModel.loadChanges()
+    }
+
+    private var stagedChangesView: some View {
+        Group {
+            if let stagedDiff = viewModel.stagedDiff, !stagedDiff.fileDiffs.isEmpty {
+                ForEach(stagedDiff.fileDiffs) { fileDiff in
+                    FileDiffView(
+                        fileDiff: fileDiff,
+                        onStage: { chunk in
+                            viewModel.unstageChunk(chunk, in: fileDiff)
+                        },
+                        onUnstage: { chunk in
+                            viewModel.stageChunk(chunk, in: fileDiff)
+                        },
+                        onReset: { chunk in
+                            viewModel.resetChunk(chunk, in: fileDiff)
+                        }
+                    )
+                }
+            } else {
+                Text("No staged changes")
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            }
         }
-        .sheet(isPresented: $showingCommitSheet) {
-            CommitSheet(viewModel: viewModel, commitMessage: $commitMessage)
+    }
+
+    private var unstagedChangesView: some View {
+        Group {
+            if let unstagedDiff = viewModel.unstagedDiff, !unstagedDiff.fileDiffs.isEmpty {
+                ForEach(unstagedDiff.fileDiffs) { fileDiff in
+                    FileDiffView(
+                        fileDiff: fileDiff,
+                        onStage: { chunk in
+                            viewModel.stageChunk(chunk, in: fileDiff)
+                        },
+                        onUnstage: { chunk in
+                            viewModel.unstageChunk(chunk, in: fileDiff)
+                        },
+                        onReset: { chunk in
+                            viewModel.resetChunk(chunk, in: fileDiff)
+                        }
+                    )
+                }
+            } else {
+                Text("No unstaged changes")
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            }
         }
     }
 }
+

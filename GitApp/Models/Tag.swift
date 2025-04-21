@@ -1,7 +1,7 @@
 import Foundation
 
 struct Tag: Identifiable, Hashable {
-    let id: UUID
+    let id: UUID = UUID()
     let name: String
     let commitHash: String
     let message: String
