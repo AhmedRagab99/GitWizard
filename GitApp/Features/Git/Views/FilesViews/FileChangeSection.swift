@@ -175,7 +175,7 @@ struct LineView: View {
                     .padding(.leading, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(lineBackground)
-            
+
         }
         .padding(.horizontal)
     }

@@ -10,7 +10,7 @@ import Foundation
 
 struct SidebarView: View {
     @ObservedObject var viewModel: GitViewModel
-    @State private var selectedSection: SidebarSection = .branches
+    @State private var expandedGroups: Set<SidebarSection> = [.branches]
 
     enum SidebarSection: String, CaseIterable {
         case branches = "Branches"
@@ -20,89 +20,184 @@ struct SidebarView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            sectionPicker
-            contentView
-        }
-    }
-
-    private var sectionPicker: some View {
-        Picker("Section", selection: $selectedSection) {
-            ForEach(SidebarSection.allCases, id: \.self) { section in
-                Text(section.rawValue).tag(section)
-            }
-        }
-        .pickerStyle(.segmented)
-        .padding()
-    }
-
-    @ViewBuilder
-    private var contentView: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                switch selectedSection {
-                case .branches:
-                    branchesContent
-                case .tags:
-                    tagsContent
-                case .stashes:
-                    stashesContent
-                case .remotes:
-                    remotesContent
+            VStack(alignment: .leading, spacing: 0) {
+                // Repository Info
+                repositoryInfo
+                    .padding(.bottom, 16)
+
+                // Groups
+                VStack(alignment: .leading, spacing: 0) {
+                    branchesGroup
+                    remotesGroup
+                    tagsGroup
+                    stashesGroup
+                   
+                }
+                .background(Color(.windowBackgroundColor))
+                .cornerRadius(8)
+            }
+            .padding()
+        }
+    }
+
+    private var repositoryInfo: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let currentBranch = viewModel.currentBranch {
+                HStack {
+                    Image(systemName: "gitbranch")
+                        .foregroundColor(.blue)
+                    Text(currentBranch.name)
+                        .font(.headline)
                 }
             }
-            .padding(.horizontal)
+
+            if let remote = viewModel.remotebranches.first {
+                HStack {
+                    Image(systemName: "cloud")
+                        .foregroundColor(.blue)
+                    Text(remote.name)
+                        .font(.subheadline)
+                }
+            }
         }
+        .padding()
+        .background(Color(.windowBackgroundColor))
+        .cornerRadius(8)
     }
 
-    @ViewBuilder
-    private var branchesContent: some View {
-        if viewModel.branches.isEmpty {
-            emptyStateView(message: "No branches")
-        } else {
-            ForEach(viewModel.branches) { branch in
-                BranchRowView(
-                    branch: branch,
-                    isCurrent: branch.name == viewModel.currentBranch?.name ?? "",
-                    onSelect: {
-                        Task {
-                            await viewModel.checkoutBranch(branch)
-                        }
+    private func groupHeader(_ title: String, section: SidebarSection) -> some View {
+        HStack {
+            Button(action: {
+                withAnimation {
+                    if expandedGroups.contains(section) {
+                        expandedGroups.remove(section)
+                    } else {
+                        expandedGroups.insert(section)
                     }
-                )
+                }
+            }) {
+                Image(systemName: expandedGroups.contains(section) ? "chevron.down" : "chevron.right")
+                    .foregroundColor(.secondary)
+                    .frame(width: 20, height: 20)
+            }
+            .buttonStyle(.plain)
+
+            Text(title)
+                .font(.headline)
+                .foregroundColor(.primary)
+
+            Spacer()
+
+            if let count = countForSection(section) {
+                Text("\(count)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(4)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation {
+                if expandedGroups.contains(section) {
+                    expandedGroups.remove(section)
+                } else {
+                    expandedGroups.insert(section)
+                }
+            }
+        }
+    }
+
+    private func countForSection(_ section: SidebarSection) -> Int? {
+        switch section {
+        case .branches:
+            return viewModel.branches.count
+        case .tags:
+            return viewModel.tags.count
+        case .stashes:
+            return viewModel.stashes.count
+        case .remotes:
+            return viewModel.remotebranches.count
+        }
+    }
+
+    @ViewBuilder
+    private var branchesGroup: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            groupHeader("Local Branches", section: .branches)
+
+            if expandedGroups.contains(.branches) {
+                if viewModel.branches.isEmpty {
+                    emptyStateView(message: "No branches")
+                } else {
+                    ForEach(viewModel.branches) { branch in
+                        BranchRowView(
+                            branch: branch,
+                            isCurrent: branch.name == viewModel.currentBranch?.name ?? "",
+                            onSelect: {
+                                Task {
+                                    await viewModel.checkoutBranch(branch)
+                                }
+                            }
+                        )
+                    }
+                }
             }
         }
     }
 
     @ViewBuilder
-    private var tagsContent: some View {
-        if viewModel.tags.isEmpty {
-            emptyStateView(message: "No tags")
-        } else {
-            ForEach(viewModel.tags) { tag in
-                TagRowView(tag: tag)
+    private var tagsGroup: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            groupHeader("Tags", section: .tags)
+
+            if expandedGroups.contains(.tags) {
+                if viewModel.tags.isEmpty {
+                    emptyStateView(message: "No tags")
+                } else {
+                    ForEach(viewModel.tags) { tag in
+                        TagRowView(tag: tag)
+                    }
+                }
             }
         }
     }
 
     @ViewBuilder
-    private var stashesContent: some View {
-        if viewModel.stashes.isEmpty {
-            emptyStateView(message: "No stashes")
-        } else {
-            ForEach(viewModel.stashes) { stash in
-                StashRowView(stash: stash)
+    private var stashesGroup: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            groupHeader("Stashes", section: .stashes)
+
+            if expandedGroups.contains(.stashes) {
+                if viewModel.stashes.isEmpty {
+                    emptyStateView(message: "No stashes")
+                } else {
+                    ForEach(viewModel.stashes) { stash in
+                        StashRowView(stash: stash)
+                    }
+                }
             }
         }
     }
 
     @ViewBuilder
-    private var remotesContent: some View {
-        if viewModel.remotebranches.isEmpty {
-            emptyStateView(message: "No remotes")
-        } else {
-            ForEach(viewModel.remotebranches) { remote in
-                RemoteRowView(remote: Remote(name: remote.name))
+    private var remotesGroup: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            groupHeader("Remotes", section: .remotes)
+
+            if expandedGroups.contains(.remotes) {
+                if viewModel.remotebranches.isEmpty {
+                    emptyStateView(message: "No remotes")
+                } else {
+                    ForEach(viewModel.remotebranches) { remote in
+                        RemoteRowView(remote: Remote(name: remote.name))
+                    }
+                }
             }
         }
     }
@@ -131,6 +226,7 @@ struct BranchRowView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+        .padding(.horizontal)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             onSelect()
@@ -161,6 +257,7 @@ struct TagRowView: View {
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 4)
+        .padding(.horizontal)
     }
 }
 
@@ -179,6 +276,7 @@ struct StashRowView: View {
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 4)
+        .padding(.horizontal)
     }
 }
 
@@ -197,5 +295,6 @@ struct RemoteRowView: View {
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 4)
+        .padding(.horizontal)
     }
 }
