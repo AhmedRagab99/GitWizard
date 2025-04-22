@@ -131,6 +131,7 @@ class GitViewModel: ObservableObject {
 
             // Update branches
             self.branches = branches
+            self.remotebranches = remotes
 
             // Set current branch and update related state
             if let currentBranchName = currentBranchName {

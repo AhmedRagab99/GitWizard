@@ -5,6 +5,6 @@ struct RepoInfo: Identifiable {
     let id = UUID()
     var name: String = "MyExampleRepo"
     var currentBranch: String = "main"
-    var remotes: [Remote] = []
+    var remotes: [Branch] = []
     // Add other repo details if needed
 }

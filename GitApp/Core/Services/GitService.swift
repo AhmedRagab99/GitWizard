@@ -91,11 +91,8 @@ actor GitService {
     }
 
     // MARK: - Remote Operations
-    func getRemotes(in directory: URL) async throws -> [Remote] {
-        let output: [String] = try await Process.output(GitRemoteList(directory: directory))
-        var data = [Remote]()
-        data = output.map{ Remote(name: $0, url: directory.absoluteString)}
-        return data
+    func getRemotes(in directory: URL) async throws -> [Branch] {
+        return try await Process.output(GitBranch(directory: directory, isRemote: true))        
     }
 
     func fetch(in directory: URL) async throws {
