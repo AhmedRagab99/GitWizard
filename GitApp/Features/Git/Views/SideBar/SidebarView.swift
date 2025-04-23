@@ -7,206 +7,272 @@
 
 import SwiftUI
 import Foundation
-
-struct SidebarView: View {
-    @ObservedObject var viewModel: GitViewModel
-    @State private var expandedGroups: Set<SidebarSection> = [.branches]
-
-    enum SidebarSection: String, CaseIterable {
-        case branches = "Branches"
-        case tags = "Tags"
-        case stashes = "Stashes"
-        case remotes = "Remotes"
+// Represents a single item in the sidebar list
+struct SidebarItem: Identifiable,Equatable {
+    static func == (lhs: SidebarItem, rhs: SidebarItem) -> Bool {
+        return lhs.id == rhs.id
     }
+    
+    let id = UUID() // Unique identifier for the list
+    var name: String
+    var icon: String // SF Symbol name for the icon
+    var isExpandable: Bool = false // Whether this item can be expanded
+    var children: [SidebarItem]? = nil // Child items if expandable
+    var isHead: Bool = false // Special flag for the 'HEAD' indicator
+    var isSelected: Bool = false // To track selection state if needed
+    var branch: Branch? = nil
+    var tag: Tag? = nil
+    var stash: Stash? = nil
+    var remote: Remote? = nil
+
+    // Helper to check if this item has children
+    var hasChildren: Bool {
+        children != nil && !children!.isEmpty
+    }
+}
+
+// Represents a section in the sidebar
+struct SidebarSection: Identifiable {
+    let id = UUID()
+    var title: String? // Optional title for the section (e.g., "Branches")
+    var items: [SidebarItem]
+}
+
+// Represents a single row in the sidebar
+struct SidebarRow: View {
+    let item: SidebarItem
+    @Binding var selection: SidebarItem.ID? // Bind to the selection state
+    @Binding var expandedItems: Set<UUID>
+    let onItemSelected: (SidebarItem) -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Repository Info
-                repositoryInfo
-                    .padding(.bottom, 16)
-
-                // Groups
-                VStack(alignment: .leading, spacing: 0) {
-                    branchesGroup
-                    remotesGroup
-                    tagsGroup
-                    stashesGroup
-                   
-                }
-                .background(Color(.windowBackgroundColor))
-                .cornerRadius(8)
-            }
-            .padding()
-        }
-    }
-
-    private var repositoryInfo: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let currentBranch = viewModel.currentBranch {
-                HStack {
-                    Image(systemName: "gitbranch")
-                        .foregroundColor(.blue)
-                    Text(currentBranch.name)
-                        .font(.headline)
-                }
-            }
-
-            if let remote = viewModel.remotebranches.first {
-                HStack {
-                    Image(systemName: "cloud")
-                        .foregroundColor(.blue)
-                    Text(remote.name)
-                        .font(.subheadline)
-                }
-            }
-        }
-        .padding()
-        .background(Color(.windowBackgroundColor))
-        .cornerRadius(8)
-    }
-
-    private func groupHeader(_ title: String, section: SidebarSection) -> some View {
-        HStack {
-            Button(action: {
-                withAnimation {
-                    if expandedGroups.contains(section) {
-                        expandedGroups.remove(section)
-                    } else {
-                        expandedGroups.insert(section)
+        if item.isExpandable {
+            // Use DisclosureGroup for expandable items
+            DisclosureGroup(
+                isExpanded: Binding(
+                    get: { expandedItems.contains(item.id) },
+                    set: { isExpanded in
+                        if isExpanded {
+                            expandedItems.insert(item.id)
+                        } else {
+                            expandedItems.remove(item.id)
+                        }
                     }
+                ),
+                content: {
+                    // Recursively create rows for children
+                    if let children = item.children {
+                        ForEach(children) { childItem in
+                            SidebarRow(
+                                item: childItem,
+                                selection: $selection,
+                                expandedItems: $expandedItems,
+                                onItemSelected: onItemSelected
+                            )
+                            .padding(.leading) // Indent child items
+                        }
+                    }
+                },
+                label: {
+                    rowLabel // Use the common label view
                 }
-            }) {
-                Image(systemName: expandedGroups.contains(section) ? "chevron.down" : "chevron.right")
-                    .foregroundColor(.secondary)
-                    .frame(width: 20, height: 20)
-            }
-            .buttonStyle(.plain)
+            )
+            // Use the item's ID for the navigation tag
+            .tag(item.id)
 
-            Text(title)
-                .font(.headline)
-                .foregroundColor(.primary)
+        } else {
+            rowLabel
+                .onTapGesture(count: 2) {
+                    onItemSelected(item)
+                }
+        }
+    }
 
-            Spacer()
-
-            if let count = countForSection(section) {
-                Text("\(count)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
+    // Extracted view for the row's label content (icon, text, HEAD tag)
+    private var rowLabel: some View {
+        HStack {
+            Image(systemName: item.icon)
+                .foregroundColor(.accentColor) // Use accent color for icons
+                .frame(width: 16) // Fixed width for alignment
+            Text(item.name)
+            Spacer() // Push HEAD tag to the right
+            if item.isHead {
+                Text("HEAD")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.1))
+                    .foregroundColor(.white)
+                    .background(Color.gray)
                     .cornerRadius(4)
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation {
-                if expandedGroups.contains(section) {
-                    expandedGroups.remove(section)
-                } else {
-                    expandedGroups.insert(section)
-                }
+    }
+}
+
+struct SidebarView: View {
+    @ObservedObject var viewModel: GitViewModel
+    @State private var selection: SidebarItem.ID? = nil
+    @State private var expandedItems = Set<UUID>()
+    @State private var filterText = ""
+
+    var body: some View {
+        SideBarItemsView(
+            sections: createSections(),
+            selection: $selection,
+            expandedItems: $expandedItems,
+            onItemSelected: handleItemSelection
+        )
+        .searchable(text: $filterText, placement: .toolbar, prompt: "Filter")
+    }
+
+    private func createSections() -> [SidebarSection] {
+        [
+            createWorkspaceSection(),
+            createBranchesSection(),
+            createTagsSection(),
+            createRemotesSection(),
+            createStashesSection()
+        ]
+    }
+
+    private func createWorkspaceSection() -> SidebarSection {
+        SidebarSection(title: "Workspace", items: [
+            SidebarItem(name: "Working Copy", icon: "folder"),
+            SidebarItem(name: "History", icon: "clock"),
+            SidebarItem(name: "Stashes", icon: "archivebox"),
+            SidebarItem(name: "Pull Requests", icon: "arrow.triangle.branch"),
+            SidebarItem(name: "Branches Review", icon: "list.bullet"),
+            SidebarItem(name: "Settings", icon: "gear")
+        ])
+    }
+
+    private func createBranchesSection() -> SidebarSection {
+        // Group branches by their folder structure
+        var folderStructure: [String: [Branch]] = [:]
+        var rootBranches: [Branch] = []
+
+        for branch in viewModel.branches {
+            if branch.name.contains("/") {
+                let components = branch.name.split(separator: "/")
+                let folderPath = String(components.first!)
+                folderStructure[folderPath, default: []].append(branch)
+            } else {
+                rootBranches.append(branch)
             }
         }
-    }
 
-    private func countForSection(_ section: SidebarSection) -> Int? {
-        switch section {
-        case .branches:
-            return viewModel.branches.count
-        case .tags:
-            return viewModel.tags.count
-        case .stashes:
-            return viewModel.stashes.count
-        case .remotes:
-            return viewModel.remotebranches.count
+        // Create items for root branches
+        var items: [SidebarItem] = rootBranches.map { branch in
+            SidebarItem(
+                name: branch.name,
+                icon: "gitbranch",
+                isHead: branch.name == viewModel.currentBranch?.name,
+                branch: branch
+            )
         }
+
+        // Create folder items with their nested branches
+        for (folder, branches) in folderStructure {
+            let children = branches.map { branch in
+                SidebarItem(
+                    name: String(branch.name.split(separator: "/").last!),
+                    icon: "gitbranch",
+                    isHead: branch.name == viewModel.currentBranch?.name,
+                    branch: branch
+                )
+            }
+
+            items.append(SidebarItem(
+                name: folder,
+                icon: "folder",
+                isExpandable: true,
+                children: children
+            ))
+        }
+
+        return SidebarSection(title: "Branches", items: items)
     }
 
-    @ViewBuilder
-    private var branchesGroup: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            groupHeader("Local Branches", section: .branches)
+    private func createTagsSection() -> SidebarSection {
+        SidebarSection(title: "Tags", items:
+            viewModel.tags.map { tag in
+                SidebarItem(
+                    name: tag.name,
+                    icon: "tag",
+                    tag: tag
+                )
+            }
+        )
+    }
 
-            if expandedGroups.contains(.branches) {
-                if viewModel.branches.isEmpty {
-                    emptyStateView(message: "No branches")
+    private func createRemotesSection() -> SidebarSection {
+        SidebarSection(title: "Remotes", items:
+            viewModel.remotebranches.map { remote in
+                SidebarItem(
+                    name: remote.name,
+                    icon: "cloud",
+                    remote: Remote(name: remote.name)
+                )
+            }
+        )
+    }
+
+    private func createStashesSection() -> SidebarSection {
+        SidebarSection(title: "Stashes", items:
+            viewModel.stashes.map { stash in
+                SidebarItem(
+                    name: stash.message,
+                    icon: "archivebox",
+                    stash: stash
+                )
+            }
+        )
+    }
+
+    private func handleItemSelection(_ item: SidebarItem) {
+        if let branch = item.branch {
+            Task {
+                await viewModel.checkoutBranch(branch)
+            }
+        }
+        // Handle other item types as needed
+    }
+}
+
+struct SideBarItemsView: View {
+    let sections: [SidebarSection]
+    @Binding var selection: SidebarItem.ID?
+    @Binding var expandedItems: Set<UUID>
+    let onItemSelected: (SidebarItem) -> Void
+
+    var body: some View {
+        List(selection: $selection) {
+            ForEach(sections) { section in
+                if let title = section.title {
+                    Section(header: Text(title).font(.caption).foregroundColor(.secondary)) {
+                        ForEach(section.items) { item in
+                            SidebarRow(
+                                item: item,
+                                selection: $selection,
+                                expandedItems: $expandedItems,
+                                onItemSelected: onItemSelected
+                            )
+                        }
+                    }
                 } else {
-                    ForEach(viewModel.branches) { branch in
-                        BranchRowView(
-                            branch: branch,
-                            isCurrent: branch.name == viewModel.currentBranch?.name ?? "",
-                            onSelect: {
-                                Task {
-                                    await viewModel.checkoutBranch(branch)
-                                }
-                            }
+                    ForEach(section.items) { item in
+                        SidebarRow(
+                            item: item,
+                            selection: $selection,
+                            expandedItems: $expandedItems,
+                            onItemSelected: onItemSelected
                         )
                     }
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private var tagsGroup: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            groupHeader("Tags", section: .tags)
-
-            if expandedGroups.contains(.tags) {
-                if viewModel.tags.isEmpty {
-                    emptyStateView(message: "No tags")
-                } else {
-                    ForEach(viewModel.tags) { tag in
-                        TagRowView(tag: tag)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var stashesGroup: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            groupHeader("Stashes", section: .stashes)
-
-            if expandedGroups.contains(.stashes) {
-                if viewModel.stashes.isEmpty {
-                    emptyStateView(message: "No stashes")
-                } else {
-                    ForEach(viewModel.stashes) { stash in
-                        StashRowView(stash: stash)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var remotesGroup: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            groupHeader("Remotes", section: .remotes)
-
-            if expandedGroups.contains(.remotes) {
-                if viewModel.remotebranches.isEmpty {
-                    emptyStateView(message: "No remotes")
-                } else {
-                    ForEach(viewModel.remotebranches) { remote in
-                        RemoteRowView(remote: Remote(name: remote.name))
-                    }
-                }
-            }
-        }
-    }
-
-    private func emptyStateView(message: String) -> some View {
-        Text(message)
-            .foregroundColor(.secondary)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding()
+        .listStyle(.sidebar)
     }
 }
 
