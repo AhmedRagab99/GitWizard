@@ -111,10 +111,13 @@ struct SidebarRow: View {
 }
 
 struct SidebarView: View {
-     var viewModel: GitViewModel
+    @Bindable var viewModel: GitViewModel
     @State private var selection: SidebarItem.ID? = nil
     @State private var expandedItems = Set<UUID>()
     @State private var filterText = ""
+    @State private var showStashSheet = false
+    @State private var showCommitSheet = false
+    @State private var showDeleteAlert = false
 
     var body: some View {
         SideBarItemsView(
@@ -124,16 +127,68 @@ struct SidebarView: View {
             onItemSelected: handleItemSelection
         )
         .searchable(text: $filterText, placement: .toolbar, prompt: "Filter")
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                SidebarToolbarView(
+                    viewModel: viewModel,
+                    showStashSheet: $showStashSheet,
+                    showCommitSheet: $showCommitSheet,
+                    showDeleteAlert: $showDeleteAlert
+                )
+            }
+        }
+        .sheet(isPresented: $showStashSheet) {
+            // StashSheet(viewModel: viewModel)
+            Text("Stash Sheet")
+        }
+        .sheet(isPresented: $showCommitSheet) {
+            // CommitSheet(viewModel: viewModel)
+            Text("Commit Sheet")
+        }
+        .alert("Delete Branch", isPresented: $showDeleteAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let branch = viewModel.currentBranch {
+                    Task {
+                        // await viewModel.deleteBranch(branch)
+                    }
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete the current branch?")
+        }
     }
 
     private func createSections() -> [SidebarSection] {
-        [
-            createWorkspaceSection(),
-            createBranchesSection(),
-            createTagsSection(),
-            createRemotesSection(),
-            createStashesSection()
-        ]
+        var sections: [SidebarSection] = []
+
+        // Always add the workspace section
+        sections.append(createWorkspaceSection())
+
+        // Only add other sections if we have a repository
+        if viewModel.repositoryURL != nil {
+            // Add branches section if we have branches
+            if !viewModel.branches.isEmpty {
+                sections.append(createBranchesSection())
+            }
+
+            // Add tags section if we have tags
+            if !viewModel.tags.isEmpty {
+                sections.append(createTagsSection())
+            }
+
+            // Add remotes section if we have remotes
+            if !viewModel.remotebranches.isEmpty {
+                sections.append(createRemotesSection())
+            }
+
+            // Add stashes section if we have stashes
+            if !viewModel.stashes.isEmpty {
+                sections.append(createStashesSection())
+            }
+        }
+
+        return sections
     }
 
     private func createWorkspaceSection() -> SidebarSection {
@@ -240,6 +295,97 @@ struct SidebarView: View {
     }
 }
 
+// MARK: - Toolbar View
+struct SidebarToolbarView: View {
+    @Bindable var viewModel: GitViewModel
+    @Binding var showStashSheet: Bool
+    @Binding var showCommitSheet: Bool
+    @Binding var showDeleteAlert: Bool
+
+    var body: some View {
+        HStack(spacing: 16) {
+            // Sync Group
+            Group {
+                // Push
+                ToolbarButton(
+                    icon: "arrow.up.circle",
+                    help: "Push changes to remote",
+                    isDisabled: viewModel.currentBranch == nil
+                ) {
+                    Task {
+                        await viewModel.push()
+                    }
+                }
+
+                // Pull
+                ToolbarButton(
+                    icon: "arrow.down.circle",
+                    help: "Pull changes from remote",
+                    isDisabled: viewModel.currentBranch == nil
+                ) {
+                    Task {
+                        await viewModel.pull()
+                    }
+                }
+            }
+
+            Divider()
+                .frame(height: 20)
+
+            // Actions Group
+            Group {
+                // Stash
+                ToolbarButton(
+                    icon: "archivebox",
+                    help: "Stash changes",
+                    isDisabled: viewModel.currentBranch == nil
+                ) {
+//                    showStashSheet = true
+                }
+
+                // Commit
+                ToolbarButton(
+                    icon: "checkmark.circle",
+                    help: "Commit changes",
+                    isDisabled: viewModel.currentBranch == nil
+                ) {
+//                    showCommitSheet = true
+                }
+            }
+
+            Divider()
+                .frame(height: 20)
+
+            // Delete
+            ToolbarButton(
+                icon: "trash",
+                help: "Delete current branch",
+                isDisabled: viewModel.currentBranch == nil
+            ) {
+//                showDeleteAlert = true
+            }
+        }
+    }
+}
+
+// MARK: - Toolbar Button
+struct ToolbarButton: View {
+    let icon: String
+    let help: String
+    let isDisabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.title2)
+        }
+        .help(help)
+        .disabled(isDisabled)
+    }
+}
+
+// MARK: - SideBarItemsView
 struct SideBarItemsView: View {
     let sections: [SidebarSection]
     @Binding var selection: SidebarItem.ID?

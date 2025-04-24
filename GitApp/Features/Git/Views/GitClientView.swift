@@ -21,72 +21,9 @@ struct GitClientView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar
             SidebarView(viewModel: viewModel)
-                .frame(minWidth: 250, maxWidth: 300)
-//                .toolbar {
-//                    ToolbarItem(placement: .automatic) {
-//                        HStack(spacing: 16) {
-//                            // Push
-//                            Button(action: {
-//                                Task {
-//                                    await viewModel.push()
-//                                }
-//                            }) {
-//                                Image(systemName: "arrow.up.circle")
-//                                    .font(.title2)
-//                            }
-//                            .help("Push changes to remote")
-//                            .disabled(viewModel.currentBranch == nil)
-//
-//                            // Pull
-//                            Button(action: {
-//                                Task {
-//                                    await viewModel.pull()
-//                                }
-//                            }) {
-//                                Image(systemName: "arrow.down.circle")
-//                                    .font(.title2)
-//                            }
-//                            .help("Pull changes from remote")
-//                            .disabled(viewModel.currentBranch == nil)
-//
-//                            Divider()
-//                                .frame(height: 20)
-//
-//                            // Stash
-//                            Button(action: {
-//                                showStashSheet = true
-//                            }) {
-//                                Image(systemName: "archivebox")
-//                                    .font(.title2)
-//                            }
-//                            .help("Stash changes")
-//                            .disabled(viewModel.currentBranch == nil)
-//
-//                            // Commit
-//                            Button(action: {
-//                                showCommitSheet = true
-//                            }) {
-//                                Image(systemName: "checkmark.circle")
-//                                    .font(.title2)
-//                            }
-//                            .help("Commit changes")
-//                            .disabled(viewModel.currentBranch == nil)
-//
-//                            Divider()
-//                                .frame(height: 20)
-//
-//                            // Delete
-//                            Button(action: {
-//                                showDeleteAlert = true
-//                            }) {
-//                                Image(systemName: "trash")
-//                                    .font(.title2)
-//                            }
-//                            .help("Delete current branch")
-//                            .disabled(viewModel.currentBranch == nil)
-//                        }
-//                    }
-//                }
+                .frame(alignment: .leading)
+                .frame(minWidth: 150, maxWidth: 300)
+
         } detail: {
             // Main content
             VStack(spacing: 0) {
@@ -127,24 +64,7 @@ struct GitClientView: View {
             }
         }
         .background(ModernUI.colors.background)
-        .sheet(isPresented: $showCommitSheet) {
-//            CommitSheet(viewModel: viewModel)
-        }
-        .sheet(isPresented: $showStashSheet) {
-            StashSheet(viewModel: viewModel)
-        }
-        .alert("Delete Branch", isPresented: $showDeleteAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                if let branch = viewModel.currentBranch {
-                    Task {
-//                        await viewModel.deleteBranch(branch)
-                    }
-                }
-            }
-        } message: {
-            Text("Are you sure you want to delete this branch?")
-        }
+
     }
 }
 
