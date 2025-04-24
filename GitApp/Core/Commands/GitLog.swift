@@ -13,7 +13,7 @@ import Foundation
     var merges = false
     var ancestryPath = false
     var reverse = false
-    var number = 0
+    var number = 50 // Default to 50 commits per page
     var revisionRange = ""
     var grep: [String] = []
     var grepAllMatch = false
@@ -21,7 +21,7 @@ import Foundation
     var g = ""
     var author = ""
     var branch = ""
-
+    var skip = 0 // Add skip parameter for pagination
 
      typealias OutputModel = [Commit]
 
@@ -42,6 +42,8 @@ import Foundation
             + .formatSeparator + "%b"
             + .formatSeparator + "%D"
             + .componentSeparator,
+            "--skip=\(skip)", // Add skip parameter
+            "-n\(number)" // Use -n instead of - for better compatibility
         ]
         if merges {
             args.append("--merges")
@@ -51,9 +53,6 @@ import Foundation
         }
         if reverse {
             args.append("--reverse")
-        }
-        if number > 0 {
-            args.append("-\(number)")
         }
         if !revisionRange.isEmpty {
             args.append(revisionRange)
