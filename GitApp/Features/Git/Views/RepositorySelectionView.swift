@@ -61,7 +61,7 @@ struct RepositorySelectionView: View {
                             Text("Open a local repository or clone from remote to get started")
                         }
                     } else {
-                        Section("Recent Repositories") {
+                        Text("Recent Repositories")
                             ForEach(viewModel.recentRepositories, id: \.self) { url in
                                 NavigationLink(value: url) {
                                     VStack(alignment: .leading, spacing: 4) {
@@ -100,8 +100,7 @@ struct RepositorySelectionView: View {
                                         Label("Remove", systemImage: "trash")
                                     }
                                 }
-                            }
-                        }
+                            }                        
                     }
                 }
             }
