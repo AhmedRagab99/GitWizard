@@ -46,6 +46,10 @@ actor GitService {
     func switchBranch(to branchName: String, in directory: URL) async throws {
         try await Process.output(GitSwitch(directory: directory, branchName: branchName))
     }
+    
+    func checkoutBranch(to branchName: Branch, in directory: URL) async throws {
+        try await Process.output(GitCheckoutB(directory: directory, newBranchName: branchName.name,startPoint: branchName.point))
+    }
 
     func deleteBranch(_ branchName: String, in directory: URL, isRemote: Bool = false) async throws {
         try await Process.output(GitBranchDelete(directory: directory, isRemote: isRemote, branchName: branchName))

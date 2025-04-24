@@ -620,7 +620,7 @@ class GitViewModel {
         }
     }
 
-    func checkoutBranch(_ branch: Branch) async {
+    func checkoutBranch(_ branch: Branch,isRemote: Bool = false) async {
         guard let url = repositoryURL else {
             errorMessage = "No repository selected"
             return
@@ -630,7 +630,11 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.switchBranch(to: branch.name, in: url)
+            if isRemote {
+                try await gitService.checkoutBranch(to: branch, in: url)
+            } else {
+                try await gitService.switchBranch(to: branch.name, in: url)
+            }
             currentBranch = branch
             selectedBranch = branch
             syncState.branch = branch
@@ -641,6 +645,7 @@ class GitViewModel {
 
             // Check sync state
             try await syncState.sync()
+            await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Checkout failed: \(error.localizedDescription)"
         }

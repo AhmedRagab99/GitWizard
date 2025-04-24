@@ -175,11 +175,7 @@ struct SidebarView: View {
                             BranchRowView(
                                 branch: branch,
                                 isCurrent: branch.name == viewModel.currentBranch?.name ?? "",
-                                onSelect: {
-                                    Task {
-                                        await viewModel.checkoutBranch(branch)
-                                    }
-                                }
+                                viewModel: viewModel
                             )
                         }
                     }
@@ -200,7 +196,7 @@ struct SidebarView: View {
                 } else {
                     LazyVStack(spacing: 0) {
                         ForEach(filtered) { remote in
-                            RemoteRowView(remote: Remote(name: remote.name))
+                            RemoteRowView(remote:remote, viewModel: viewModel)
                         }
                     }
                 }
@@ -261,8 +257,8 @@ struct SidebarView: View {
 struct BranchRowView: View {
     let branch: Branch
     let isCurrent: Bool
-    let onSelect: () -> Void
     @State private var isHovered = false
+    @Bindable var viewModel: GitViewModel
 
     var body: some View {
         HStack(spacing: 12) {
@@ -286,18 +282,40 @@ struct BranchRowView: View {
                       isHovered ? Color.secondary.opacity(0.1) : Color.clear)
         )
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
+//            withAnimation(.easeInOut(duration: 0.2)) {
                 isHovered = hovering
-            }
+//            }
         }
         .onTapGesture(count: 2) {
-            onSelect()
+            checkoutBranch()
         }
         .contextMenu {
-            Button(action: onSelect) {
+            Button(action: checkoutBranch) {
                 Label("Checkout", systemImage: "arrow.triangle.branch")
             }
-            .disabled(isCurrent)
+
+            Button(action: pullBranch) {
+                Label("Pull from origin", systemImage: "arrow.down")
+            }
+
+            if !branch.isCurrent {
+                Button(action: {
+                    // TODO: Implement delete branch
+                }) {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+    }
+    private func checkoutBranch() {
+        Task { @MainActor in
+            await viewModel.checkoutBranch(branch)
+        }
+    }
+
+    private func pullBranch() {
+        Task { @MainActor in
+            await viewModel.pull()
         }
     }
 }
@@ -373,7 +391,8 @@ struct StashRowView: View {
 }
 
 struct RemoteRowView: View {
-    let remote: Remote
+    let remote: Branch
+    @Bindable var  viewModel: GitViewModel
     @State private var isHovered = false
 
     var body: some View {
@@ -386,9 +405,7 @@ struct RemoteRowView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(remote.name)
                     .font(.body)
-                Text(remote.url)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                
             }
 
             Spacer()
@@ -403,6 +420,17 @@ struct RemoteRowView: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 isHovered = hovering
             }
+        }
+        .contextMenu {
+            Button(action: checkoutBranch) {
+                Label("Checkout", systemImage: "arrow.triangle.branch")
+            }
+        }
+        
+    }
+    private func checkoutBranch() {
+        Task { @MainActor in
+            await viewModel.checkoutBranch(remote,isRemote: true)
         }
     }
 }

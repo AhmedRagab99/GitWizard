@@ -23,11 +23,6 @@ struct SidebarBranchView: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            if hasSubbranches {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 11))
-                    .foregroundColor(branch.isCurrent ? .white : .secondary)
-            }
 
             Image(systemName: branch.isCurrent ? "point.3.connected.trianglepath.dotted" : "arrow.triangle.branch")
                 .foregroundColor(branch.isCurrent ? .white : .secondary)
