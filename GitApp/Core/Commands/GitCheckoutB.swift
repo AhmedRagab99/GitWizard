@@ -16,6 +16,7 @@ struct GitCheckoutB: Git {
             "checkout",
             "-b",
             newBranchName,
+            "--track",
             startPoint,
         ]
     }

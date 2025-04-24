@@ -14,11 +14,13 @@ struct CommitRowView: View {
     let isSelected: Bool
     let onSelect: () -> Void
 
+
     var body: some View {
         HStack(spacing: 12) {
-            // Commit icon
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundColor(.green)
+            // Commit icon based on type
+            
+            Image(systemName: commit.commitType.commitIcon.name)
+                .foregroundColor(commit.commitType.commitIcon.color)
                 .font(.title2)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -29,7 +31,7 @@ struct CommitRowView: View {
 
                 // Commit metadata
                 HStack {
-                    AsyncImage(url: URL(string:commit.authorAvatar)!) { image in
+                    AsyncImage(url: URL(string: commit.authorAvatar)!) { image in
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -39,7 +41,7 @@ struct CommitRowView: View {
                     }
                     .frame(width: 20, height: 20)
                     .clipShape(Circle())
-                    
+
                     Text(commit.author)
                         .font(.caption)
                         .foregroundColor(.secondary)

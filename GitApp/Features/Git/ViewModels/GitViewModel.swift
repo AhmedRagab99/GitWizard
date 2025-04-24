@@ -620,7 +620,7 @@ class GitViewModel {
         }
     }
 
-    func checkoutBranch(_ branch: Branch,isRemote: Bool = false) async {
+    func checkoutBranch(_ branch: Branch, isRemote: Bool = false) async {
         guard let url = repositoryURL else {
             errorMessage = "No repository selected"
             return
@@ -631,21 +631,29 @@ class GitViewModel {
 
         do {
             if isRemote {
+                // For remote branches, create a new local branch tracking the remote
                 try await gitService.checkoutBranch(to: branch, in: url)
             } else {
+                // For local branches, just switch to it
                 try await gitService.switchBranch(to: branch.name, in: url)
             }
-            currentBranch = branch
-            selectedBranch = branch
-            syncState.branch = branch
 
-            // Update LogStore with new branch
-            logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
-            await logStore.refresh()
-
-            // Check sync state
-            try await syncState.sync()
+            // Refresh all repository data to update branches list
             await loadRepositoryData(from: url)
+
+            // After refresh, find and set the current branch
+            if let newCurrentBranch = branches.first(where: { $0.isCurrent }) {
+                currentBranch = newCurrentBranch
+                selectedBranch = newCurrentBranch
+                syncState.branch = newCurrentBranch
+
+                // Update LogStore with new branch
+                logStore.searchTokens = [SearchToken(kind: .revisionRange, text: newCurrentBranch.name)]
+                await logStore.refresh()
+
+                // Check sync state
+                try await syncState.sync()
+            }
         } catch {
             errorMessage = "Checkout failed: \(error.localizedDescription)"
         }

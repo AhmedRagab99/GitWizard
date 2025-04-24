@@ -1,5 +1,5 @@
 import Foundation
-
+import SwiftUI
 struct Commit: Hashable, Identifiable {
     var id: String { hash }
     var hash: String
@@ -41,25 +41,22 @@ struct Commit: Hashable, Identifiable {
         case rebase
         case cherryPick
         case revert
-        }
-}
-
-
-// private functions
-extension Commit {
-    private func determineCommitType(message: String, parentHashes: [String]) -> Commit.CommitType {
-        let lowercasedMessage = message.lowercased()
-
-        if parentHashes.count > 1 {
-            return .merge
-        } else if lowercasedMessage.contains("rebase") {
-            return .rebase
-        } else if lowercasedMessage.contains("cherry-pick") {
-            return .cherryPick
-        } else if lowercasedMessage.contains("revert") {
-            return .revert
-        } else {
-            return .normal
+        
+        var  commitIcon:  (name: String, color: Color) {
+            switch self {
+            case .merge:
+                return ("arrow.triangle.merge", .blue)
+            case .rebase:
+                return ("arrow.triangle.branch", .purple)
+            case .cherryPick:
+                return ("arrow.triangle.pull", .pink)
+            case .revert:
+                return ("arrow.uturn.backward", .red)
+            case .normal:
+                return ("checkmark.circle.fill", .green)
+            }
         }
     }
 }
+
+

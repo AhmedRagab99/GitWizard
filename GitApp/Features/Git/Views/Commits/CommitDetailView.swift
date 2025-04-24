@@ -22,46 +22,9 @@ struct CommitDetailView: View {
             DragHandle(height: $detailHeight, isDragging: $isDragging)
 
             if isLoading {
-                VStack(spacing: ModernUI.spacing) {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .padding()
-                    Text("Loading commit details...")
-                        .foregroundColor(ModernUI.colors.secondaryText)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(ModernUI.colors.background)
+                loadingView
             } else {
-                VStack(spacing: 0) {
-                    // Header Section with Commit Info
-                    CommitDetailHeader(
-                        commit: commit,
-                        refs: commit.branches ?? [],
-                        viewModel: viewModel
-                    )
-                    .padding(ModernUI.padding)
-                    .background(ModernUI.colors.background)
-                    .modernShadow(.small)
-
-                    // Divider
-                    Divider()
-                        .background(ModernUI.colors.border)
-
-                    // Changes Section
-                    ScrollView {
-                        if let details = details {
-                            VStack(alignment: .leading, spacing: ModernUI.spacing) {
-                                ForEach(details.diff.fileDiffs) { file in
-                                    FileChangeSection(
-                                        fileDiff: file,
-                                        viewModel: viewModel
-                                    )
-                                }
-                            }
-                            .padding(ModernUI.padding)
-                        }
-                    }
-                }
+                contentView
             }
         }
         .frame(height: detailHeight)
@@ -71,6 +34,51 @@ struct CommitDetailView: View {
         .onAppear {
             withAnimation(ModernUI.animation.delay(0.3)) {
                 isLoading = false
+            }
+        }
+    }
+
+    private var loadingView: some View {
+        VStack(spacing: ModernUI.spacing) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .padding()
+            Text("Loading commit details...")
+                .foregroundColor(ModernUI.colors.secondaryText)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ModernUI.colors.background)
+    }
+
+    private var contentView: some View {
+        VStack(spacing: 0) {
+            // Header Section with Commit Info
+            CommitDetailHeader(
+                commit: commit,
+                refs: commit.branches ?? [],
+                viewModel: viewModel
+            )
+            .padding(ModernUI.padding)
+            .background(ModernUI.colors.background)
+            .modernShadow(.small)
+
+            // Divider
+            Divider()
+                .background(ModernUI.colors.border)
+
+            // Changes Section
+            if let details = details {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: ModernUI.spacing) {
+                        ForEach(details.diff.fileDiffs) { file in
+                            FileChangeSection(
+                                fileDiff: file,
+                                viewModel: viewModel
+                            )
+                        }
+                    }
+                    .padding(ModernUI.padding)
+                }
             }
         }
     }

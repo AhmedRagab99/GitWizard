@@ -174,7 +174,7 @@ struct SidebarView: View {
                         ForEach(filtered) { branch in
                             BranchRowView(
                                 branch: branch,
-                                isCurrent: branch.name == viewModel.currentBranch?.name ?? "",
+                                isCurrent: branch.isCurrent,
                                 viewModel: viewModel
                             )
                         }

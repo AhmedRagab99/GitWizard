@@ -8,26 +8,25 @@ import SwiftUI
 import Foundation
 
 struct HistoryView: View {
-     var viewModel: GitViewModel
+    @Bindable var viewModel: GitViewModel
     @State private var selectedCommit: Commit?
 
     var body: some View {
         VStack(spacing: 0) {
             // Commit list
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(viewModel.logStore.commits) { commit in
-                        CommitRowView(
-                            commit: commit,
-                            isSelected: selectedCommit?.id == commit.id,
-                            onSelect: {
-                                selectedCommit = commit
-                                viewModel.loadCommitDetails(commit)
-                            }
-                        )
+            List(viewModel.logStore.commits) { commit in
+                CommitRowView(
+                    commit: commit,
+                    isSelected: selectedCommit?.id == commit.id,
+                    onSelect: {
+                        selectedCommit = commit
+                        viewModel.loadCommitDetails(commit)
                     }
-                }
+                )
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
             }
+            .listStyle(.plain)
 
             // Commit details
             if let selectedCommit = selectedCommit {

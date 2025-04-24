@@ -13,9 +13,6 @@ struct GitAppApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                
-//                .themeManager(themeManager)
-//                .preferredColorScheme(themeManager.colorScheme)
         }
     }
 }
