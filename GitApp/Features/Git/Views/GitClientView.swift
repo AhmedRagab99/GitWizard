@@ -5,12 +5,8 @@ import Foundation
 import AppKit
 
 struct GitClientView: View {
-     var viewModel: GitViewModel
+    @ObservedObject var viewModel: GitViewModel
     @State private var selectedTab: Tab = .history
-    @State private var showCommitSheet = false
-    @State private var showStashSheet = false
-    @State private var showDeleteAlert = false
-    @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     enum Tab {
         case history
@@ -18,39 +14,40 @@ struct GitClientView: View {
     }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Sidebar
-            SidebarView(viewModel: viewModel)
-                .frame(alignment: .leading)
-                .frame(minWidth: 150, maxWidth: 300)
+        VStack(spacing: 0) {
+            // Top section - Sidebar and content
+            HStack(spacing: 0) {
+                // Sidebar
+                SidebarView(viewModel: viewModel)
+                    .frame(minWidth: 250, maxWidth: 300)
 
-        } detail: {
-            // Main content
-            VStack(spacing: 0) {
-                // Tab bar
-                HStack {
-                    Button(action: { selectedTab = .history }) {
-                        Label("History", systemImage: "clock")
-                            .foregroundStyle(selectedTab == .history ? .tertiary : .secondary)
+                // Main content
+                VStack(spacing: 0) {
+                    // Tab bar
+                    HStack {
+                        Button(action: { selectedTab = .history }) {
+                            Label("History", systemImage: "clock")
+                                .foregroundStyle(selectedTab == .history ? .tertiary : .secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: { selectedTab = .changes }) {
+                            Label("Changes", systemImage: "list.bullet")
+                                .foregroundStyle(selectedTab == .changes ? .tertiary : .secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
                     }
-                    .buttonStyle(.plain)
+                    .padding()
+                    .background(ModernUI.colors.background)
 
-                    Button(action: { selectedTab = .changes }) {
-                        Label("Changes", systemImage: "list.bullet")
-                            .foregroundStyle(selectedTab == .changes ? .tertiary : .secondary)
+                    // Content area
+                    if selectedTab == .history {
+                        HistoryView(viewModel: viewModel)
+                    } else {
+                        ChangesView(viewModel: viewModel)
                     }
-                    .buttonStyle(.plain)
-
-                    Spacer()
-                }
-                .padding()
-                .background(ModernUI.colors.background)
-
-                // Content area
-                if selectedTab == .history {
-                    HistoryView(viewModel: viewModel)
-                } else {
-                    ChangesView(viewModel: viewModel)
                 }
             }
 
@@ -64,7 +61,6 @@ struct GitClientView: View {
             }
         }
         .background(ModernUI.colors.background)
-
     }
 }
 
@@ -132,36 +128,3 @@ enum ModernUI {
 //        )
 //    }
 //}
-
-// MARK: - Sheets
-struct StashSheet: View {
-     var viewModel: GitViewModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var message: String = ""
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section {
-                    TextField("Stash message", text: $message)
-                }
-            }
-            .navigationTitle("Stash Changes")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Stash") {
-                        Task {
-//                            await viewModel.stash(message: message)
-                            dismiss()
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
