@@ -7,7 +7,7 @@ import Observation
 // Remove Branch struct definition since it's now in Models/Branch.swift
 
 // --- Git View Model ---
-//@MainActor
+
 @Observable
 class GitViewModel {
     // --- Published Properties (State) ---

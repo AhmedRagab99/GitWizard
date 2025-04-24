@@ -5,7 +5,7 @@ import Foundation
 import AppKit
 
 struct GitClientView: View {
-    @ObservedObject var viewModel: GitViewModel
+    @Bindable var viewModel: GitViewModel
     @State private var selectedTab: Tab = .history
 
     enum Tab {

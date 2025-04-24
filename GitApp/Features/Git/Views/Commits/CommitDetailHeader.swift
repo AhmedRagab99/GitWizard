@@ -10,7 +10,7 @@ import Foundation
 struct CommitDetailHeader: View {
     let commit: Commit
     let refs: [String]
-    let viewModel: GitViewModel
+    @Bindable var viewModel: GitViewModel
 
     private var commitIcon: String {
         switch commit.commitType {

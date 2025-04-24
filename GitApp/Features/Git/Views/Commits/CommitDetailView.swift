@@ -12,7 +12,7 @@ struct CommitDetailView: View {
     let details: CommitDetails?
     @State private var expandedFile: FileDiff?
     @State private var isLoading = true
-     var viewModel: GitViewModel
+    @Bindable var viewModel: GitViewModel
     @State private var detailHeight: CGFloat = 300 // Default height
     @State private var isDragging = false
 

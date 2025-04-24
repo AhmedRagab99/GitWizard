@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct FileDiffContainerView: View {
-     var viewModel: GitViewModel
+    @Bindable var viewModel: GitViewModel
     let fileDiff: FileDiff
 
     var body: some View {

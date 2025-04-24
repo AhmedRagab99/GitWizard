@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct CloneRepositoryView: View {
-     var viewModel: GitViewModel
+    @Bindable var viewModel: GitViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var cloneURL: String = ""
     @State private var selectedDirectory: URL?
@@ -137,7 +137,7 @@ struct CloneRepositoryView: View {
 }
 
 struct ImportRepositoryView: View {
-     var viewModel: GitViewModel
+     @Bindable var viewModel: GitViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedURL: URL?
 

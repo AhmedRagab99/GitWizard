@@ -2,7 +2,7 @@ import SwiftUI
 import Foundation
 
 struct ChangesView: View {
-     var viewModel: GitViewModel
+    @Bindable var viewModel: GitViewModel
     @State private var selectedTab: Int = 0
 
     var body: some View {

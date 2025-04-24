@@ -9,7 +9,7 @@ import Foundation
 
 struct FileChangeSection: View {
     let fileDiff: FileDiff
-    let viewModel: GitViewModel
+    @Bindable var viewModel: GitViewModel
     @State private var isExpanded: Bool
     @State private var language: Language = .other
 
