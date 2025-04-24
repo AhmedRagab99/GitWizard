@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-@MainActor
+
 @Observable
 class SyncState {
     var folderURL: URL?

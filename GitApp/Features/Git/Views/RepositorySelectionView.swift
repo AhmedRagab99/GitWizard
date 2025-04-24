@@ -8,7 +8,7 @@ import SwiftUI
 import AppKit
 
 struct RepositorySelectionView: View {
-    @ObservedObject var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @State private var selectedRepository: URL?
     @State private var isShowingFilePicker = false
     @State private var isShowingCloneSheet = false

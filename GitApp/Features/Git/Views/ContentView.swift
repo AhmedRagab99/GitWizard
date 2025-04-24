@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = GitViewModel()
+    private var viewModel = GitViewModel()
 
     var body: some View {
         RepositorySelectionView(viewModel: viewModel)

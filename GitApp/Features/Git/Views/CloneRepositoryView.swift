@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct CloneRepositoryView: View {
-    @ObservedObject var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var cloneURL: String = ""
     @State private var selectedDirectory: URL?
@@ -137,7 +137,7 @@ struct CloneRepositoryView: View {
 }
 
 struct ImportRepositoryView: View {
-    @ObservedObject var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedURL: URL?
 
@@ -188,7 +188,7 @@ struct ImportRepositoryView: View {
 }
 
 struct AddLocalRepositoryView: View {
-    @ObservedObject var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedURL: URL?
     @State private var isGitRepo: Bool = false

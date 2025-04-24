@@ -8,7 +8,7 @@ import SwiftUI
 import Foundation
 
 struct HistoryView: View {
-    @ObservedObject var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @State private var selectedCommit: Commit?
 
     var body: some View {

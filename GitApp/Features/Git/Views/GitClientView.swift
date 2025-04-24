@@ -5,7 +5,7 @@ import Foundation
 import AppKit
 
 struct GitClientView: View {
-    @ObservedObject var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @State private var selectedTab: Tab = .history
     @State private var showCommitSheet = false
     @State private var showStashSheet = false
@@ -215,7 +215,7 @@ enum ModernUI {
 
 // MARK: - Sheets
 struct StashSheet: View {
-    @ObservedObject var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var message: String = ""
 

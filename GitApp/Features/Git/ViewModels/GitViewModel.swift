@@ -1,27 +1,29 @@
 import SwiftUI
 import Combine
 import Foundation
+import Observation
 
 
 // Remove Branch struct definition since it's now in Models/Branch.swift
 
 // --- Git View Model ---
-@MainActor
-class GitViewModel: ObservableObject {
+//@MainActor
+@Observable
+class GitViewModel {
     // --- Published Properties (State) ---
-    @Published var repoInfo: RepoInfo = RepoInfo()
-    @Published var branches: [Branch] = []
-    @Published var remotebranches: [Branch] = []
-    @Published var tags: [Tag] = []
-    @Published var stashes: [Stash] = []
-    @Published var workspaceCommands: [WorkspaceCommand] = []
-    @Published var selectedSidebarItem: AnyHashable?
-    @Published var selectedCommit: Commit?
-    @Published var selectedFileDiff: FileDiff?
-    @Published var diffContent: Diff?
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String?
-    @Published var repositoryURL: URL? {
+     var repoInfo: RepoInfo = RepoInfo()
+     var branches: [Branch] = []
+     var remotebranches: [Branch] = []
+     var tags: [Tag] = []
+     var stashes: [Stash] = []
+     var workspaceCommands: [WorkspaceCommand] = []
+     var selectedSidebarItem: AnyHashable?
+     var selectedCommit: Commit?
+     var selectedFileDiff: FileDiff?
+     var diffContent: Diff?
+     var isLoading: Bool = false
+     var errorMessage: String?
+     var repositoryURL: URL? {
         didSet {
             if let url = repositoryURL {
                 Task {
@@ -30,40 +32,41 @@ class GitViewModel: ObservableObject {
             }
         }
     }
-    @Published var foundRepositories: [URL] = []
-    @Published var isSearchingRepositories = false
-    @Published var permissionError: String?
-    @Published var isCloning = false
-    @Published var cloneProgress: Double = 0.0
-    @Published var cloneStatus: String = ""
-    @Published var cloneURL: String = ""
-    @Published var cloneDirectory: URL?
-    @Published var isShowingCloneSheet = false
-    @Published var isShowingImportSheet = false
-    @Published var isAddingLocalRepo = false
-    @Published var isShowingAddLocalSheet = false
-    @Published var localRepoPath: URL?
-    @Published var localRepoName: String = ""
-    @Published var importProgress: ImportProgress?
-    @Published var isImporting = false
-    @Published var importStatus: String = ""
-    @Published var selectedBranch: Branch? {
+     var foundRepositories: [URL] = []
+     var isSearchingRepositories = false
+     var permissionError: String?
+     var isCloning = false
+     var cloneProgress: Double = 0.0
+     var cloneStatus: String = ""
+     var cloneURL: String = ""
+     var cloneDirectory: URL?
+     var isShowingCloneSheet = false
+     var isShowingImportSheet = false
+     var isAddingLocalRepo = false
+     var isShowingAddLocalSheet = false
+     var localRepoPath: URL?
+     var localRepoName: String = ""
+     var importProgress: ImportProgress?
+     var isImporting = false
+     var importStatus: String = ""
+     var selectedBranch: Branch? {
         didSet {
             if let branch = selectedBranch, let url = repositoryURL {
                 loadCommits(for: branch, in: url)
             }
         }
     }
-    @Published var currentBranch: Branch?
-    @Published var commitDetails: CommitDetails?
-    @Published var clonedRepositories: [URL] = []
-    @Published var importedRepositories: [URL] = []
-    @Published var selectedRepository: URL?
-    @Published var stagedDiff: Diff?
-    @Published var unstagedDiff: Diff?
-    @Published var untrackedFiles: [String] = []
-    @Published var recentRepositories: [URL] = []
+     var currentBranch: Branch?
+     var commitDetails: CommitDetails?
+     var clonedRepositories: [URL] = []
+     var importedRepositories: [URL] = []
+     var selectedRepository: URL?
+     var stagedDiff: Diff?
+     var unstagedDiff: Diff?
+     var untrackedFiles: [String] = []
+     var recentRepositories: [URL] = []
     var syncState = SyncState()
+    var commits = [Commit]()
 
     // Add LogStore
     let logStore = LogStore()
@@ -137,12 +140,14 @@ class GitViewModel: ObservableObject {
             if let currentBranchName = currentBranchName {
                 currentBranch = branches.first { $0.name == currentBranchName }
                 selectedBranch = currentBranch
-                syncState.branch = currentBranch
-                syncState.folderURL = url
+                await MainActor.run {
+                    syncState.branch = currentBranch
+                    syncState.folderURL = url
 
-                // Update LogStore with current branch
-                logStore.directory = url
-                logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
+                    // Update LogStore with current branch
+                    logStore.directory = url
+                    logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
+                }
                 await logStore.refresh()
             }
 
@@ -204,11 +209,13 @@ class GitViewModel: ObservableObject {
 
     // --- Bindings Setup ---
     private func setupBindings() {
-        $selectedFileDiff
-            .dropFirst()
+        // Use Combine's publisher for selectedFileDiff
+        NotificationCenter.default.publisher(for: NSNotification.Name("SelectedFileDiffChanged"))
+            .compactMap { notification -> FileDiff? in
+                return notification.object as? FileDiff
+            }
             .sink { [weak self] fileDiff in
                 guard let self = self,
-                      let fileDiff = fileDiff,
                       let commit = self.selectedCommit,
                       let url = self.repositoryURL else { return }
 
@@ -219,7 +226,6 @@ class GitViewModel: ObservableObject {
                     do {
                         let diff = try await self.gitService.getDiff(in: url)
                         self.diffContent = diff
-
                     } catch {
                         self.errorMessage = "Error loading diff: \(error.localizedDescription)"
                     }
@@ -227,21 +233,33 @@ class GitViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        $selectedCommit
-            .dropFirst()
+        // Use Combine's publisher for selectedCommit
+        NotificationCenter.default.publisher(for: NSNotification.Name("SelectedCommitChanged"))
+            .compactMap { notification -> Commit? in
+                return notification.object as? Commit
+            }
             .sink { [weak self] commit in
                 guard let self = self else { return }
                 if commit == nil {
                     self.selectedFileDiff = nil
                     self.diffContent = nil
                     self.commitDetails = nil
-                } else if let commit = commit, let url = self.repositoryURL {
+                } else if let url = self.repositoryURL {
                     Task {
                         await self.loadCommitDetails(commit, in: url)
                     }
                 }
             }
             .store(in: &cancellables)
+    }
+
+    // Helper methods to post notifications
+    func notifySelectedFileDiffChanged(_ fileDiff: FileDiff?) {
+        NotificationCenter.default.post(name: NSNotification.Name("SelectedFileDiffChanged"), object: fileDiff)
+    }
+
+    func notifySelectedCommitChanged(_ commit: Commit?) {
+        NotificationCenter.default.post(name: NSNotification.Name("SelectedCommitChanged"), object: commit)
     }
 
     // --- Git Actions ---

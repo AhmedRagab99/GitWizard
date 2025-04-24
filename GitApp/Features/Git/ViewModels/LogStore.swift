@@ -8,7 +8,7 @@
 import Foundation
 import Observation
 
-@MainActor
+
 @Observable class LogStore {
     var number = 500
     var directory: URL?

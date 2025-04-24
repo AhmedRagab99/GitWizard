@@ -8,7 +8,7 @@
 import Foundation
 
  struct GitLog: Git {
-    
+
     var directory: URL
     var merges = false
     var ancestryPath = false
@@ -21,13 +21,13 @@ import Foundation
     var g = ""
     var author = ""
     var branch = ""
-    
-    
+
+
      typealias OutputModel = [Commit]
-    
+
      var arguments: [String] {
 //         %H|%an|%ae|%ad|%s|%P
-         
+
         var args: [String] = [
             "git",
             "log",
@@ -76,8 +76,8 @@ import Foundation
         }
         return args
     }
-    
-    
+
+
      func parse(for stdOut: String) throws -> [Commit] {
          guard !stdOut.isEmpty else { return [] }
          let logs = stdOut.components(separatedBy: String.componentSeparator + "\n")
@@ -89,7 +89,7 @@ import Foundation
              } else {
                  refs = separated[7].components(separatedBy: ", ")
              }
-             
+
              let hash  = separated[0]
              let parentHash = separated[1].components(separatedBy: .whitespacesAndNewlines)
              let author = separated[2]
@@ -117,8 +117,8 @@ import Foundation
              )
          }
      }
-     
-     
+
+
      private func determineCommitType(message: String, parentHashes: [String]) -> Commit.CommitType {
          let lowercasedMessage = message.lowercased()
 
@@ -134,6 +134,6 @@ import Foundation
              return .normal
          }
      }
-    
-    
+
+
 }

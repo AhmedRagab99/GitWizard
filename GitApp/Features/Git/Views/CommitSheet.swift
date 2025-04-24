@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct CommitSheet: View {
-    @ObservedObject var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @Binding var commitMessage: String
     @Environment(\.dismiss) private var dismiss
 

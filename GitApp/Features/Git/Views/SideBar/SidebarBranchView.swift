@@ -9,14 +9,13 @@
 import SwiftUI
 import Foundation
 
-// Import models and view models
-@preconcurrency import GitApp
+
 
 struct SidebarBranchView: View {
     let branch: Branch
     let isExpanded: Bool
     let hasSubbranches: Bool
-    @ObservedObject var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @State private var isHovered = false
 
     private let selectedBackgroundColor = Color(red: 0.32, green: 0.48, blue: 0.96)

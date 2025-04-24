@@ -12,7 +12,7 @@ struct SidebarItem: Identifiable,Equatable {
     static func == (lhs: SidebarItem, rhs: SidebarItem) -> Bool {
         return lhs.id == rhs.id
     }
-    
+
     let id = UUID() // Unique identifier for the list
     var name: String
     var icon: String // SF Symbol name for the icon
@@ -111,7 +111,7 @@ struct SidebarRow: View {
 }
 
 struct SidebarView: View {
-    @ObservedObject var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @State private var selection: SidebarItem.ID? = nil
     @State private var expandedItems = Set<UUID>()
     @State private var filterText = ""
