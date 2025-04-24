@@ -282,9 +282,7 @@ struct BranchRowView: View {
                       isHovered ? Color.secondary.opacity(0.1) : Color.clear)
         )
         .onHover { hovering in
-//            withAnimation(.easeInOut(duration: 0.2)) {
                 isHovered = hovering
-//            }
         }
         .onTapGesture(count: 2) {
             checkoutBranch()

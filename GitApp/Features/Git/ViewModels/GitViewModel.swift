@@ -640,11 +640,9 @@ class GitViewModel {
             syncState.branch = branch
 
             // Update LogStore with new branch
-            logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
-            await logStore.refresh()
+            logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]            
 
             // Check sync state
-            try await syncState.sync()
             await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Checkout failed: \(error.localizedDescription)"
