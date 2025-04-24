@@ -71,6 +71,11 @@ class GitViewModel {
     // Add LogStore
     let logStore = LogStore()
 
+    // Add state tracking
+    private var lastLoadTime: Date?
+    private var isLoadingRepository = false
+    private var loadTask: Task<Void, Never>?
+
     struct ImportProgress: Identifiable {
         let id = UUID()
         var current: Int
@@ -107,93 +112,102 @@ class GitViewModel {
 
     // --- Public Methods ---
     func loadRepositoryData(from url: URL) async {
-        do {
-            guard  await gitService.isGitRepository(at: url) else {
-                errorMessage = "Selected directory is not a Git repository"
+        // Cancel any existing load task
+        loadTask?.cancel()
+
+        // Create new load task
+        loadTask = Task {
+            // Check if we're already loading
+            guard !isLoadingRepository else { return }
+
+            // Check if we need to reload (less than 2 seconds since last load)
+            if let lastLoad = lastLoadTime, Date().timeIntervalSince(lastLoad) < 2 {
                 return
             }
 
-            isLoading = true
-            defer { isLoading = false }
-
-            // Load data in parallel where possible
-            async let branchesTask = gitService.getBranches(in: url)
-            async let currentBranchTask = gitService.getCurrentBranch(in: url)
-            async let tagsTask = gitService.getTags(in: url)
-            async let stashesTask = gitService.getStashes(in: url)
-            async let remotesTask = gitService.getRemotes(in: url)
-
-            // Wait for all parallel tasks to complete
-            let (branches, currentBranchName, tags, stashes, remotes) = try await (
-                branchesTask,
-                currentBranchTask,
-                tagsTask,
-                stashesTask,
-                remotesTask
-            )
-
-            // Update branches
-            self.branches = branches
-            self.remotebranches = remotes
-
-            // Set current branch and update related state
-            if let currentBranchName = currentBranchName {
-                currentBranch = branches.first { $0.name == currentBranchName }
-                selectedBranch = currentBranch
-                await MainActor.run {
-                    syncState.branch = currentBranch
-                    syncState.folderURL = url
-
-                    // Update LogStore with current branch
-                    logStore.directory = url
-                    logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
+            do {
+                guard await gitService.isGitRepository(at: url) else {
+                    errorMessage = "Selected directory is not a Git repository"
+                    return
                 }
+
+                isLoadingRepository = true
+                isLoading = true
+                defer {
+                    isLoading = false
+                    isLoadingRepository = false
+                    lastLoadTime = Date()
+                }
+
+                // Load data in parallel where possible
+                async let branchesTask = gitService.getBranches(in: url)
+                async let currentBranchTask = gitService.getCurrentBranch(in: url)
+                async let tagsTask = gitService.getTags(in: url)
+                async let stashesTask = gitService.getStashes(in: url)
+                async let remotesTask = gitService.getRemotes(in: url)
+
+                // Wait for all parallel tasks to complete
+                let (branches, currentBranchName, tags, stashes, remotes) = try await (
+                    branchesTask,
+                    currentBranchTask,
+                    tagsTask,
+                    stashesTask,
+                    remotesTask
+                )
+
+                // Update branches and current branch
+                await MainActor.run {
+                    if let currentBranchName = currentBranchName {
+                        currentBranch = branches.first { $0.name == currentBranchName }
+                        selectedBranch = currentBranch
+
+                        self.branches = branches
+                        self.remotebranches = remotes
+                        syncState.branch = currentBranch
+                        syncState.folderURL = url
+
+                        // Update LogStore with current branch
+                        logStore.directory = url
+                        logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
+                    }
+                }
+
+                // Only refresh log store if needed
+                if Task.isCancelled { return }
                 await logStore.refresh()
+
+                // Update other repository data
+                await MainActor.run {
+                    self.tags = tags
+                    self.stashes = stashes
+
+                    // Update repository info
+                    repoInfo = RepoInfo(
+                        name: url.lastPathComponent,
+                        currentBranch: currentBranchName ?? "main",
+                        remotes: remotes
+                    )
+                }
+
+                // Check sync state
+                if Task.isCancelled { return }
+                try await syncState.sync()
+
+            } catch {
+                if !Task.isCancelled {
+                    errorMessage = "Error loading repository data: \(error.localizedDescription)"
+                }
             }
-
-            // Update other repository data
-            self.tags = tags
-            self.stashes = stashes
-
-            // Update repository info
-            repoInfo = RepoInfo(
-                name: url.lastPathComponent,
-                currentBranch: currentBranchName ?? "main",
-                remotes: remotes
-            )
-
-            // Check sync state
-            try await syncState.sync()
-
-        } catch {
-            errorMessage = "Error loading repository data: \(error.localizedDescription)"
         }
+
+        // Wait for the load task to complete
+        await loadTask?.value
     }
 
-    private func gatherRepositoryInfo(from url: URL) async -> RepoInfo {
-        do {
-            // Get repository name
-            let name = url.lastPathComponent
 
-            // Get current branch
-            let currentBranch = try await gitService.getCurrentBranch(in: url) ?? "main"
-
-            // Get remote information
-            let remotes = try await gitService.getRemotes(in: url)
-
-            return RepoInfo(
-                name: name,
-                currentBranch: currentBranch,
-                remotes: remotes
-            )
-        } catch {
-            errorMessage = "Error gathering repository info: \(error.localizedDescription)"
-            return RepoInfo()
-        }
-    }
 
     private func loadCommits(for branch: Branch, in url: URL) {
-        Task {
+        Task { @MainActor in
             do {
                 isLoading = true
                 defer { isLoading = false }

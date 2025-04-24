@@ -80,6 +80,17 @@ struct FileChangeSection: View {
             Text(fileDiff.filePathDisplay)
                 .font(.headline)
             Spacer()
+
+            // Open file button
+            Button(action: {
+                openFile()
+            }) {
+                Image(systemName: "doc.text")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Open file in default editor")
+
             Text(fileDiff.status.rawValue)
                 .font(.caption)
                 .padding(.horizontal, 8)
@@ -96,6 +107,12 @@ struct FileChangeSection: View {
                 isExpanded.toggle()
             }
         }
+    }
+
+    private func openFile() {
+        guard let url = viewModel.repositoryURL else { return }
+        let fileURL = url.appendingPathComponent(fileDiff.filePathDisplay)
+        NSWorkspace.shared.open(fileURL)
     }
 }
 

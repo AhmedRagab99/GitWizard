@@ -31,16 +31,22 @@ struct CommitRowView: View {
 
                 // Commit metadata
                 HStack {
-                    AsyncImage(url: URL(string: commit.authorAvatar)!) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
+                    if let avatarURL = URL(string: commit.authorAvatar) {
+                        AsyncImage(url: avatarURL) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Image(systemName: "person.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(width: 20, height: 20)
+                        .clipShape(Circle())
+                    } else {
                         Image(systemName: "person.circle.fill")
                             .foregroundColor(.secondary)
+                            .frame(width: 20, height: 20)
                     }
-                    .frame(width: 20, height: 20)
-                    .clipShape(Circle())
 
                     Text(commit.author)
                         .font(.caption)

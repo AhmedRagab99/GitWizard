@@ -10,11 +10,13 @@ import Foundation
 struct HistoryView: View {
     @Bindable var viewModel: GitViewModel
     @State private var selectedCommit: Commit?
+    @State private var isLoadingMore = false
+    @State private var commits: [Commit] = []
 
     var body: some View {
         VStack(spacing: 0) {
             // Commit list
-            List(viewModel.logStore.commits) { commit in
+            List(commits) { commit in
                 CommitRowView(
                     commit: commit,
                     isSelected: selectedCommit?.id == commit.id,
@@ -36,6 +38,10 @@ struct HistoryView: View {
                     viewModel: viewModel
                 )
             }
+        }
+        .task {
+            // Initial load of commits
+            commits = await viewModel.logStore.getCommits()
         }
     }
 }
