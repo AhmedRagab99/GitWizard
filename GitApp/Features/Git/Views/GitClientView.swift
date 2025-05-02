@@ -6,7 +6,7 @@ import AppKit
 
 struct GitClientView: View {
     @Bindable var viewModel: GitViewModel
-    @State private var selectedWorkspaceItem: WorkspaceItem = .history
+    @State private var selectedWorkspaceItem: WorkspaceSidebarItem = .history
     @State private var showStashSheet = false
     @State private var showDeleteAlert = false
     @State private var columnVisibility = NavigationSplitViewVisibility.all
@@ -17,7 +17,7 @@ struct GitClientView: View {
         } detail: {
             VStack(spacing: 0) {
                 // Main content area
-                if selectedWorkspaceItem == .fileStatus {
+                if selectedWorkspaceItem == .workingCopy {
                     CommitView(viewModel: viewModel)
                 } else if selectedWorkspaceItem == .history {
                     HistoryView(viewModel: viewModel)

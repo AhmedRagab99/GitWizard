@@ -8,492 +8,193 @@
 import SwiftUI
 import Foundation
 
-enum WorkspaceItem: String, CaseIterable, Identifiable {
-       case fileStatus = "File status"
-       case history = "History"
-       case search = "Search"
-       var id: String { rawValue }
-   }
-
-   enum SidebarSection: String, CaseIterable, Identifiable {
-       case branches = "Branches"
-       case tags = "Tags"
-       case stashes = "Stashes"
-       case remotes = "Remotes"
-
-       var id: String { rawValue }
-
-       var icon: String {
-           switch self {
-           case .branches: return "git.branch"
-           case .tags: return "tag"
-           case .stashes: return "archivebox"
-           case .remotes: return "cloud"
-           }
-       }
-   }
-
+// Workspace items for the top section
+enum WorkspaceSidebarItem: String, CaseIterable, Identifiable {
+    case workingCopy = "Working Copy"
+    case history = "History"
+    case stashes = "Stashes"
+    case pullRequests = "Pull Requests"
+    case branchesReview = "Branches Review"
+    case settings = "Settings"
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .workingCopy: return "folder"
+        case .history: return "clock"
+        case .stashes: return "archivebox"
+        case .pullRequests: return "arrow.triangle.branch"
+        case .branchesReview: return "point.topleft.down.curvedto.point.bottomright.up"
+        case .settings: return "gearshape"
+        }
+    }
+}
 
 struct SidebarView: View {
     @Bindable var viewModel: GitViewModel
-    @Binding var selectedWorkspaceItem: WorkspaceItem
-    @State private var expandedGroups: Set<SidebarSection> = [.branches]
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var searchText = ""
-
-
+    @Binding var selectedWorkspaceItem: WorkspaceSidebarItem
+    @State private var filterText: String = ""
+    @State private var expandedFeature: Bool = true
 
     var body: some View {
-        VStack(spacing: 0) {
-            // WORKSPACE section
-            VStack(alignment: .leading, spacing: 0) {
-                Text("WORKSPACE")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 16)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 4)
-                ForEach(WorkspaceItem.allCases) { item in
-                    let isSelected = selectedWorkspaceItem == item
-                    let iconColor: Color = isSelected ? .accentColor : .secondary
-                    let textColor: Color = isSelected ? .accentColor : .primary
-                    let bgColor: Color = isSelected ? Color.accentColor.opacity(0.15) : Color.clear
+        ZStack {
+            // Background
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color(.windowBackgroundColor))
+                .shadow(radius: 2)
 
+            VStack(alignment: .leading, spacing: 0) {
+                // Workspace Section
+                sectionHeader("Workspace")
+                ForEach(WorkspaceSidebarItem.allCases) { item in
+                    let isSelected = selectedWorkspaceItem == item
                     Button(action: { selectedWorkspaceItem = item }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: icon(for: item))
-                                .foregroundStyle(iconColor)
+                        HStack(spacing: 12) {
+                            Image(systemName: item.icon)
+                                .foregroundColor(isSelected ? .accentColor : .blue.opacity(0.7))
                             Text(item.rawValue)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(textColor)
+                                .fontWeight(isSelected ? .semibold : .regular)
+                                .foregroundColor(isSelected ? .primary : .blue.opacity(0.8))
                             Spacer()
                         }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 14)
                         .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(bgColor)
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
                         )
                     }
                     .buttonStyle(.plain)
                 }
-            }
-            .padding(.bottom, 16)
+                .padding(.bottom, 8)
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 24) {
-                    // Repository Info
-                    repositoryInfo
-
-                    // Groups
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        branchesGroup
-                        remotesGroup
-                        tagsGroup
-                        stashesGroup
+                // Branches Section
+                sectionHeader("Branches")
+                ForEach(viewModel.branches) { branch in
+                    if branch.name == "feature" {
+                        // Feature folder
+                        DisclosureGroup(isExpanded: $expandedFeature) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(viewModel.branches.filter { $0.name.hasPrefix("feature/") }) { featureBranch in
+                                    branchRow(featureBranch, indent: 34)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "folder")
+                                    .foregroundColor(.blue.opacity(0.7))
+                                Text("feature")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                            }
+                            .padding(.vertical, 5)
+                            .padding(.horizontal, 18)
+                        }
+                        .padding(.bottom, 2)
+                    } else if !branch.name.hasPrefix("feature/") {
+                        branchRow(branch, indent: 22)
                     }
                 }
-                .padding()
-            }
-            .background(Color(.textBackgroundColor))
 
-            // Search Bar
-            searchBar
-                .padding()
-                .background(Color(.windowBackgroundColor))
-        }
-    }
-
-    private func icon(for item: WorkspaceItem) -> String {
-        switch item {
-        case .fileStatus: return "desktopcomputer"
-        case .history: return "clock"
-        case .search: return "magnifyingglass"
-        }
-    }
-
-    private var searchBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-
-            TextField("Search...", text: $searchText)
-                .textFieldStyle(.plain)
-                .font(.body)
-
-            if !searchText.isEmpty {
-                Button(action: {
-                    searchText = ""
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(.textBackgroundColor))
-        )
-    }
-
-    private var repositoryInfo: some View {
-        LazyVStack(alignment: .leading, spacing: 16) {
-            if let currentBranch = viewModel.currentBranch {
-                LazyHStack(spacing: 12) {
-                    Image(systemName: "gitbranch")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.blue)
-                        .frame(width: 24, height: 24)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Current Branch")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(currentBranch.name)
-                            .font(.headline)
+               
+                // Remotes Section
+                sectionHeader("Remotes")
+                ForEach(viewModel.remotebranches, id: \.name) { remote in
+                    HStack(spacing: 10) {
+                        Image(systemName: "cloud")
+                            .foregroundColor(.blue.opacity(0.7))
+                        Text(remote.name)
+                            .foregroundColor(.primary)
+                        Spacer()
                     }
+                    .padding(.vertical, 5)
+                    .padding(.horizontal, 22)
                 }
-            }
-        }
-    }
-
-    private func groupHeader(_ title: String, section: SidebarSection) -> some View {
-        LazyHStack {
-            Button(action: {
-                withAnimation(.spring(response: 0.3)) {
-                    if expandedGroups.contains(section) {
-                        expandedGroups.remove(section)
-                    } else {
-                        expandedGroups.insert(section)
+                
+                // Tags Section
+                sectionHeader("Tags")
+                ForEach(viewModel.tags, id: \.name) { tag in
+                    HStack(spacing: 10) {
+                        Image(systemName: "tag")
+                            .foregroundColor(.blue.opacity(0.7))
+                        Text(tag.name)
+                            .foregroundColor(.primary)
+                        Spacer()
                     }
+                    .padding(.vertical, 5)
+                    .padding(.horizontal, 22)
                 }
-            }) {
-                Image(systemName: expandedGroups.contains(section) ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
 
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.primary)
 
-            Spacer()
-        }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.spring(response: 0.3)) {
-                if expandedGroups.contains(section) {
-                    expandedGroups.remove(section)
-                } else {
-                    expandedGroups.insert(section)
+                Spacer()
+
+                // Filter Bar
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    TextField("Filter", text: $filterText)
+                        .textFieldStyle(.plain)
+                        .font(.body)
+                    Button(action: {
+                        // Add new remote/tag/branch logic
+                    }) {
+                        Image(systemName: "plus")
+                            .foregroundColor(.blue)
+                    }
+                    .buttonStyle(.plain)
                 }
+                .padding(10)
+                .background(Color(.controlBackgroundColor))
+                .cornerRadius(8)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
             }
+            .padding(.top, 8)
         }
-    }
-
-    private func filteredBranches() -> [Branch] {
-        if searchText.isEmpty {
-            return viewModel.branches
-        }
-        return viewModel.branches.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
-
-    private func filteredRemotes() -> [Branch] {
-        if searchText.isEmpty {
-            return viewModel.remotebranches
-        }
-        return viewModel.remotebranches.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
-
-    private func filteredTags() -> [Tag] {
-        if searchText.isEmpty {
-            return viewModel.tags
-        }
-        return viewModel.tags.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
-
-    private func filteredStashes() -> [Stash] {
-        if searchText.isEmpty {
-            return viewModel.stashes
-        }
-        return viewModel.stashes.filter { $0.message.localizedCaseInsensitiveContains(searchText) }
+        .frame(minWidth: 240)
     }
 
     @ViewBuilder
-    private var branchesGroup: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            groupHeader("Local Branches", section: .branches)
-
-            if expandedGroups.contains(.branches) {
-                let filtered = filteredBranches()
-                if filtered.isEmpty {
-                    emptyStateView(message: searchText.isEmpty ? "No branches" : "No matching branches")
-                } else {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filtered) { branch in
-                            BranchRowView(
-                                branch: branch,
-                                isCurrent: branch.isCurrent,
-                                viewModel: viewModel
-                            )
-                        }
-                    }
-                }
-            }
-        }
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.caption)
+            .fontWeight(.bold)
+            .foregroundColor(.secondary)
+            .textCase(.uppercase)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 2)
     }
 
     @ViewBuilder
-    private var remotesGroup: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            groupHeader("Remotes", section: .remotes)
-
-            if expandedGroups.contains(.remotes) {
-                let filtered = filteredRemotes()
-                if filtered.isEmpty {
-                    emptyStateView(message: searchText.isEmpty ? "No remotes" : "No matching remotes")
-                } else {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filtered) { remote in
-                            RemoteRowView(remote:remote, viewModel: viewModel)
-                        }
-                    }
-                }
+    private func branchRow(_ branch: Branch, indent: CGFloat) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                .foregroundColor(.blue.opacity(0.7))
+            Text(branch.name.replacingOccurrences(of: "feature/", with: ""))
+                .fontWeight(branch.isCurrent ? .bold : .regular)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+            if branch.isCurrent {
+                BadgeView(text: "HEAD")
             }
+            Spacer()
         }
-    }
-
-    @ViewBuilder
-    private var tagsGroup: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            groupHeader("Tags", section: .tags)
-
-            if expandedGroups.contains(.tags) {
-                let filtered = filteredTags()
-                if filtered.isEmpty {
-                    emptyStateView(message: searchText.isEmpty ? "No tags" : "No matching tags")
-                } else {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filtered) { tag in
-                            TagRowView(tag: tag)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var stashesGroup: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            groupHeader("Stashes", section: .stashes)
-
-            if expandedGroups.contains(.stashes) {
-                let filtered = filteredStashes()
-                if filtered.isEmpty {
-                    emptyStateView(message: searchText.isEmpty ? "No stashes" : "No matching stashes")
-                } else {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filtered) { stash in
-                            StashRowView(stash: stash)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func emptyStateView(message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 16)
+        .padding(.vertical, 5)
+        .padding(.leading, indent)
+        .padding(.trailing, 8)
     }
 }
 
-// MARK: - Row Views
-struct BranchRowView: View {
-    let branch: Branch
-    let isCurrent: Bool
-    @State private var isHovered = false
-    @Bindable var viewModel: GitViewModel
-
+struct BadgeView: View {
+    let text: String
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: isCurrent ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(isCurrent ? .green : .secondary)
-                .frame(width: 24, height: 24)
-
-            Text(branch.name)
-                .font(.body)
-                .foregroundStyle(.primary)
-
-            Spacer()
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 16)
-        .contentShape(Rectangle())
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isCurrent ? Color.accentColor.opacity(0.1) :
-                      isHovered ? Color.secondary.opacity(0.1) : Color.clear)
-        )
-        .onHover { hovering in
-                isHovered = hovering
-        }
-        .onTapGesture(count: 2) {
-            checkoutBranch()
-        }
-        .contextMenu {
-            Button(action: checkoutBranch) {
-                Label("Checkout", systemImage: "arrow.triangle.branch")
-            }
-
-            Button(action: pullBranch) {
-                Label("Pull from origin", systemImage: "arrow.down")
-            }
-
-            if !branch.isCurrent {
-                Button(action: {
-                    // TODO: Implement delete branch
-                }) {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
-        }
-    }
-    private func checkoutBranch() {
-        Task { @MainActor in
-            await viewModel.checkoutBranch(branch)
-        }
-    }
-
-    private func pullBranch() {
-        Task { @MainActor in
-            await viewModel.pull()
-        }
-    }
-}
-
-struct TagRowView: View {
-    let tag: Tag
-    @State private var isHovered = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "tag")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.orange)
-                .frame(width: 24, height: 24)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(tag.name)
-                    .font(.body)
-                Text(tag.commitHash)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
-        )
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovered = hovering
-            }
-        }
-    }
-}
-
-struct StashRowView: View {
-    let stash: Stash
-    @State private var isHovered = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "archivebox")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.purple)
-                .frame(width: 24, height: 24)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(stash.message)
-                    .font(.body)
-                Text("#\(stash.index)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
-        )
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovered = hovering
-            }
-        }
-    }
-}
-
-struct RemoteRowView: View {
-    let remote: Branch
-    @Bindable var  viewModel: GitViewModel
-    @State private var isHovered = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "cloud")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.blue)
-                .frame(width: 24, height: 24)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(remote.name)
-                    .font(.body)
-
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
-        )
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovered = hovering
-            }
-        }
-        .contextMenu {
-            Button(action: checkoutBranch) {
-                Label("Checkout", systemImage: "arrow.triangle.branch")
-            }
-        }
-
-    }
-    private func checkoutBranch() {
-        Task { @MainActor in
-            await viewModel.checkoutBranch(remote,isRemote: true)
-        }
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.bold)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color(.systemGray))
+            .cornerRadius(6)
+            .foregroundColor(.primary)
     }
 }

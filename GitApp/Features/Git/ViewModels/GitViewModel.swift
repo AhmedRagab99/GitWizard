@@ -607,14 +607,14 @@ class GitViewModel {
     }
 
     func unstageAllChanges() async {
-        guard let url = repositoryURL else { return }        
+        guard let url = repositoryURL else { return }
             do {
                 try await gitService.unstageAllChanges(in: url)
                 await loadChanges()
             } catch {
                 errorMessage = "Error unstaging all changes: \(error.localizedDescription)"
             }
-        
+
     }
 
     func commitChanges(message: String) async {
