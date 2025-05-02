@@ -112,7 +112,8 @@ struct GitClientView: View {
                 if selectedTab == .history {
                     HistoryView(viewModel: viewModel)
                 } else {
-                    ChangesView(viewModel: viewModel)
+//                    ChangesView(viewModel: viewModel)
+                    CommitView(viewModel: viewModel)
                 }
             }
 

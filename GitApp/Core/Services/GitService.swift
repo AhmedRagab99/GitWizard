@@ -162,16 +162,26 @@ actor GitService {
             cloneStatus = "Cloning repository..."
             cloneProgress = 0.1
 
-            let destinationPath = directory.appendingPathComponent(URL(string: url)!.lastPathComponent).path
+            // Extract repository name from URL
+            let repoName: String
+            if let url = URL(string: url) {
+                repoName = url.deletingPathExtension().lastPathComponent
+            } else {
+                // Fallback: try to extract name from the URL string
+                let components = url.components(separatedBy: "/")
+                repoName = components.last?.replacingOccurrences(of: ".git", with: "") ?? "repository"
+            }
+
+            let destinationPath = directory.appendingPathComponent(repoName).path
             _ = try await Process.output(GitClone(
                 directory: directory,
                 repositoryURL: url,
                 destinationPath: destinationPath
             ))
 
-                cloneProgress = 1.0
-                cloneStatus = "Clone completed"
-                return true
+            cloneProgress = 1.0
+            cloneStatus = "Clone completed"
+            return true
         } catch {
             cloneStatus = "Clone failed: \(error.localizedDescription)"
             return false
@@ -196,12 +206,9 @@ actor GitService {
         return output
     }
 
-
     func createBranch(_ name: String, in url: URL) async throws {
         _ = try await Process.output(GitBranchCreate(directory: url, name: name))
     }
-
-
 
     func checkoutBranch(_ name: String, in url: URL) async throws {
         try await Process.output(GitCheckout(directory: url, commitHash: name))

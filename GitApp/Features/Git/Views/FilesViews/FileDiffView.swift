@@ -11,19 +11,7 @@ struct FileDiffView: View {
     @State private var showLineNumbers = true
     @State private var showWhitespace = true
     @State private var fontSize: CGFloat = 12
-    @State private var theme: Theme = .light
 
-    enum Theme: String, CaseIterable {
-        case light = "xcode"
-        case dark = "atom-one-dark"
-
-        var colorScheme: ColorScheme {
-            switch self {
-            case .light: return .light
-            case .dark: return .dark
-            }
-        }
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,8 +27,7 @@ struct FileDiffView: View {
                 }
             }
         }
-//        .background(Color.clear)
-        .environment(\.colorScheme, theme.colorScheme)
+        .background(Color.clear)
     }
 
     private var headerView: some View {
@@ -55,30 +42,7 @@ struct FileDiffView: View {
                         .lineLimit(1)
                 }
 
-                Spacer()
-
-                // Controls
-                HStack(spacing: 16) {
-                    // Theme picker
-                    Picker("Theme", selection: $theme) {
-                        ForEach(Theme.allCases, id: \.self) { theme in
-                            Text(theme.rawValue.capitalized)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 200)
-
-                    // Font size control
-                    HStack(spacing: 4) {
-                        Image(systemName: "textformat.size")
-                        Slider(value: $fontSize, in: 8...20, step: 1)
-                            .frame(width: 100)
-                    }
-
-                    // Toggles
-                    Toggle("Line Numbers", isOn: $showLineNumbers)
-                    Toggle("Whitespace", isOn: $showWhitespace)
-                }
+                              
             }
             .padding(.horizontal)
 

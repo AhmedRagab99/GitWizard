@@ -87,13 +87,8 @@ class GitViewModel {
         loadRepositoryList()
     }
 
-    func isGitRepository(at: URL) async -> Bool {
-        do {
+    func isGitRepository(at: URL) async -> Bool {        
             return try await gitService.isGitRepository(at: at)
-        } catch {
-            errorMessage = "Error checking repository: \(error.localizedDescription)"
-            return false
-        }
     }
 
     private func loadWorkspaceCommands() {
@@ -566,6 +561,28 @@ class GitViewModel {
         }
     }
 
+    func unstageFile(path: String) async {
+        guard let url = repositoryURL else { return }
+
+        do {
+            try await gitService.unstageFile(path, in: url)
+            await loadChanges()
+        } catch {
+            errorMessage = "Error unstaging file: \(error.localizedDescription)"
+        }
+    }
+
+    func stageFile(path: String) async {
+        guard let url = repositoryURL else { return }
+
+        do {
+            try await gitService.addFiles(in: url, pathspec: path)
+            await loadChanges()
+        } catch {
+            errorMessage = "Error staging file: \(error.localizedDescription)"
+        }
+    }
+
     func resetChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
         guard let url = repositoryURL else { return }
 
@@ -640,7 +657,7 @@ class GitViewModel {
             syncState.branch = branch
 
             // Update LogStore with new branch
-            logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]            
+            logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
 
             // Check sync state
             await loadRepositoryData(from: url)
