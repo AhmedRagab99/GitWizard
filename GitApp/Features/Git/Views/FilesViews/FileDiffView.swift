@@ -7,158 +7,121 @@ struct FileDiffView: View {
     let onReset: (Chunk) -> Void
 
     @State private var selectedChunk: Chunk?
-    @State private var isHovering = false
     @State private var showLineNumbers = true
-    @State private var showWhitespace = true
-    @State private var fontSize: CGFloat = 12
-
+    @State private var fontSize: CGFloat = 13
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             headerView
-
+            Divider()
             // Diff content
-            ScrollView {
-                LazyVStack(spacing: 0) {
+            ScrollView(.vertical) {
+                VStack(spacing: 0) {
                     ForEach(fileDiff.chunks) { chunk in
-                        chunkViewContent(chunk)
+                        chunkHeader(chunk)
+                        ForEach(chunk.lines) { line in
+                            diffLineView(line: line)
+                        }
                     }
                 }
+                .padding(.vertical, 4)
             }
         }
-        .background(Color.clear)
+        .background(Color(.windowBackgroundColor))
     }
 
     private var headerView: some View {
-        VStack(spacing: 8) {
-            HStack {
-                // File status and path
-                HStack(spacing: 4) {
-                    Image(systemName: fileDiff.status.icon)
-                        .foregroundColor(fileDiff.status.color)
-                    Text(fileDiff.filePathDisplay)
-                        .font(.system(.body, design: .monospaced))
-                        .lineLimit(1)
-                }
-
-                              
+        HStack(spacing: 8) {
+            Image(systemName: fileDiff.status.icon)
+                .foregroundColor(fileDiff.status.color)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(fileDiff.fromFilePath.components(separatedBy: "/").last ?? fileDiff.fromFilePath)
+                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                Text(fileDiff.fromFilePath)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal)
-
-            Divider()
+            Spacer()
         }
+        .padding(.horizontal)
         .padding(.vertical, 8)
+        .background(Color(.controlBackgroundColor))
     }
 
-    private func chunkViewContent(_ chunk: Chunk) -> some View {
-        VStack(spacing: 0) {
-            // Chunk header
-            HStack {
-                Text(chunk.raw.components(separatedBy: "\n").first ?? "")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.secondary)
-                Spacer()
-
-                // Chunk actions
-                HStack(spacing: 8) {
-                    Button(action: { onStage(chunk) }) {
-                        Image(systemName: "plus.circle")
-                            .foregroundColor(.green)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: { onUnstage(chunk) }) {
-                        Image(systemName: "minus.circle")
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: { onReset(chunk) }) {
-                        Image(systemName: "arrow.uturn.backward.circle")
-                            .foregroundColor(.orange)
-                    }
-                    .buttonStyle(.plain)
+    private func chunkHeader(_ chunk: Chunk) -> some View {
+        HStack {
+            Text(chunk.lines.first?.raw ?? "")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundColor(.blue)
+            Spacer()
+            // Optional: chunk actions
+            HStack(spacing: 8) {
+                Button(action: { onStage(chunk) }) {
+                    Image(systemName: "plus.circle")
+                        .foregroundColor(.green)
                 }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 4)
-            .background(Color(.clear))
-
-            // Diff content
-            HStack(spacing: 0) {
-                // Left side (old content)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(chunk.lines.filter { $0.kind == .removed || $0.kind == .unchanged }) { line in
-                            lineView(line.raw, isOld: true)
-                        }
-                    }
+                .buttonStyle(.plain)
+                Button(action: { onUnstage(chunk) }) {
+                    Image(systemName: "minus.circle")
+                        .foregroundColor(.orange)
                 }
-                .frame(minWidth: 300)
-
-                Divider()
-
-                // Right side (new content)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(chunk.lines.filter { $0.kind == .added || $0.kind == .unchanged }) { line in
-                            lineView(line.raw, isOld: false)
-                        }
-                    }
+                .buttonStyle(.plain)
+                Button(action: { onReset(chunk) }) {
+                    Image(systemName: "arrow.uturn.backward.circle")
+                        .foregroundColor(.gray)
                 }
-                .frame(minWidth: 300)
+                .buttonStyle(.plain)
             }
-        }
-        .background(selectedChunk == chunk ? Color(.selectedControlColor).opacity(0.3) : Color.clear)
-        .onHover { isHovering in
-            self.isHovering = isHovering
-        }
-        .onTapGesture {
-            selectedChunk = chunk
-        }
-    }
-
-    private func lineView(_ line: String, isOld: Bool) -> some View {
-        HStack(spacing: 0) {
-            if showLineNumbers {
-                Text(line.prefix(while: { $0.isNumber }))
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 40, alignment: .trailing)
-                    .padding(.trailing, 8)
-            }
-
-            Text(line)
-                .font(.system(size: fontSize, design: .monospaced))
-                .foregroundColor(lineColor(for: line))
-                .padding(.vertical, 2)
         }
         .padding(.horizontal, 8)
-        .background(lineBackground(for: line))
+        .padding(.vertical, 4)
+        .background(Color(.controlBackgroundColor))
     }
 
-    private func lineColor(for line: String) -> Color {
-        if line.hasPrefix("+") {
-            return .green
-        } else if line.hasPrefix("-") {
-            return .red
-        } else if line.hasPrefix("@@") {
-            return .blue
+    private func diffLineView(line: Chunk.Line) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+//            if showLineNumbers {
+//                Group {
+////                    Text(line.oldLineNumber != nil ? String(line.oldLineNumber!) : " ")
+////                        .frame(width: 40, alignment: .trailing)
+////                        .foregroundColor(.secondary)
+//                    Text(line. != nil ? String(line.newLineNumber!) : " ")
+//                        .frame(width: 40, alignment: .trailing)
+//                        .foregroundColor(.secondary)
+//                }
+//                .font(.system(size: fontSize, design: .monospaced))
+//                .padding(.trailing, 4)
+//            }
+            Text(line.raw)
+                .font(.system(size: fontSize, design: .monospaced))
+                .foregroundColor(lineTextColor(line))
+                .padding(.vertical, 1.5)
+            Spacer()
         }
-        return .clear
+        .padding(.horizontal, 8)
+        .background(lineBackground(line))
     }
 
-    private func lineBackground(for line: String) -> Color {
-        if line.hasPrefix("+") {
-            return Color.green.opacity(0.1)
-        } else if line.hasPrefix("-") {
-            return Color.red.opacity(0.1)
+    private func lineTextColor(_ line: Chunk.Line) -> Color {
+        switch line.kind {
+        case .added: return .green
+        case .removed: return .red
+        case .unchanged: return .primary
+        case .header: return .blue
         }
-        return .clear
+    }
+
+    private func lineBackground(_ line: Chunk.Line) -> Color {
+        switch line.kind {
+        case .added: return Color.green.opacity(0.12)
+        case .removed: return Color.red.opacity(0.12)
+        case .header: return Color.blue.opacity(0.08)
+        case .unchanged: return Color.clear
+        }
     }
 }
-//
+
 //#Preview {
 //    FileDiffView(
 //        fileDiff: FileDiff(

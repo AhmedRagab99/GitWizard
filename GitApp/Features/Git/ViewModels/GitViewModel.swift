@@ -599,25 +599,22 @@ class GitViewModel {
     func stageAllChanges() async {
             do {
                 guard let url = repositoryURL else { return }
-                try await gitService.unstageAllChanges(in: url)
-//                stageAllChanges(in: url)
-                await loadRepositoryData(from: url)
+                try await gitService.stageAllChanges(in: url)
+                await loadChanges()
             } catch {
                 errorMessage = "Error staging changes: \(error.localizedDescription)"
             }
     }
 
-    func unstageAllChanges() {
-        guard let url = repositoryURL else { return }
-
-        Task {
+    func unstageAllChanges() async {
+        guard let url = repositoryURL else { return }        
             do {
                 try await gitService.unstageAllChanges(in: url)
                 await loadChanges()
             } catch {
                 errorMessage = "Error unstaging all changes: \(error.localizedDescription)"
             }
-        }
+        
     }
 
     func commitChanges(message: String) async {

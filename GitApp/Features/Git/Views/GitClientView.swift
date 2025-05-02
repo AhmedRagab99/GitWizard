@@ -6,129 +6,28 @@ import AppKit
 
 struct GitClientView: View {
     @Bindable var viewModel: GitViewModel
-    @State private var selectedTab: Tab = .history
-    @State private var showCommitSheet = false
+    @State private var selectedWorkspaceItem: WorkspaceItem = .history
     @State private var showStashSheet = false
     @State private var showDeleteAlert = false
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
-    enum Tab {
-        case history
-        case changes
-    }
-
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Sidebar
-            SidebarView(viewModel: viewModel)
-//                .toolbar {
-//                    ToolbarItem(placement: .automatic) {
-//                        HStack(spacing: 16) {
-//                            // Push
-//                            Button(action: {
-//                                Task {
-//                                    await viewModel.push()
-//                                }
-//                            }) {
-//                                Image(systemName: "arrow.up.circle")
-//                                    .font(.title2)
-//                            }
-//                            .help("Push changes to remote")
-//                            .disabled(viewModel.currentBranch == nil)
-//
-//                            // Pull
-//                            Button(action: {
-//                                Task {
-//                                    await viewModel.pull()
-//                                }
-//                            }) {
-//                                Image(systemName: "arrow.down.circle")
-//                                    .font(.title2)
-//                            }
-//                            .help("Pull changes from remote")
-//                            .disabled(viewModel.currentBranch == nil)
-//
-//                            Divider()
-//                                .frame(height: 20)
-//
-//                            // Stash
-//                            Button(action: {
-//                                showStashSheet = true
-//                            }) {
-//                                Image(systemName: "archivebox")
-//                                    .font(.title2)
-//                            }
-//                            .help("Stash changes")
-//                            .disabled(viewModel.currentBranch == nil)
-//
-//                            // Commit
-//                            Button(action: {
-//                                showCommitSheet = true
-//                            }) {
-//                                Image(systemName: "checkmark.circle")
-//                                    .font(.title2)
-//                            }
-//                            .help("Commit changes")
-//                            .disabled(viewModel.currentBranch == nil)
-//
-//                            Divider()
-//                                .frame(height: 20)
-//
-//                            // Delete
-//                            Button(action: {
-//                                showDeleteAlert = true
-//                            }) {
-//                                Image(systemName: "trash")
-//                                    .font(.title2)
-//                            }
-//                            .help("Delete current branch")
-//                            .disabled(viewModel.currentBranch == nil)
-//                        }
-//                    }
-//                }
+            SidebarView(viewModel: viewModel, selectedWorkspaceItem: $selectedWorkspaceItem)
         } detail: {
-            // Main content
             VStack(spacing: 0) {
-                // Tab bar
-                HStack {
-                    Button(action: { selectedTab = .history }) {
-                        Label("History", systemImage: "clock")
-                            .foregroundStyle(selectedTab == .history ? .tertiary : .secondary)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: { selectedTab = .changes }) {
-                        Label("Changes", systemImage: "list.bullet")
-                            .foregroundStyle(selectedTab == .changes ? .tertiary : .secondary)
-                    }
-                    .buttonStyle(.plain)
-
-                    Spacer()
-                }
-                .padding()
-                .background(ModernUI.colors.background)
-
-                // Content area
-                if selectedTab == .history {
+                // Main content area
+                if selectedWorkspaceItem == .fileStatus {
+                    CommitView(viewModel: viewModel)
+                } else if selectedWorkspaceItem == .history {
                     HistoryView(viewModel: viewModel)
                 } else {
-//                    ChangesView(viewModel: viewModel)
-                    CommitView(viewModel: viewModel)
+                    // Optionally, add a search view or placeholder
+                    Text("Search coming soon...")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-
-            // Bottom section - Commit details
-            if let commit = viewModel.selectedCommit {
-                VStack(spacing: 0) {
-                    Divider()
-                    CommitDetailView(commit: commit, details: viewModel.commitDetails, viewModel: viewModel)
-                }
-                .frame(height: 300)
-            }
-        }
-        .background(ModernUI.colors.background)
-        .sheet(isPresented: $showCommitSheet) {
-//            CommitSheet(viewModel: viewModel)
         }
         .sheet(isPresented: $showStashSheet) {
             StashSheet(viewModel: viewModel)

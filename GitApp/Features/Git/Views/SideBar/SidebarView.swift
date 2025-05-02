@@ -8,21 +8,78 @@
 import SwiftUI
 import Foundation
 
+enum WorkspaceItem: String, CaseIterable, Identifiable {
+       case fileStatus = "File status"
+       case history = "History"
+       case search = "Search"
+       var id: String { rawValue }
+   }
+
+   enum SidebarSection: String, CaseIterable, Identifiable {
+       case branches = "Branches"
+       case tags = "Tags"
+       case stashes = "Stashes"
+       case remotes = "Remotes"
+
+       var id: String { rawValue }
+
+       var icon: String {
+           switch self {
+           case .branches: return "git.branch"
+           case .tags: return "tag"
+           case .stashes: return "archivebox"
+           case .remotes: return "cloud"
+           }
+       }
+   }
+
+
 struct SidebarView: View {
     @Bindable var viewModel: GitViewModel
+    @Binding var selectedWorkspaceItem: WorkspaceItem
     @State private var expandedGroups: Set<SidebarSection> = [.branches]
     @Environment(\.colorScheme) private var colorScheme
     @State private var searchText = ""
 
-    enum SidebarSection: String, CaseIterable {
-        case branches = "Branches"
-        case tags = "Tags"
-        case stashes = "Stashes"
-        case remotes = "Remotes"
-    }
+
 
     var body: some View {
         VStack(spacing: 0) {
+            // WORKSPACE section
+            VStack(alignment: .leading, spacing: 0) {
+                Text("WORKSPACE")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 16)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 4)
+                ForEach(WorkspaceItem.allCases) { item in
+                    let isSelected = selectedWorkspaceItem == item
+                    let iconColor: Color = isSelected ? .accentColor : .secondary
+                    let textColor: Color = isSelected ? .accentColor : .primary
+                    let bgColor: Color = isSelected ? Color.accentColor.opacity(0.15) : Color.clear
+
+                    Button(action: { selectedWorkspaceItem = item }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: icon(for: item))
+                                .foregroundStyle(iconColor)
+                            Text(item.rawValue)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(textColor)
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(bgColor)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.bottom, 16)
+
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
                     // Repository Info
@@ -44,6 +101,14 @@ struct SidebarView: View {
             searchBar
                 .padding()
                 .background(Color(.windowBackgroundColor))
+        }
+    }
+
+    private func icon(for item: WorkspaceItem) -> String {
+        switch item {
+        case .fileStatus: return "desktopcomputer"
+        case .history: return "clock"
+        case .search: return "magnifyingglass"
         }
     }
 
@@ -403,7 +468,7 @@ struct RemoteRowView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(remote.name)
                     .font(.body)
-                
+
             }
 
             Spacer()
@@ -424,7 +489,7 @@ struct RemoteRowView: View {
                 Label("Checkout", systemImage: "arrow.triangle.branch")
             }
         }
-        
+
     }
     private func checkoutBranch() {
         Task { @MainActor in
