@@ -87,7 +87,7 @@ class GitViewModel {
         loadRepositoryList()
     }
 
-    func isGitRepository(at: URL) async -> Bool {        
+    func isGitRepository(at: URL) async -> Bool {
             return try await gitService.isGitRepository(at: at)
     }
 
@@ -596,8 +596,7 @@ class GitViewModel {
         }
     }
 
-    func stageAllChanges() {
-        Task {
+    func stageAllChanges() async {
             do {
                 guard let url = repositoryURL else { return }
                 try await gitService.unstageAllChanges(in: url)
@@ -606,7 +605,6 @@ class GitViewModel {
             } catch {
                 errorMessage = "Error staging changes: \(error.localizedDescription)"
             }
-        }
     }
 
     func unstageAllChanges() {
