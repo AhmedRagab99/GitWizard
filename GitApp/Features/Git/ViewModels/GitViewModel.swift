@@ -194,6 +194,7 @@ class GitViewModel {
                 defer { isLoading = false }
 
                 // Update LogStore with branch
+                logStore.directory = url
                 logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
                 await logStore.refresh()
             } catch {
@@ -739,6 +740,7 @@ class GitViewModel {
                 selectedBranch = currentBranch
 
                 // Update LogStore
+                logStore.directory = url
                 logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
                 await logStore.refresh()
             }
@@ -868,6 +870,25 @@ class GitViewModel {
             await loadCommitDetails(commit, in: url)
         }
     }
+//    var commits: [Commit] = []
+}
+
+extension GitViewModel {
+    func loadMoreCommits(commit: Commit) async {
+        if commit == logStore.commits.last {
+            await logStore.loadMore()
+        }
+    }
+    
+    func getCommits() -> [Commit] {
+        return logStore.commits
+    }
+    
+    func refreshCommits() async  {
+        await logStore.refresh()
+    }
+    
+    
 }
 
 extension GitViewModel {

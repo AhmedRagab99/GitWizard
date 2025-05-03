@@ -13,8 +13,8 @@ import Observation
     var number = 50 // Default page size
     var directory: URL?
     private var currentPage = 0
-    private var hasMoreCommits = true
-    private var isLoading = false
+    var hasMoreCommits = true
+    var isLoading = false
 
     private var grep: [String] {
         searchTokens.filter { token in
@@ -76,13 +76,14 @@ import Observation
 
             guard searchTokenRevisionRange.isEmpty else {
                 commits = try await loadCommitsWithSearchTokenRevisionRange(directory: directory, revisionRange: searchTokenRevisionRange)
+                hasMoreCommits = false
                 return
             }
 
             defer { isLoading = false }
             commits = try await Process.output(GitLog(
                 directory: directory,
-                number: number,                
+                number: number,
                 grep: grep,
                 grepAllMatch: grepAllMatch,
                 s: s,
@@ -94,6 +95,7 @@ import Observation
             hasMoreCommits = commits.count == number
         } catch {
             self.error = error
+            hasMoreCommits = false
         }
     }
 
@@ -111,19 +113,17 @@ import Observation
     }
 
     func loadMore() async {
-        guard let directory = directory,
-              !isLoading,
-              hasMoreCommits,
-              searchTokenRevisionRange.isEmpty else { return }
-
+        guard let directory = directory
+              else { return }
+        defer{ isLoading = false }
         do {
             isLoading = true
             currentPage += 1
             defer { isLoading = false }
+
             let newCommits = try await Process.output(GitLog(
                 directory: directory,
                 number: number,
-                
                 grep: grep,
                 grepAllMatch: grepAllMatch,
                 s: s,
@@ -136,6 +136,7 @@ import Observation
             hasMoreCommits = newCommits.count == number
         } catch {
             self.error = error
+            hasMoreCommits = false
         }
     }
 
