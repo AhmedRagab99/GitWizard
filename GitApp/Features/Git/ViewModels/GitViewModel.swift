@@ -288,7 +288,8 @@ class GitViewModel {
         do {
             try await gitService.pull(in: url)
             // Refresh repository data
-            await loadRepositoryData(from: url)
+            await loadChanges()
+//            await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Pull failed: \(error.localizedDescription)"
         }
@@ -306,6 +307,7 @@ class GitViewModel {
 
         do {
             try await gitService.push(in: url)
+             await loadChanges()
         } catch {
             errorMessage = "Push failed: \(error.localizedDescription)"
         }

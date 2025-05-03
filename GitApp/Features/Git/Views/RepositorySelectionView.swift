@@ -154,7 +154,8 @@ struct RepositorySelectionView: View {
         if let _ = getWindowBy(id: windowId) {
             bringWindowToFront(id: windowId)
         } else {
-            openNewWindow(with: GitClientView(viewModel: viewModel,url: url), id: windowId, title: windowId)
+            openNewWindow(with: GitClientView(viewModel: viewModel,url: url), id: windowId, title: windowId,width: (NSScreen.main?.frame.width) ?? 600
+                          / 2  ,height: (NSScreen.main?.frame.width) ?? 600 / 2 )
         }
     }
 }
