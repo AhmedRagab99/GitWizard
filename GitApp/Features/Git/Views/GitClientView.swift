@@ -70,7 +70,8 @@ struct GitClientView: View {
                         }
                         .frame(width: 60)
                         .overlay(alignment: .topTrailing) {
-                            if let count = viewModel.syncState.commitsAhead, count > 0 {
+                            if  viewModel.pendingPushCount > 0 {
+                                let count = viewModel.pendingPushCount
                                 Text("\(count)")
                                     .font(.caption2)
                                     .foregroundColor(.white)
@@ -144,6 +145,7 @@ struct GitClientView: View {
         }
         .onAppear {
             viewModel.selectRepository(url)
+            
         }
         .alert("Delete Branch", isPresented: $showDeleteAlert) {
             Button("Cancel", role: .cancel) { }

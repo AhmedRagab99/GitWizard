@@ -288,7 +288,7 @@ class GitViewModel {
         do {
             try await gitService.pull(in: url)
             // Refresh repository data
-            await loadChanges()
+            await refreshState()
 //            await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Pull failed: \(error.localizedDescription)"
@@ -307,7 +307,8 @@ class GitViewModel {
 
         do {
             try await gitService.push(in: url)
-             await loadChanges()
+            syncState.commitsAhead =  0
+            await refreshState()
         } catch {
             errorMessage = "Push failed: \(error.localizedDescription)"
         }
@@ -628,7 +629,7 @@ class GitViewModel {
             try await gitService.commitChanges(in: url, message: message)
 
             // Reload repository data
-            await loadRepositoryData(from: url)
+            await refreshState()
         } catch {
             errorMessage = "Error committing changes: \(error.localizedDescription)"
         }
