@@ -11,7 +11,6 @@ struct GitClientView: View {
     @State private var showStashSheet = false
     @State private var showDeleteAlert = false
     @State private var columnVisibility = NavigationSplitViewVisibility.all
-    @State private var searchText: String = ""
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -28,137 +27,6 @@ struct GitClientView: View {
                     Text("Search coming soon...")
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                // Search Bar
-                HStack(spacing: 4) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search commits...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .frame(width: 200)
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(6)
-                .background(Color(.textBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                Divider()
-                    .padding(.horizontal, 8)
-
-                // Primary Actions Group
-                Group {
-                    Button(action: {
-                        Task {
-                            await viewModel.performPull()
-                        }
-                    }) {
-                        VStack(spacing: 2) {
-                            Image(systemName: "arrow.down.circle.fill")
-                                .font(.system(size: 16))
-                            Text("Pull")
-                                .font(.caption2)
-                        }
-                        .frame(width: 45)
-                        .overlay(alignment: .topTrailing) {
-                            if viewModel.syncState.shouldPull {
-                                Circle()
-                                    .fill(.blue)
-                                    .frame(width: 6, height: 6)
-                                    .offset(x: 1, y: -1)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: {
-                        Task {
-                            await viewModel.performPush()
-                        }
-                    }) {
-                        VStack(spacing: 2) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 16))
-                            Text("Push")
-                                .font(.caption2)
-                        }
-                        .frame(width: 45)
-                        .overlay(alignment: .topTrailing) {
-                            if let count = viewModel.syncState.commitsAhead, count > 0 {
-                                Text("\(count)")
-                                    .font(.system(size: 8))
-                                    .foregroundColor(.white)
-                                    .padding(3)
-                                    .background(Circle().fill(.blue))
-                                    .offset(x: 1, y: -1)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: {
-                        // Show commit sheet
-                    }) {
-                        VStack(spacing: 2) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 16))
-                            Text("Commit")
-                                .font(.caption2)
-                        }
-                        .frame(width: 45)
-                        .overlay(alignment: .topTrailing) {
-                            if viewModel.pendingCommitsCount > 0 {
-                                Text("\(viewModel.pendingCommitsCount)")
-                                    .font(.system(size: 8))
-                                    .foregroundColor(.white)
-                                    .padding(3)
-                                    .background(Circle().fill(.blue))
-                                    .offset(x: 1, y: -1)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Divider()
-                    .padding(.horizontal, 8)
-
-                // Secondary Actions Group
-                Group {
-                    Button(action: {
-                        // Show merge sheet
-                    }) {
-                        VStack(spacing: 2) {
-                            Image(systemName: "arrow.triangle.merge")
-                                .font(.system(size: 16))
-                            Text("Merge")
-                                .font(.caption2)
-                        }
-                        .frame(width: 45)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: {
-                        showDeleteAlert = true
-                    }) {
-                        VStack(spacing: 2) {
-                            Image(systemName: "trash")
-                                .font(.system(size: 16))
-                            Text("Delete")
-                                .font(.caption2)
-                        }
-                        .frame(width: 45)
-                    }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -182,7 +50,6 @@ struct GitClientView: View {
         }
     }
 }
-
 
 // Syntax Highlighting Colors
 enum SyntaxTheme {
