@@ -66,9 +66,9 @@ struct SidebarView: View {
     @State private var expandedFolders: Set<String> = []
 
     var body: some View {
- 
+
     VStack(alignment: .leading, spacing: 0) {
-                
+
                 // Workspace Section
                 sectionHeader("Workspace", icon: "folder")
                 ForEach(WorkspaceSidebarItem.allCases) { item in
@@ -92,21 +92,21 @@ struct SidebarView: View {
                     .buttonStyle(.plain)
                 }
                 .padding([.bottom,.leading], 8)
-                
+
                 // Branches Section (recursive tree)
                 sectionHeader("Branches", icon: "point.topleft.down.curvedto.point.bottomright.up")
                 let branchTree = buildBranchTreeRevised(from: viewModel.branches)
                 BranchTreeView(branchNodes: branchTree)
-                
-                
+
+
                 // Remotes Section
                 sectionHeader("Remotes", icon: "cloud")
                 let branchRemoteTree = buildBranchTreeRevised(from: viewModel.remotebranches)
                 BranchTreeView(branchNodes: branchRemoteTree)
-                
-                
-                
-                
+
+
+
+
                 // Tags Section
                 sectionHeader("Tags", icon: "tag")
                 ForEach(viewModel.tags, id: \.name) { tag in
@@ -240,11 +240,11 @@ struct BadgeView: View {
 struct BranchTreeView: View {
     let branchNodes: [BranchNode] // Root nodes
     var body: some View {
-        
+
             List(branchNodes, children: \.children) { node in
                 BranchNodeRow(node: node)
                     .tag(node.branch?.id)
-                
+
             }
             .scrollDisabled(true)
             .scrollIndicators(.hidden)

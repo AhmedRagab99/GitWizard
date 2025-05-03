@@ -6,6 +6,7 @@ import AppKit
 
 struct GitClientView: View {
     @Bindable var viewModel: GitViewModel
+    var url: URL
     @State private var selectedWorkspaceItem: WorkspaceSidebarItem = .history
     @State private var showStashSheet = false
     @State private var showDeleteAlert = false
@@ -31,6 +32,9 @@ struct GitClientView: View {
         }
         .sheet(isPresented: $showStashSheet) {
             StashSheet(viewModel: viewModel)
+        }
+        .onAppear {
+            viewModel.selectRepository(url)
         }
         .alert("Delete Branch", isPresented: $showDeleteAlert) {
             Button("Cancel", role: .cancel) { }
