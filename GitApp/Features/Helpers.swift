@@ -22,10 +22,10 @@ public func manageOverlayWindow<Content: View>(
         print("Error: Unable to determine screen frame.")
         return
     }
-    
+
     // Determine window position
     var windowRect = NSRect(origin: .zero, size: CGSize(width: width, height: height))
-    
+
     if let position = position {
         windowRect.origin = position
     } else {
@@ -34,7 +34,7 @@ public func manageOverlayWindow<Content: View>(
         // Align to top with a margin
         windowRect.origin.y = screenFrame.maxY  - 80 // Adjust 20 as needed for margin
     }
-    
+
     // Create or update window
     if let existingWindow = windowsDictionary[id] {
         // Update existing window content
@@ -43,12 +43,12 @@ public func manageOverlayWindow<Content: View>(
         } else {
             existingWindow.contentView = NSHostingView(rootView: view)
         }
-        
+
         // Show the window with animation
         withAnimation {
             existingWindow.makeKeyAndOrderFront(nil)
         }
-        
+
     } else {
         // Create a new window
         let window = NSWindow(
@@ -63,13 +63,13 @@ public func manageOverlayWindow<Content: View>(
         window.isMovableByWindowBackground = true
         window.contentView = NSHostingView(rootView: view)
         windowsDictionary[id] = window
-        
+
         // Show the window with animation
         withAnimation {
             window.makeKeyAndOrderFront(nil)
         }
     }
-    
+
     // Automatically hide the window after the specified duration, if provided
     if let showDuration = showDuration {
         DispatchQueue.main.asyncAfter(deadline: .now() + showDuration) {
@@ -84,7 +84,7 @@ public func manageOverlayWindow<Content: View>(
 
 public func openNewWindow<Content: View>(with view: Content,id: String, title: String = "New Window", width: CGFloat = 300, height: CGFloat = 200) {
     let newWindowView = NSHostingController(rootView: view)
-    
+
     // Create the window and set properties
     let newWindow = NSWindow(contentViewController: newWindowView)
     newWindow.title = title
@@ -110,4 +110,9 @@ public func closeWindow(from windowId: String) {
 public func getWindowPostionBy(id:String) -> CGPoint? {
     guard let window = windowsDictionary[id] else { return nil }
     return window.frame.origin
+}
+
+public func bringWindowToFront(id: String) {
+    guard let window = windowsDictionary[id], window.isVisible else { return }
+    window.makeKeyAndOrderFront(nil)
 }
