@@ -179,9 +179,9 @@ actor GitService {
                 destinationPath: destinationPath
             ))
 
-            cloneProgress = 1.0
-            cloneStatus = "Clone completed"
-            return true
+                cloneProgress = 1.0
+                cloneStatus = "Clone completed"
+                return true
         } catch {
             cloneStatus = "Clone failed: \(error.localizedDescription)"
             return false

@@ -33,49 +33,49 @@ struct FileDiffView: View {
 
     private var headerView: some View {
         HStack(spacing: 8) {
-            Image(systemName: fileDiff.status.icon)
-                .foregroundColor(fileDiff.status.color)
+                    Image(systemName: fileDiff.status.icon)
+                        .foregroundColor(fileDiff.status.color)
             VStack(alignment: .leading, spacing: 2) {
                 Text(fileDiff.fromFilePath.components(separatedBy: "/").last ?? fileDiff.fromFilePath)
                     .font(.system(size: 15, weight: .semibold, design: .monospaced))
                 Text(fileDiff.fromFilePath)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.secondary)
-            }
+                }
             Spacer()
-        }
-        .padding(.horizontal)
+            }
+            .padding(.horizontal)
         .padding(.vertical, 8)
         .background(Color(.controlBackgroundColor))
     }
 
     private func chunkHeader(_ chunk: Chunk) -> some View {
-        HStack {
+            HStack {
             Text(chunk.lines.first?.raw ?? "")
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundColor(.blue)
-            Spacer()
+                Spacer()
             // Optional: chunk actions
-            HStack(spacing: 8) {
-                Button(action: { onStage(chunk) }) {
-                    Image(systemName: "plus.circle")
-                        .foregroundColor(.green)
-                }
-                .buttonStyle(.plain)
-                Button(action: { onUnstage(chunk) }) {
-                    Image(systemName: "minus.circle")
-                        .foregroundColor(.orange)
-                }
-                .buttonStyle(.plain)
+                HStack(spacing: 8) {
+                    Button(action: { onStage(chunk) }) {
+                        Image(systemName: "plus.circle")
+                            .foregroundColor(.green)
+                    }
+                    .buttonStyle(.plain)
+                    Button(action: { onUnstage(chunk) }) {
+                        Image(systemName: "minus.circle")
+                            .foregroundColor(.orange)
+                    }
+                    .buttonStyle(.plain)
                 Button(action: { onReset(chunk) }) {
                     Image(systemName: "arrow.uturn.backward.circle")
                         .foregroundColor(.gray)
                 }
                 .buttonStyle(.plain)
             }
-        }
+            }
         .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+            .padding(.vertical, 4)
         .background(Color(.controlBackgroundColor))
     }
 
@@ -118,8 +118,8 @@ struct FileDiffView: View {
         case .removed: return Color.red.opacity(0.12)
         case .header: return Color.blue.opacity(0.08)
         case .unchanged: return Color.clear
-        }
     }
+}
 }
 
 //#Preview {
