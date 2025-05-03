@@ -865,6 +865,16 @@ class GitViewModel {
             await loadCommitDetails(commit, in: url)
         }
     }
+}
 
+extension GitViewModel {
+    var pendingCommitsCount: Int {
+        // If you have a better way to count pending commits, use it here
+        stagedDiff?.fileDiffs.count ?? 0
+    }
 
+    var pendingPushCount: Int {
+        // If you track commits ahead, use that here
+        syncState.commitsAhead ?? 0
+    }
 }

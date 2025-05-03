@@ -30,6 +30,115 @@ struct GitClientView: View {
                 }
             }
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                // Primary Actions Group
+                Group {
+                    Button(action: {
+                        Task {
+                            await viewModel.performPull()
+                        }
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.system(size: 20))
+                            Text("Pull")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
+                        .overlay(alignment: .topTrailing) {
+                            if viewModel.syncState.shouldPull {
+                                Circle()
+                                    .fill(.blue)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: 2, y: -2)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: {
+                        Task {
+                            await viewModel.performPush()
+                        }
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 20))
+                            Text("Push")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
+                        .overlay(alignment: .topTrailing) {
+                            if let count = viewModel.syncState.commitsAhead, count > 0 {
+                                Text("\(count)")
+                                    .font(.caption2)
+                                    .foregroundColor(.white)
+                                    .padding(4)
+                                    .background(Circle().fill(.blue))
+                                    .offset(x: 2, y: -2)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: {
+                        // Show commit sheet
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 20))
+                            Text("Commit")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
+                        .overlay(alignment: .topTrailing) {
+                            if viewModel.pendingCommitsCount > 0 {
+                                Text("\(viewModel.pendingCommitsCount)")
+                                    .font(.caption2)
+                                    .foregroundColor(.white)
+                                    .padding(4)
+                                    .background(Circle().fill(.blue))
+                                    .offset(x: 2, y: -2)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Divider()
+                    .padding(.horizontal, 8)
+
+                // Secondary Actions Group
+                Group {
+                    Button(action: {
+                        // Show merge sheet
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.merge")
+                                .font(.system(size: 20))
+                            Text("Merge")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: {
+                        showDeleteAlert = true
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 20))
+                            Text("Delete")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
         .sheet(isPresented: $showStashSheet) {
             StashSheet(viewModel: viewModel)
         }
@@ -50,6 +159,7 @@ struct GitClientView: View {
         }
     }
 }
+
 
 // Syntax Highlighting Colors
 enum SyntaxTheme {
