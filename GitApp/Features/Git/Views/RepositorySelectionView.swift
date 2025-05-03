@@ -78,7 +78,7 @@ struct RepositorySelectionView: View {
                             RoundedRectangle(cornerRadius: 8)
                                 .fill(url == selectedRepository ? Color.accentColor.opacity(0.15) : Color.clear)
                         )
-                        
+
                         .contextMenu {
                             Button(role: .destructive) {
                                 viewModel.removeFromRecentRepositories(url)
@@ -88,7 +88,7 @@ struct RepositorySelectionView: View {
                             } label: {
                                 Label("Remove from Recent", systemImage: "trash")
                             }
-                            
+
                             Button(role: .destructive) {
                                 handleWindow(with: url)
                             } label: {
@@ -146,16 +146,15 @@ struct RepositorySelectionView: View {
                 await viewModel.loadRecentRepositories()
             }
         }
-        
+
     }
-    
+
     private func handleWindow(with url: URL){
         let windowId = url.lastPathComponent
-        if let _ = getWindowBy(id: windowId) {
+        if  isWindowVisible(id: windowId) {
             bringWindowToFront(id: windowId)
         } else {
-            openNewWindow(with: GitClientView(viewModel: viewModel,url: url), id: windowId, title: windowId,width: (NSScreen.main?.frame.width) ?? 600
-                          / 2  ,height: (NSScreen.main?.frame.width) ?? 600 / 2 )
+            openNewWindow(with: GitClientView(viewModel: viewModel, url: url), id: windowId, title: windowId, width: (NSScreen.main?.frame.width ?? 600) / 2, height: (NSScreen.main?.frame.height ?? 600) / 2)
         }
     }
 }

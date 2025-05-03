@@ -7,6 +7,7 @@
 import AppKit
 import SwiftUI
 
+// Window state tracking
 fileprivate var windowsDictionary = [String: NSWindow]()
 
 public func manageOverlayWindow<Content: View>(
@@ -62,7 +63,12 @@ public func manageOverlayWindow<Content: View>(
         window.level = .floating
         window.isMovableByWindowBackground = true
         window.contentView = NSHostingView(rootView: view)
+
+     
+
+        // Store window and delegate
         windowsDictionary[id] = window
+     
 
         // Show the window with animation
         withAnimation {
@@ -82,7 +88,13 @@ public func manageOverlayWindow<Content: View>(
     }
 }
 
-public func openNewWindow<Content: View>(with view: Content,id: String, title: String = "New Window", width: CGFloat = 300, height: CGFloat = 200) {
+public func openNewWindow<Content: View>(
+    with view: Content,
+    id: String,
+    title: String = "New Window",
+    width: CGFloat = 300,
+    height: CGFloat = 200
+) {
     let newWindowView = NSHostingController(rootView: view)
 
     // Create the window and set properties
@@ -92,12 +104,21 @@ public func openNewWindow<Content: View>(with view: Content,id: String, title: S
     newWindow.styleMask = [.titled, .closable, .resizable, .miniaturizable]
     newWindow.center()
     newWindow.standardWindowButton(.toolbarButton)
+
+   
+
+    // Store window and delegate
+    if let _ = windowsDictionary[id] {
+        windowsDictionary[id] = nil
+    }
     windowsDictionary[id] = newWindow
+   
+
     newWindow.makeKeyAndOrderFront(nil)
 }
 
-public func getWindowBy(id: String) -> NSWindow?  {
-    guard let window = windowsDictionary[id] else  { return nil }
+public func getWindowBy(id: String) -> NSWindow? {
+    guard let window = windowsDictionary[id] else { return nil }
     return window
 }
 
@@ -106,8 +127,7 @@ public func closeWindow(from windowId: String) {
     window.close()
 }
 
-
-public func getWindowPostionBy(id:String) -> CGPoint? {
+public func getWindowPostionBy(id: String) -> CGPoint? {
     guard let window = windowsDictionary[id] else { return nil }
     return window.frame.origin
 }
@@ -115,4 +135,15 @@ public func getWindowPostionBy(id:String) -> CGPoint? {
 public func bringWindowToFront(id: String) {
     guard let window = windowsDictionary[id], window.isVisible else { return }
     window.makeKeyAndOrderFront(nil)
+}
+
+// Helper to check if a window exists and is visible
+public func isWindowVisible(id: String) -> Bool {
+    guard let window = windowsDictionary[id] else { return false }
+    return window.isVisible
+}
+
+// Helper to check if a window exists (visible or not)
+public func doesWindowExist(id: String) -> Bool {
+    return windowsDictionary[id] != nil
 }
