@@ -1,49 +1,43 @@
 import SwiftUI
 import AppKit
-import Foundation
 
-
-
-
-indirect enum SidebarItem: Identifiable, Equatable {
-    static func == (lhs: SidebarItem, rhs: SidebarItem) -> Bool { lhs.id == rhs.id }
-    case workspace(WorkspaceSidebarItem)
-    case branch(BranchNode)
-    case remote(BranchNode)
-    case tag(Tag)
-    case section(String)
-    var id: String {
-        switch self {
-        case .workspace(let w): return "workspace-\(w.id)"
-        case .branch(let b): return "branch-\(b.id)"
-        case .remote(let r): return "remote-\(r.id)"
-        case .tag(let t): return "tag-\(t.id)"
-        case .section(let s): return "section-\(s)"
-        }
-    }
-    var children: [SidebarItem]? {
-        switch self {
-        case .branch(let node): return node.children?.map { .branch($0) }
-        case .remote(let node): return node.children?.map { .remote($0) }
-        default: return nil
-        }
-    }
-    var isExpandable: Bool { children != nil }
-}
 
 // MARK: - SwiftUI Wrapper
 struct SidebarOutlineView: NSViewControllerRepresentable {
     var items: [SidebarItem]
     @Binding var selectedItem: SidebarItem?
+
+    var menuProvider: ((SidebarItem) -> NSMenu?)? = nil
+    var branchCellProvider: ((BranchNode, Bool) -> NSView)? = nil
+
     func makeNSViewController(context: Context) -> SidebarOutlineViewController {
         let controller = SidebarOutlineViewController()
         controller.items = items
+        controller.selectedItem = selectedItem
+        controller.menuProvider = menuProvider
+        controller.branchCellProvider = branchCellProvider
         controller.onSelect = { item in selectedItem = item }
         return controller
     }
     func updateNSViewController(_ nsViewController: SidebarOutlineViewController, context: Context) {
         nsViewController.items = items
+        nsViewController.selectedItem = selectedItem
+        nsViewController.menuProvider = menuProvider
+        nsViewController.branchCellProvider = branchCellProvider
         nsViewController.reloadSidebar()
+    }
+    static func dismantleNSViewController(_ nsViewController: SidebarOutlineViewController, coordinator: ()) {
+        // No-op
+    }
+    class Coordinator {
+        var lastReloadTrigger: Int = 0
+    }
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    func didUpdateNSViewController(_ nsViewController: SidebarOutlineViewController, context: Context) {
+        let last = context.coordinator.lastReloadTrigger
+
     }
 }
 
@@ -52,7 +46,11 @@ class SidebarOutlineViewController: NSViewController, NSOutlineViewDataSource, N
     var outlineView: NSOutlineView!
     var scrollView: NSScrollView!
     var items: [SidebarItem] = []
+    var selectedItem: SidebarItem? = nil
     var onSelect: ((SidebarItem?) -> Void)?
+    var menuProvider: ((SidebarItem) -> NSMenu?)? = nil
+    var branchCellProvider: ((BranchNode, Bool) -> NSView)? = nil
+
     override func loadView() {
         self.view = NSView()
         scrollView = NSScrollView()
@@ -105,6 +103,7 @@ class SidebarOutlineViewController: NSViewController, NSOutlineViewDataSource, N
     // MARK: - NSOutlineViewDelegate
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let sidebarItem = item as? SidebarItem else { return nil }
+        let isSelected = isSelected(sidebarItem)
         switch sidebarItem {
         case .section(let title):
             return sectionHeaderView(title: title)
@@ -112,21 +111,24 @@ class SidebarOutlineViewController: NSViewController, NSOutlineViewDataSource, N
             return sidebarCell(
                 icon: item.icon,
                 text: item.rawValue,
-                selected: isSelected(sidebarItem),
+                selected: isSelected,
                 iconColor: .systemGray,
-                textColor: isSelected(sidebarItem) ? .white : .labelColor,
-                highlight: isSelected(sidebarItem),
+                textColor: isSelected ? .white : .labelColor,
+                highlight: isSelected,
                 indent: outlineView.level(forItem: item)
             )
         case .branch(let node):
+            if let branchCellProvider = branchCellProvider {
+                return branchCellProvider(node, isSelected)
+            }
             let isHead = node.branch?.isCurrent == true
             return sidebarCell(
                 icon: node.isFolder ? "folder.fill" : "arrow.triangle.branch",
                 text: node.name,
-                selected: isSelected(sidebarItem),
+                selected: isSelected,
                 iconColor: .systemGray,
                 textColor: .labelColor,
-                highlight: isSelected(sidebarItem),
+//                highlight: isSelected,
                 badge: isHead ? "HEAD" : nil,
                 indent: outlineView.level(forItem: item)
             )
@@ -134,27 +136,26 @@ class SidebarOutlineViewController: NSViewController, NSOutlineViewDataSource, N
             return sidebarCell(
                 icon: node.isFolder ? "folder.fill" : "arrow.triangle.branch",
                 text: node.name,
-                selected: isSelected(sidebarItem),
+                selected: isSelected,
                 iconColor: .systemGray,
                 textColor: .labelColor,
-                highlight: isSelected(sidebarItem),
+//                highlight: isSelected,
                 indent: outlineView.level(forItem: item)
             )
         case .tag(let tag):
             return sidebarCell(
                 icon: "tag",
                 text: tag.name,
-                selected: isSelected(sidebarItem),
+                selected: isSelected,
                 iconColor: .systemGray,
-                textColor: .systemBlue,
-                highlight: isSelected(sidebarItem),
+                textColor: .labelColor,
+                highlight: isSelected,
                 indent: outlineView.level(forItem: item)
             )
         }
     }
     func isSelected(_ item: SidebarItem) -> Bool {
-        guard let row = outlineView.row(forItem: item) as Int?, row >= 0 else { return false }
-        return outlineView.selectedRowIndexes.contains(row)
+        return item.id == selectedItem?.id
     }
     // MARK: - Private UI Helpers
     private func sectionHeaderView(title: String) -> NSView {
@@ -175,21 +176,20 @@ class SidebarOutlineViewController: NSViewController, NSOutlineViewDataSource, N
         ])
         return header
     }
-    private func sidebarCell(icon: String, text: String, selected: Bool, iconColor: NSColor, textColor: NSColor, highlight: Bool, badge: String? = nil, indent: Int = 0) -> NSView {
+    private func sidebarCell(icon: String, text: String, selected: Bool, iconColor: NSColor, textColor: NSColor, highlight: Bool = false, badge: String? = nil, indent: Int = 0) -> NSView {
         let cell = NSTableCellView()
         let stack = NSStackView()
         stack.orientation = .horizontal
         stack.spacing = 10
-        stack.edgeInsets = NSEdgeInsets(top: 6, left: CGFloat(20 + indent * 18), bottom: 6, right: 12)
+        stack.edgeInsets = NSEdgeInsets(top: 6, left: 6, bottom: 6, right: 12)
         stack.translatesAutoresizingMaskIntoConstraints = false
         // Icon with background circle
         let iconContainer = NSView()
         iconContainer.wantsLayer = true
         iconContainer.layer?.cornerRadius = 7.5
-        // Optionally add a subtle background for selected
         let iconView = NSImageView(image: NSImage(systemSymbolName: icon, accessibilityDescription: nil) ?? NSImage())
         iconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
-        iconView.contentTintColor = iconColor
+        iconView.contentTintColor = selected ? NSColor.systemBlue : iconColor
         iconView.translatesAutoresizingMaskIntoConstraints = false
         iconContainer.addSubview(iconView)
         iconView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor).isActive = true
@@ -200,7 +200,7 @@ class SidebarOutlineViewController: NSViewController, NSOutlineViewDataSource, N
         // Label
         let label = NSTextField(labelWithString: text)
         label.font = NSFont.systemFont(ofSize: 15, weight: selected ? .semibold : .medium)
-        label.textColor = textColor
+        label.textColor = selected ? NSColor.systemBlue : textColor
         label.backgroundColor = .clear
         label.isBordered = false
         label.isBezeled = false
@@ -221,7 +221,7 @@ class SidebarOutlineViewController: NSViewController, NSOutlineViewDataSource, N
         ])
         cell.wantsLayer = true
         cell.layer?.cornerRadius = 9
-        cell.layer?.backgroundColor = highlight ? NSColor.systemBlue.withAlphaComponent(0.18).cgColor : NSColor.clear.cgColor
+        cell.layer?.backgroundColor = selected ? NSColor.systemBlue.withAlphaComponent(0.18).cgColor : NSColor.clear.cgColor
         return cell
     }
     // Modern pill badge helper
@@ -258,10 +258,23 @@ class SidebarOutlineViewController: NSViewController, NSOutlineViewDataSource, N
     }
     func outlineViewSelectionDidChange(_ notification: Notification) {
         let selectedRow = outlineView.selectedRow
+        
         if selectedRow >= 0, let item = outlineView.item(atRow: selectedRow) as? SidebarItem {
             onSelect?(item)
+        }
+    }
+    // MARK: - Context Menu
+    override func rightMouseDown(with event: NSEvent) {
+        let point = outlineView.convert(event.locationInWindow, from: nil)
+        let row = outlineView.row(at: point)
+        guard row >= 0, let item = outlineView.item(atRow: row) as? SidebarItem else {
+            super.rightMouseDown(with: event)
+            return
+        }
+        if let menu = menuProvider?(item) {
+            NSMenu.popUpContextMenu(menu, with: event, for: outlineView)
         } else {
-            onSelect?(nil)
+            super.rightMouseDown(with: event)
         }
     }
 }
