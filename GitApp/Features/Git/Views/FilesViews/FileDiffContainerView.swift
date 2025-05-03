@@ -17,7 +17,6 @@ struct FileDiffContainerView: View {
                 viewModel.resetChunk(chunk, in: fileDiff)
             }
         )
-        .navigationTitle(fileDiff.filePathDisplay)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {

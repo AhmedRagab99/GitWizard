@@ -17,7 +17,9 @@ enum FileStatus: String {
     case untracked = "Untracked"
     case ignored = "Ignored"
     case deleted = "Deleted"
+
     
+
     var icon: String {
         switch self {
         case .added: return "plus.circle.fill"
@@ -31,7 +33,7 @@ enum FileStatus: String {
         case .unknown: return "questionmark.circle.fill"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .added: return .green
@@ -47,6 +49,20 @@ enum FileStatus: String {
             return .yellow
         case .unknown:
             return .gray
+        }
+    }
+
+    var shortDescription: String {
+        switch self {
+        case .modified: return "M"
+        case .added: return "A"
+        case .removed: return "R"
+        case .renamed: return "Ren"
+        case .copied: return "C"
+        case .unknown: return "?"
+        case .untracked: return "U"
+        case .ignored: return "I"
+        case .deleted: return "D"
         }
     }
 }
