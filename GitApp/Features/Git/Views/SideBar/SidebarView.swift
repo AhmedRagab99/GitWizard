@@ -63,83 +63,37 @@ struct SidebarView: View {
     @Bindable var viewModel: GitViewModel
     @Binding var selectedWorkspaceItem: WorkspaceSidebarItem
     @State private var filterText: String = ""
-    @State private var expandedFolders: Set<String> = []
+    @State private var selectedSidebarItem: SidebarItem? = nil
 
     var body: some View {
-
-    VStack(alignment: .leading, spacing: 0) {
-
-                // Workspace Section
-                sectionHeader("Workspace", icon: "folder")
-                ForEach(WorkspaceSidebarItem.allCases) { item in
-                    let isSelected = selectedWorkspaceItem == item
-                    Button(action: { selectedWorkspaceItem = item }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: item.icon)
-                                .foregroundColor(isSelected ? .accentColor : .blue.opacity(0.7))
-                            Text(item.rawValue)
-                                .fontWeight(isSelected ? .semibold : .regular)
-                                .foregroundColor(isSelected ? .primary : .blue.opacity(0.8))
-                            Spacer()
-                        }
-                        .padding(.vertical, 7)
-                        .padding(.horizontal, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding([.bottom,.leading], 8)
-
-                // Branches Section (recursive tree)
-                sectionHeader("Branches", icon: "point.topleft.down.curvedto.point.bottomright.up")
-                let branchTree = buildBranchTreeRevised(from: viewModel.branches)
-                BranchTreeView(branchNodes: branchTree)
-
-
-                // Remotes Section
-                sectionHeader("Remotes", icon: "cloud")
-                let branchRemoteTree = buildBranchTreeRevised(from: viewModel.remotebranches)
-                BranchTreeView(branchNodes: branchRemoteTree)
-
-
-
-
-                // Tags Section
-                sectionHeader("Tags", icon: "tag")
-                ForEach(viewModel.tags, id: \.name) { tag in
-                    HStack(spacing: 10) {
-                        Image(systemName: "tag")
-                            .foregroundColor(.blue.opacity(0.7))
-                        Text(tag.name)
-                            .foregroundColor(.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 5)
-                    .padding(.horizontal, 22)
-                }
-            }
+        SidebarOutlineView(
+            items: sidebarItems,
+            selectedItem: $selectedSidebarItem
+        )
         .frame(minWidth: 240)
     }
 
-    @ViewBuilder
-    private func sectionHeader(_ title: String, icon: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundColor(.secondary)
-            Text(title)
-                .font(.caption)
-                .fontWeight(.bold)
-                .foregroundColor(.secondary)
-                .textCase(.uppercase)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 2)
+    // Build the sidebar items array using your logic
+    var sidebarItems: [SidebarItem] {
+        var items: [SidebarItem] = []
+        // Workspace section
+        items.append(.section("Workspace"))
+        items.append(contentsOf: WorkspaceSidebarItem.allCases.map { .workspace($0) })
+        // Branches section
+        items.append(.section("Branches"))
+        let branchTree = buildBranchTreeRevised(from: viewModel.branches)
+        items.append(contentsOf: branchTree.map { .branch($0) })
+        // Remotes section
+        items.append(.section("Remotes"))
+        let remoteTree = buildBranchTreeRevised(from: viewModel.remotebranches)
+        items.append(contentsOf: remoteTree.map { .remote($0) })
+        // Tags section
+        items.append(.section("Tags"))
+        items.append(contentsOf: viewModel.tags.map { .tag($0) })
+        return items
     }
 
+    // Use your existing buildBranchTreeRevised logic
     func buildBranchTreeRevised(from branches: [Branch]) -> [BranchNode] {
         // Temporary storage: Key = full folder path, Value = (Set<ChildFolderName>, [DirectChildBranches])
         var structure: [String: (subfolders: Set<String>, branches: [Branch])] = [:]
@@ -221,7 +175,6 @@ struct SidebarView: View {
         return rootNodes
     }
 }
-
 
 struct BadgeView: View {
     let text: String
