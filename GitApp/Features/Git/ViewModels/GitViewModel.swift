@@ -287,7 +287,7 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.pull(in: url)
+            try await gitService.pull(in: url,refspec: currentBranch?.name ?? "HEAD")
             // Refresh repository data
             await refreshState()
 //            await loadRepositoryData(from: url)
@@ -307,7 +307,7 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.push(in: url)
+            try await gitService.push(in: url,refspec: currentBranch?.name ?? "HEAD")
             syncState.commitsAhead =  0
             await refreshState()
         } catch {
@@ -870,25 +870,6 @@ class GitViewModel {
             await loadCommitDetails(commit, in: url)
         }
     }
-//    var commits: [Commit] = []
-}
-
-extension GitViewModel {
-    func loadMoreCommits(commit: Commit) async {
-        if commit == logStore.commits.last {
-            await logStore.loadMore()
-        }
-    }
-    
-    func getCommits() -> [Commit] {
-        return logStore.commits
-    }
-    
-    func refreshCommits() async  {
-        await logStore.refresh()
-    }
-    
-    
 }
 
 extension GitViewModel {

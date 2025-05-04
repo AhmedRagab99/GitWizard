@@ -13,8 +13,9 @@ import Observation
     var number = 50 // Default page size
     var directory: URL?
     private var currentPage = 0
-    var hasMoreCommits = true
+    private var hasMoreCommits = true
     var isLoading = false
+    var isLoadingMore = false
 
     private var grep: [String] {
         searchTokens.filter { token in
@@ -76,7 +77,6 @@ import Observation
 
             guard searchTokenRevisionRange.isEmpty else {
                 commits = try await loadCommitsWithSearchTokenRevisionRange(directory: directory, revisionRange: searchTokenRevisionRange)
-                hasMoreCommits = false
                 return
             }
 
@@ -95,7 +95,6 @@ import Observation
             hasMoreCommits = commits.count == number
         } catch {
             self.error = error
-            hasMoreCommits = false
         }
     }
 
@@ -113,13 +112,14 @@ import Observation
     }
 
     func loadMore() async {
-        guard let directory = directory
-              else { return }
-        defer{ isLoading = false }
+        guard let directory = directory,
+              !isLoadingMore,
+              hasMoreCommits else { return }
+
         do {
-            isLoading = true
+            isLoadingMore = true
             currentPage += 1
-            defer { isLoading = false }
+            defer { isLoadingMore = false }
 
             let newCommits = try await Process.output(GitLog(
                 directory: directory,
@@ -136,7 +136,6 @@ import Observation
             hasMoreCommits = newCommits.count == number
         } catch {
             self.error = error
-            hasMoreCommits = false
         }
     }
 

@@ -6,19 +6,18 @@
 //
 import SwiftUI
 import Foundation
-import Observation
 
 struct HistoryView: View {
     @Bindable var viewModel: GitViewModel
     @State private var selectedCommit: Commit?
     @State private var isLoadingMore = false
-    @State private var hasReachedEnd = false
-
+    @GestureState private var dragOffset = CGSize.zero
+    
     var body: some View {
         VStack(spacing: 0) {
             // Commit list
             List {
-                ForEach(viewModel.getCommits()) { commit in
+                ForEach(viewModel.logStore.commits) { commit in
                     CommitRowView(
                         commit: commit,
                         isSelected: selectedCommit?.id == commit.id,
@@ -29,24 +28,48 @@ struct HistoryView: View {
                     )
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
-                    .task {
-                        await viewModel.loadMoreCommits(commit: commit)
-
+                    .task(priority: .background) {
+                        // Load more when we reach the last item
+                        if commit == viewModel.logStore.commits.last && !viewModel.logStore.isLoadingMore {
+                            Task {
+                                await viewModel.logStore.loadMore()
+                            }
+                        }
+                    }
+                }
+                
+               
             }
             .listStyle(.plain)
             .refreshable {
-                await viewModel.refreshCommits()
+                await viewModel.logStore.refresh()
             }
-
-            // Commit details
+            
+            // Commit details with close button and drag gesture
             if let selectedCommit = selectedCommit {
+                
                 CommitDetailView(
                     commit: selectedCommit,
                     details: viewModel.commitDetails,
                     viewModel: viewModel
                 )
+                .offset(y: dragOffset.height)
+                .gesture(
+                    DragGesture()
+                        .updating($dragOffset) { value, state, _ in
+                            state = value.translation
+                        }
+                        .onEnded { value in
+                            if value.translation.height > 100 {
+                                withAnimation {
+                                    self.selectedCommit = nil
+                                }
+                            }
+                        }
+                )
+                .transition(.move(edge: .bottom))
             }
+            
         }
     }
 }
-

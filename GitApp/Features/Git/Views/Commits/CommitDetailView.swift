@@ -13,13 +13,11 @@ struct CommitDetailView: View {
     @State private var expandedFile: FileDiff?
     @State private var isLoading = true
     @Bindable var viewModel: GitViewModel
-    @State private var detailHeight: CGFloat = 300 // Default height
+    @State private var detailHeight: CGFloat = 400 // Default height
     @State private var isDragging = false
 
     var body: some View {
         VStack(spacing: 0) {
-            // Drag Handle
-            DragHandle(height: $detailHeight, isDragging: $isDragging)
 
             if isLoading {
                 loadingView
