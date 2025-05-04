@@ -12,7 +12,7 @@ enum SidebarItem: Identifiable, Equatable,Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-    
+
     static func == (lhs: SidebarItem, rhs: SidebarItem) -> Bool { lhs.id == rhs.id }
     case workspace(WorkspaceSidebarItem)
     case branch(BranchNode)
@@ -135,8 +135,8 @@ struct SidebarView: View {
 //                return NSHostingView(rootView: view)
 //            }
 //        )
-        
-        SwiftUISidebarView(items: sidebarItems, selectedItem: $selectedSidebarItem)
+
+        SwiftUISidebarView(items: sidebarItems, selectedItem: $selectedSidebarItem, selectedWorkspaceItem: $selectedWorkspaceItem)
         .frame(minWidth: 240)
         .onChange(of: selectedSidebarItem) { newValue in
             if case let .workspace(item) = newValue {

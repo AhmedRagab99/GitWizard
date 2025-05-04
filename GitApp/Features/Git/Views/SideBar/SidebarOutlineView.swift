@@ -3,6 +3,7 @@ import SwiftUI
 struct SwiftUISidebarView: View {
     let items: [SidebarItem]
     @Binding var selectedItem: SidebarItem?
+    @Binding var selectedWorkspaceItem: WorkspaceSidebarItem
     // Add providers for context menus or specific actions if needed
     // var menuProvider: ((SidebarItem) -> Menu<Button<Label<Text, Image>>>)? = nil
     // var branchContextMenuProvider: ((BranchNode) -> Menu<Button<Label<Text, Image>>>)? = nil // Example
@@ -12,6 +13,12 @@ struct SwiftUISidebarView: View {
         List(items, children: \.children, selection: $selectedItem) { item in
             rowView(for: item)
                 .listRowInsets(EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10)) // Adjust padding
+                .onTapGesture {
+                    if case let .workspace(workspaceItem) = item {
+                        selectedWorkspaceItem = workspaceItem
+                        selectedItem = .workspace(selectedWorkspaceItem)
+                    }
+                }
                 // Add context menus if needed
                 // .contextMenu {
                 //     if let menu = menuProvider?(item) {
@@ -103,10 +110,7 @@ struct SidebarCellView: View {
         // Approximating the NSView selection style
          Color.accentColor.opacity(0.2) // SwiftUI standard accent
     }
-    private var hoverBackgroundColor: Color {
-         Color(nsColor: .controlAccentColor.withSystemEffect(.rollover)) // More standard hover
-       // Color(nsColor: .unemphasizedSelectedContentBackgroundColor) // Alternative closer to SidebarBranchView
-    }
+  
 
 
     @State private var isHovered = false
@@ -137,12 +141,8 @@ struct SidebarCellView: View {
         .padding(.horizontal, 8)
         .background(
              RoundedRectangle(cornerRadius: 6) // Adjust corner radius
-                 .fill(isSelected ? selectedBackgroundColor : (isHovered ? hoverBackgroundColor : Color.clear))
-        )
-       // .contentShape(Rectangle()) // Ensure the whole area is tappable/hoverable
-        .onHover { hovering in
-            isHovered = hovering
-        }
+                 .fill(isSelected ? selectedBackgroundColor : Color.clear)
+        )       
     }
 }
 
