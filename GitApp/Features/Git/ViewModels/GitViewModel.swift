@@ -660,6 +660,7 @@ class GitViewModel {
 
             // Check sync state
             await loadRepositoryData(from: url)
+            await refreshState()
         } catch {
             errorMessage = "Checkout failed: \(error.localizedDescription)"
         }

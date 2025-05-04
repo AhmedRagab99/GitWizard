@@ -1,9 +1,15 @@
 import SwiftUI
+// Import needed types
+// (Assume SidebarItem, Branch, Tag, BranchContextAction, RemoteContextAction, TagContextAction, WorkspaceSidebarItem are in scope)
 
 struct SwiftUISidebarView: View {
     let items: [SidebarItem]
     @Binding var selectedItem: SidebarItem?
     @Binding var selectedWorkspaceItem: WorkspaceSidebarItem
+    var onBranchAction: (BranchContextAction, Branch) -> Void
+    var onRemoteAction: (RemoteContextAction, Branch) -> Void
+    var onTagAction: (TagContextAction, Tag) -> Void
+    var refresh: () -> Void
     // Add providers for context menus or specific actions if needed
     // var menuProvider: ((SidebarItem) -> Menu<Button<Label<Text, Image>>>)? = nil
     // var branchContextMenuProvider: ((BranchNode) -> Menu<Button<Label<Text, Image>>>)? = nil // Example
@@ -19,19 +25,84 @@ struct SwiftUISidebarView: View {
                         selectedItem = .workspace(selectedWorkspaceItem)
                     }
                 }
-                // Add context menus if needed
-                // .contextMenu {
-                //     if let menu = menuProvider?(item) {
-                //         menu
-                //     }
-                //     // Or provide specific menus based on type
-                //     // if case .branch(let node) = item, let branchMenu = branchContextMenuProvider?(node) {
-                //     //     branchMenu
-                //     // }
-                // }
+                .contextMenu {
+                    contextMenu(for: item)
+                }
         }
         .listStyle(.sidebar) // Use the sidebar list style for appropriate appearance
 //        .background(Color(nsColor: NSColor(named: "SidebarBackground") ?? NSColor(calibratedRed: 23/255, green: 34/255, blue: 56/255, alpha: 1))) // Match background
+    }
+
+    // Context menu builder
+    @ViewBuilder
+    private func contextMenu(for item: SidebarItem) -> some View {
+        switch item {
+        case .branch(let node):
+            if let branch = node.branch {
+                Button("Checkout \(branch.name)") {
+                    onBranchAction(.checkout, branch); refresh()
+                }.disabled(branch.isCurrent)
+                Button("Merge main into \(branch.name)") {
+                    onBranchAction(.merge, branch); refresh()
+                }
+                Button("Rebase current changes onto \(branch.name)") {
+                    onBranchAction(.rebase, branch); refresh()
+                }
+                Divider()
+                Button("Pull origin/\(branch.name) (tracked)") {
+                    onBranchAction(.pull, branch); refresh()
+                }
+                Button("Push to origin/\(branch.name) (tracked)") {
+                    onBranchAction(.push, branch); refresh()
+                }
+                Menu("Push to") {
+                    // TODO: List remotes/branches
+                }
+                Menu("Track Remote Branch") {
+                    // TODO: List remotes/branches
+                }
+                Divider()
+                Button("Diff Against Current") {
+                    onBranchAction(.diff, branch); refresh()
+                }
+                Divider()
+                Button("Rename...") {
+                    onBranchAction(.rename, branch); refresh()
+                }
+                Button("Delete \(branch.name)") {
+                    onBranchAction(.delete, branch); refresh()
+                }.disabled(branch.isCurrent)
+                Divider()
+                Button("Copy Branch Name to Clipboard") {
+                    onBranchAction(.copyName, branch); refresh()
+                }
+                Button("Create Pull Request...") {
+                    onBranchAction(.createPR, branch); refresh()
+                }
+            }
+        case .remote(let node):
+            if let branch = node.branch {
+                Button("Checkout \(branch.name)") {
+                    onRemoteAction(.checkout, branch); refresh()
+                }
+                Button("Track Remote Branch") {
+                    onRemoteAction(.track, branch); refresh()
+                }
+                Divider()
+                Button("Copy Remote Branch Name to Clipboard") {
+                    onRemoteAction(.copyName, branch); refresh()
+                }
+            }
+        case .tag(let tag):
+            Button("Copy Tag Name to Clipboard") {
+                onTagAction(.copyName, tag); refresh()
+            }
+            Button("Delete Tag") {
+                onTagAction(.delete, tag); refresh()
+            }
+        default:
+            EmptyView()
+        }
     }
 
     // Helper function to create the appropriate view for each row type
@@ -110,7 +181,7 @@ struct SidebarCellView: View {
         // Approximating the NSView selection style
          Color.accentColor.opacity(0.2) // SwiftUI standard accent
     }
-  
+
 
 
     @State private var isHovered = false
@@ -142,7 +213,7 @@ struct SidebarCellView: View {
         .background(
              RoundedRectangle(cornerRadius: 6) // Adjust corner radius
                  .fill(isSelected ? selectedBackgroundColor : Color.clear)
-        )       
+        )
     }
 }
 
@@ -175,3 +246,9 @@ struct ModernPillBadgeView: View {
             .overlay(Capsule().stroke(borderColor, lineWidth: 1)) // Add border
     }
 }
+
+// MARK: - Context Menu Action Enums
+
+enum BranchContextAction { case checkout, merge, rebase, pull, push, diff, rename, delete, copyName, createPR }
+enum RemoteContextAction { case checkout, track, copyName }
+enum TagContextAction { case copyName, delete }

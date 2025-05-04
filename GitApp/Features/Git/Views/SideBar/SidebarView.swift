@@ -7,7 +7,8 @@
 
 import SwiftUI
 import Foundation
-// SidebarItem enum for sidebar selection logic
+
+
 enum SidebarItem: Identifiable, Equatable,Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
@@ -94,6 +95,7 @@ struct SidebarView: View {
     @Binding var selectedWorkspaceItem: WorkspaceSidebarItem
     @State private var filterText: String = ""
     @State private var selectedSidebarItem: SidebarItem? = .workspace(.history)
+    @State private var sidebarItems: [SidebarItem] = []
 
     var body: some View {
 //        SidebarOutlineView(
@@ -136,8 +138,19 @@ struct SidebarView: View {
 //            }
 //        )
 
-        SwiftUISidebarView(items: sidebarItems, selectedItem: $selectedSidebarItem, selectedWorkspaceItem: $selectedWorkspaceItem)
+        SwiftUISidebarView(
+            items: sidebarItems,
+            selectedItem: $selectedSidebarItem,
+            selectedWorkspaceItem: $selectedWorkspaceItem,
+            onBranchAction: handleBranchAction,
+            onRemoteAction: handleRemoteAction,
+            onTagAction: handleTagAction,
+            refresh: refreshSidebar
+        )
         .frame(minWidth: 240)
+        .onAppear {
+            refreshSidebar()
+        }
         .onChange(of: selectedSidebarItem) { newValue in
             if case let .workspace(item) = newValue {
                 selectedWorkspaceItem = item
@@ -145,8 +158,45 @@ struct SidebarView: View {
         }
     }
 
-    // Build the sidebar items array using your logic
-    var sidebarItems: [SidebarItem] {
+    private func handleBranchAction(_ action: BranchContextAction, _ branch: Branch) {
+            switch action {
+            case .checkout:
+                Task { await viewModel.checkoutBranch(branch) }
+            case .pull:
+                Task { await viewModel.performPull() }
+            case .push:
+                Task { await viewModel.performPush() }
+            case .copyName:
+                viewModel.copyCommitHash(branch.name)
+            // ... handle other actions ...
+            default: break
+            }
+            refreshSidebar()
+        }
+
+        private func handleRemoteAction(_ action: RemoteContextAction, _ branch: Branch) {
+            switch action {
+            case .checkout:
+                Task { await viewModel.checkoutBranch(branch, isRemote: true) }
+            case .copyName:
+                viewModel.copyCommitHash(branch.name)
+            // ... handle other actions ...
+            default: break
+            }
+            refreshSidebar()
+        }
+
+        private func handleTagAction(_ action: TagContextAction, _ tag: Tag) {
+            switch action {
+            case .copyName:
+                viewModel.copyCommitHash(tag.name)
+            // ... handle other actions ...
+            default: break
+            }
+            refreshSidebar()
+        }
+
+    private func refreshSidebar() {
         var items: [SidebarItem] = []
         // Workspace section
         items.append(.section("Workspace"))
@@ -162,7 +212,7 @@ struct SidebarView: View {
         // Tags section
         items.append(.section("Tags"))
         items.append(contentsOf: viewModel.tags.map { .tag($0) })
-        return items
+        sidebarItems = items
     }
 
     // Use your existing buildBranchTreeRevised logic
