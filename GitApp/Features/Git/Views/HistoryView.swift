@@ -13,7 +13,7 @@ struct HistoryView: View {
     @State private var selectedCommit: Commit?
     @State private var isLoadingMore = false
     @State private var hasReachedEnd = false
-
+    
     var body: some View {
         VStack(spacing: 0) {
             // Commit list
@@ -31,22 +31,24 @@ struct HistoryView: View {
                     .listRowBackground(Color.clear)
                     .task {
                         await viewModel.loadMoreCommits(commit: commit)
-
-            }
-            .listStyle(.plain)
-            .refreshable {
-                await viewModel.refreshCommits()
-            }
-
-            // Commit details
-            if let selectedCommit = selectedCommit {
-                CommitDetailView(
-                    commit: selectedCommit,
-                    details: viewModel.commitDetails,
-                    viewModel: viewModel
-                )
+                        
+                    }
+                    .listStyle(.plain)
+                    .refreshable {
+                        await viewModel.refreshCommits()
+                    }
+                    
+                    // Commit details
+                    if let selectedCommit = selectedCommit {
+                        CommitDetailView(
+                            commit: selectedCommit,
+                            details: viewModel.commitDetails,
+                            viewModel: viewModel
+                        )
+                    }
+                }
             }
         }
+        
     }
 }
-
