@@ -729,7 +729,7 @@ class GitViewModel {
 
         do {
             // Refresh repository data
-            await loadRepositoryData(from: url)
+//            await loadRepositoryData(from: url)
 
             // Refresh changes
             await loadChanges()
