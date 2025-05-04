@@ -8,7 +8,11 @@
 import SwiftUI
 import Foundation
 // SidebarItem enum for sidebar selection logic
-  enum SidebarItem: Identifiable, Equatable {
+enum SidebarItem: Identifiable, Equatable,Hashable {
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
     static func == (lhs: SidebarItem, rhs: SidebarItem) -> Bool { lhs.id == rhs.id }
     case workspace(WorkspaceSidebarItem)
     case branch(BranchNode)
@@ -92,45 +96,47 @@ struct SidebarView: View {
     @State private var selectedSidebarItem: SidebarItem? = .workspace(.history)
 
     var body: some View {
-        SidebarOutlineView(
-            items: sidebarItems,
-            selectedItem: $selectedSidebarItem,
-            menuProvider: { item in
-                switch item {
-                case .branch(let node):
-                    let menu = NSMenu()
-                    menu.addItem(ClosureMenuItem(title: "Checkout \(node.name)") {
-                        if let branch = node.branch { Task { await viewModel.checkoutBranch(branch) } }
-                    })
-                    menu.addItem(.separator())
-                    menu.addItem(ClosureMenuItem(title: "Pull origin/\(node.name)") {
-                        Task { await viewModel.performPull() }
-                    })
-                    menu.addItem(ClosureMenuItem(title: "Push to origin/\(node.name)") {
-                        Task { await viewModel.performPush() }
-                    })
-                    menu.addItem(.separator())
-                    menu.addItem(ClosureMenuItem(title: "Copy Full Name") {
-                        if let branch = node.branch { viewModel.copyCommitHash(branch.name) }
-                    })
-                    return menu
-                default: return nil
-                }
-            },
-            branchCellProvider: { node, isSelected in
-                // Build a custom NSView or NSHostingView here using push/pull counts from viewModel
-                // Example: show arrow.down and arrow.up with numbers, and badge for HEAD
-                // You can use a SwiftUI view and wrap it with NSHostingView for best results
-                let view = BranchSidebarCellSwiftUIView(
-                    node: node,
-                    isSelected: isSelected,
-                    isHead: node.branch?.isCurrent == true,
-                    pushCount: viewModel.syncState.commitsAhead ?? 0,
-                    pullCount: viewModel.syncState.shouldPull ? 1 : 0 // Replace with your actual logic
-                )
-                return NSHostingView(rootView: view)
-            }
-        )
+//        SidebarOutlineView(
+//            items: sidebarItems,
+//            selectedItem: $selectedSidebarItem,
+//            menuProvider: { item in
+//                switch item {
+//                case .branch(let node):
+//                    let menu = NSMenu()
+//                    menu.addItem(ClosureMenuItem(title: "Checkout \(node.name)") {
+//                        if let branch = node.branch { Task { await viewModel.checkoutBranch(branch) } }
+//                    })
+//                    menu.addItem(.separator())
+//                    menu.addItem(ClosureMenuItem(title: "Pull origin/\(node.name)") {
+//                        Task { await viewModel.performPull() }
+//                    })
+//                    menu.addItem(ClosureMenuItem(title: "Push to origin/\(node.name)") {
+//                        Task { await viewModel.performPush() }
+//                    })
+//                    menu.addItem(.separator())
+//                    menu.addItem(ClosureMenuItem(title: "Copy Full Name") {
+//                        if let branch = node.branch { viewModel.copyCommitHash(branch.name) }
+//                    })
+//                    return menu
+//                default: return nil
+//                }
+//            },
+//            branchCellProvider: { node, isSelected in
+//                // Build a custom NSView or NSHostingView here using push/pull counts from viewModel
+//                // Example: show arrow.down and arrow.up with numbers, and badge for HEAD
+//                // You can use a SwiftUI view and wrap it with NSHostingView for best results
+//                let view = BranchSidebarCellSwiftUIView(
+//                    node: node,
+//                    isSelected: isSelected,
+//                    isHead: node.branch?.isCurrent == true,
+//                    pushCount: viewModel.syncState.commitsAhead ?? 0,
+//                    pullCount: viewModel.syncState.shouldPull ? 1 : 0 // Replace with your actual logic
+//                )
+//                return NSHostingView(rootView: view)
+//            }
+//        )
+        
+        SwiftUISidebarView(items: sidebarItems, selectedItem: $selectedSidebarItem)
         .frame(minWidth: 240)
         .onChange(of: selectedSidebarItem) { newValue in
             if case let .workspace(item) = newValue {
@@ -306,54 +312,3 @@ struct BranchNodeRow: View {
     }
 }
 
-final class ClosureMenuItem: NSMenuItem {
-    private var actionClosure: (() -> Void)?
-    convenience init(title: String, keyEquivalent: String = "", action: @escaping () -> Void) {
-        self.init(title: title, action: #selector(performAction), keyEquivalent: keyEquivalent)
-        self.target = self
-        self.actionClosure = action
-    }
-    @objc private func performAction() { actionClosure?() }
-}
-
-struct BranchSidebarCellSwiftUIView: View {
-    let node: BranchNode
-    let isSelected: Bool
-    let isHead: Bool
-    let pushCount: Int
-    let pullCount: Int
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: node.isFolder ? "folder.fill" : "arrow.triangle.branch")
-                .foregroundColor(.secondary)
-            Text(node.name)
-                .fontWeight(isHead ? .semibold : .regular)
-            if isHead {
-                Text("HEAD")
-                    .font(.caption2)
-                    .padding(.horizontal, 6)
-                    .background(Capsule().fill(Color.blue.opacity(0.2)))
-            }
-            Spacer()
-            if pullCount > 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "arrow.down")
-                    Text("\(pullCount)")
-                }
-                .foregroundColor(.blue)
-            }
-            if pushCount > 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "arrow.up")
-                    Text("\(pushCount)")
-                }
-                .foregroundColor(.orange)
-            }
-        }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
-        .cornerRadius(6)
-    }
-}

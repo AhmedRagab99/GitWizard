@@ -7,8 +7,17 @@
 
 import Foundation
 
-struct GitStash: Git {
+final class GitStash: Git {
     typealias OutputModel = Void
+
+    let directory: URL
+    let message: String
+
+    init(directory: URL, message: String = "") {
+        self.directory = directory
+        self.message = message
+    }
+
     var arguments: [String] {
         var args = [
             "git",
@@ -21,8 +30,6 @@ struct GitStash: Git {
         }
         return args
     }
-    var directory: URL
-    var message = ""
 
     func parse(for stdOut: String) -> Void {}
 }

@@ -7,7 +7,12 @@
 
 import Foundation
 
-struct GitPull: Git {
+final class GitPull: Git {
+    internal init(directory: URL, refspec: String) {
+        self.directory = directory
+        self.refspec = refspec
+    }
+    
     typealias OutputModel = Void
     var arguments: [String] {
         [

@@ -1,6 +1,10 @@
 import Foundation
 
-struct GitCurrentBranch: Git {
+final class GitCurrentBranch: Git {
+    internal init(directory: URL) {
+        self.directory = directory
+    }
+    
     typealias OutputModel = String?
     var arguments: [String] {
         [

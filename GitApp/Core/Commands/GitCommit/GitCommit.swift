@@ -7,8 +7,17 @@
 
 import Foundation
 
-struct GitCommit: Git {
+final class GitCommit: Git {
     typealias OutputModel = Void
+
+    let directory: URL
+    let message: String
+
+    init(directory: URL, message: String) {
+        self.directory = directory
+        self.message = message
+    }
+
     var arguments: [String] {
         [
             "git",
@@ -17,8 +26,6 @@ struct GitCommit: Git {
             message,
         ]
     }
-    var directory: URL
-    var message: String
 
     func parse(for stdOut: String) -> Void {}
 }

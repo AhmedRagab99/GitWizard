@@ -7,7 +7,23 @@
 
 import Foundation
 
- struct GitLog: Git {
+final class GitLog: Git {
+    internal init(directory: URL, merges: Bool = false, ancestryPath: Bool = false, reverse: Bool = false, number: Int = 50, revisionRange: String = "", grep: [String] = [], grepAllMatch: Bool = false, s: String = "", g: String = "", author: String = "", branch: String = "", skip: Int = 0) {
+        self.directory = directory
+        self.merges = merges
+        self.ancestryPath = ancestryPath
+        self.reverse = reverse
+        self.number = number
+        self.revisionRange = revisionRange
+        self.grep = grep
+        self.grepAllMatch = grepAllMatch
+        self.s = s
+        self.g = g
+        self.author = author
+        self.branch = branch
+        self.skip = skip
+    }
+
 
     var directory: URL
     var merges = false
@@ -57,7 +73,7 @@ import Foundation
         if !revisionRange.isEmpty {
             args.append(revisionRange)
         }
-        args = args + grep.map { "--grep=\($0)" }
+        args.append(contentsOf: grep.map { "--grep=\($0)" })
         if grepAllMatch {
             args.append("--all-match")
         }

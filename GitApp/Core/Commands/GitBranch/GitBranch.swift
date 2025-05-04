@@ -5,12 +5,19 @@
 //  Created by Ahmed Ragab on 20/04/2025.
 //
 
-
-
 import Foundation
 
-struct GitBranch: Git {
+final class GitBranch: Git {
     typealias OutputModel = [Branch]
+
+    let directory: URL
+    let isRemote: Bool
+
+    init(directory: URL, isRemote: Bool = false) {
+        self.directory = directory
+        self.isRemote = isRemote
+    }
+
     var arguments: [String] {
         var arg = [
             "git",
@@ -22,8 +29,6 @@ struct GitBranch: Git {
         }
         return arg
     }
-    var directory: URL
-    var isRemote = false
 
     func parse(for stdOut: String) throws -> [Branch] {
         let lines = stdOut.components(separatedBy: .newlines).dropLast()
