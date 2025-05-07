@@ -147,8 +147,15 @@ struct SidebarView: View {
             onTagAction: handleTagAction,
             refresh: refreshSidebar
         )
-        .frame(minWidth: 240)
-        .onAppear {
+        .frame(minWidth: 240)        
+        
+        .onChange(of: viewModel.branches) {
+            refreshSidebar()
+        }
+        .onChange(of: viewModel.tags) {
+            refreshSidebar()
+        }
+        .onChange(of: viewModel.remotebranches) {
             refreshSidebar()
         }
         .onChange(of: selectedSidebarItem) { newValue in

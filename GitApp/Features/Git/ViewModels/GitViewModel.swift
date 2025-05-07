@@ -736,15 +736,15 @@ class GitViewModel {
             await loadChanges()
 
             // Refresh current branch
-            if let currentBranchName = try await gitService.getCurrentBranch(in: url) {
-                currentBranch = branches.first { $0.name == currentBranchName }
-                selectedBranch = currentBranch
+//            if let currentBranchName = try await gitService.getCurrentBranch(in: url) {
+//                currentBranch = branches.first { $0.name == currentBranchName }
+//                selectedBranch = currentBranch
 
                 // Update LogStore
                 logStore.directory = url
-                logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
+//                logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
                 await logStore.refresh()
-            }
+//            }
         } catch {
             errorMessage = "Error refreshing state: \(error.localizedDescription)"
         }
