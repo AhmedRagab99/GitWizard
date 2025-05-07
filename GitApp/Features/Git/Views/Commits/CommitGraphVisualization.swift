@@ -21,7 +21,7 @@ struct CommitGraphVisualization: View {
 
             Canvas { context, size in
                 // Draw branch lines
-                for (index, parentHash) in commit.parentHashes.enumerated() {
+                for (index, _) in commit.parentHashes.enumerated() {
                     let startX = width / 2
                     let startY = height / 2
                     let endY = height
@@ -77,8 +77,7 @@ struct CommitGraphVisualization: View {
         case .merge: return .purple
         case .rebase: return .orange
         case .cherryPick: return .green
-        case .revert: return .red
-        default : return .blue
+        case .revert: return .red        
         }
     }
 }

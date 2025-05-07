@@ -98,46 +98,6 @@ struct SidebarView: View {
     @State private var sidebarItems: [SidebarItem] = []
 
     var body: some View {
-//        SidebarOutlineView(
-//            items: sidebarItems,
-//            selectedItem: $selectedSidebarItem,
-//            menuProvider: { item in
-//                switch item {
-//                case .branch(let node):
-//                    let menu = NSMenu()
-//                    menu.addItem(ClosureMenuItem(title: "Checkout \(node.name)") {
-//                        if let branch = node.branch { Task { await viewModel.checkoutBranch(branch) } }
-//                    })
-//                    menu.addItem(.separator())
-//                    menu.addItem(ClosureMenuItem(title: "Pull origin/\(node.name)") {
-//                        Task { await viewModel.performPull() }
-//                    })
-//                    menu.addItem(ClosureMenuItem(title: "Push to origin/\(node.name)") {
-//                        Task { await viewModel.performPush() }
-//                    })
-//                    menu.addItem(.separator())
-//                    menu.addItem(ClosureMenuItem(title: "Copy Full Name") {
-//                        if let branch = node.branch { viewModel.copyCommitHash(branch.name) }
-//                    })
-//                    return menu
-//                default: return nil
-//                }
-//            },
-//            branchCellProvider: { node, isSelected in
-//                // Build a custom NSView or NSHostingView here using push/pull counts from viewModel
-//                // Example: show arrow.down and arrow.up with numbers, and badge for HEAD
-//                // You can use a SwiftUI view and wrap it with NSHostingView for best results
-//                let view = BranchSidebarCellSwiftUIView(
-//                    node: node,
-//                    isSelected: isSelected,
-//                    isHead: node.branch?.isCurrent == true,
-//                    pushCount: viewModel.syncState.commitsAhead ?? 0,
-//                    pullCount: viewModel.syncState.shouldPull ? 1 : 0 // Replace with your actual logic
-//                )
-//                return NSHostingView(rootView: view)
-//            }
-//        )
-
         SwiftUISidebarView(
             items: sidebarItems,
             selectedItem: $selectedSidebarItem,

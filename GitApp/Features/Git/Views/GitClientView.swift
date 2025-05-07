@@ -150,11 +150,11 @@ struct GitClientView: View {
         .alert("Delete Branch", isPresented: $showDeleteAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
-                if let branch = viewModel.currentBranch {
-                    Task {
+//                if let branch = viewModel.currentBranch {
+//                    Task {
 //                        await viewModel.deleteBranch(branch)
-                    }
-                }
+//                    }
+//                }
             }
         } message: {
             Text("Are you sure you want to delete this branch?")

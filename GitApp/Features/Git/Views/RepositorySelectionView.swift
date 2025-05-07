@@ -9,7 +9,7 @@ import AppKit
 
 
 struct RepositorySelectionView: View {
-    var viewModel: GitViewModel
+    var viewModel: RepositoryViewModel
     @State private var selectedRepository: URL?
     @State private var isShowingFilePicker = false
     @State private var isShowingCloneSheet = false
@@ -121,16 +121,11 @@ struct RepositorySelectionView: View {
             switch result {
             case .success(let urls):
                 if let url = urls.first {
-                    Task {
-                        do {
-                            try await viewModel.openRepository(at: url)
-                            selectedRepository = url
-                        } catch {
-                            errorMessage = error.localizedDescription
-                            isShowingErrorAlert = true
-                        }
-                    }
+                    selectedRepository = url
+                    viewModel.addImportedRepository(url)
+                    
                 }
+            
             case .failure(let error):
                 errorMessage = error.localizedDescription
                 isShowingErrorAlert = true
@@ -154,11 +149,11 @@ struct RepositorySelectionView: View {
         if  isWindowVisible(id: windowId) {
             bringWindowToFront(id: windowId)
         } else {
-            openNewWindow(with: GitClientView(viewModel: viewModel, url: url), id: windowId, title: windowId, width: (NSScreen.main?.frame.width ?? 600) / 2, height: (NSScreen.main?.frame.height ?? 600) / 2)
+            openNewWindow(with: GitClientView(viewModel: GitViewModel(), url: url), id: windowId, title: windowId, width: (NSScreen.main?.frame.width ?? 600) / 2, height: (NSScreen.main?.frame.height ?? 600) / 2)
         }
     }
 }
 
 #Preview {
-    RepositorySelectionView(viewModel: GitViewModel())
+    RepositorySelectionView(viewModel: RepositoryViewModel())
 }

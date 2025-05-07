@@ -1,0 +1,175 @@
+//
+//  RepositoryViewModel.swift
+//  GitApp
+//
+//  Created by Ahmed Ragab on 08/05/2025.
+//
+
+import SwiftUI
+
+@Observable
+class RepositoryViewModel {
+    // Repository Management Properties
+    var repositoryURL: URL?
+    var foundRepositories: [URL] = []
+    var isSearchingRepositories = false
+    var permissionError: String?
+    var isCloning = false
+    var cloneProgress: Double = 0.0
+    var cloneStatus: String = ""
+    var cloneURL: String = ""
+    var cloneDirectory: URL?
+    var isShowingCloneSheet = false
+    var isShowingImportSheet = false
+    var isAddingLocalRepo = false
+    var isShowingAddLocalSheet = false
+    var localRepoPath: URL?
+    var localRepoName: String = ""
+    var importProgress: ImportProgress?
+    var isImporting = false
+    var importStatus: String = ""
+    var selectedRepository: URL?
+    var recentRepositories: [URL] = []
+    var errorMessage: String?
+    
+    private let gitService = GitService()
+    
+    struct ImportProgress: Identifiable {
+        let id = UUID()
+        var current: Int
+        var total: Int
+        var status: String
+    }
+    
+    init() {
+        loadRepositoryList()
+    }
+    
+    func isGitRepository(at: URL) async -> Bool {
+        return  await gitService.isGitRepository(at: at)
+    }
+
+    
+    
+    
+    func cloneRepository(from url: String, to directory: URL) async throws -> Bool {
+        guard !url.isEmpty else {
+            errorMessage = "Please enter a repository URL"
+            return false
+        }
+        
+        isCloning = true
+        cloneProgress = 0.0
+        cloneStatus = "Starting clone..."
+        
+        defer {
+            isCloning = false
+            cloneProgress = 0.0
+            cloneStatus = ""
+        }
+        
+        do {
+            let success =  await gitService.cloneRepository(from: url, to: directory)
+            
+            if success {
+                let repoName = url.components(separatedBy: "/").last?.replacingOccurrences(of: ".git", with: "") ?? "repository"
+                let repoPath = directory.appendingPathComponent(repoName)
+                
+                addClonedRepository(repoPath)
+                repositoryURL = repoPath
+                selectedRepository = repoPath
+                
+                if !recentRepositories.contains(repoPath) {
+                    recentRepositories.insert(repoPath, at: 0)
+                    if recentRepositories.count > 10 {
+                        recentRepositories.removeLast()
+                    }
+                    saveRecentRepositories()
+                }
+                
+                cloneProgress = 1.0
+                cloneStatus = "Clone completed successfully"
+                return true
+            }
+            return false
+        }
+    }
+    
+    func selectRepository(_ url: URL) {
+        selectedRepository = url
+        repositoryURL = url
+    }
+    
+    func removeFromRecentRepositories(_ url: URL) {
+        recentRepositories.removeAll { $0 == url }
+        saveRecentRepositories()
+    }
+    
+    private func saveRepositoryList() {
+        let encoder = JSONEncoder()
+        do {
+            let clonedData = try encoder.encode(recentRepositories.map { $0.path })
+            
+            UserDefaults.standard.set(clonedData, forKey: "clonedRepositories")
+        } catch {
+            print("Failed to save repository list: \(error)")
+        }
+    }
+    
+    private func loadRepositoryList() {
+        let decoder = JSONDecoder()
+        if let clonedData = UserDefaults.standard.data(forKey: "clonedRepositories")
+           {
+            do {
+                let clonedPaths = try decoder.decode([String].self, from: clonedData)
+                recentRepositories = clonedPaths.map { URL(fileURLWithPath: $0) }
+            } catch {
+                print("Failed to load repository list: \(error)")
+            }
+        }
+    }
+    
+    func addClonedRepository(_ url: URL) {
+        if !recentRepositories.contains(url) {
+            recentRepositories.append(url)
+            saveRepositoryList()
+        }
+    }
+    
+    func addImportedRepository(_ url: URL) {
+        if !recentRepositories.contains(url) {
+            recentRepositories.append(url)
+            
+            saveRepositoryList()
+        }
+    }
+    
+    func loadRecentRepositories() async {
+        if let data = UserDefaults.standard.data(forKey: "recentRepositories") {
+            do {
+                let paths = try JSONDecoder().decode([String].self, from: data)
+                recentRepositories = paths.map { URL(fileURLWithPath: $0) }
+                
+                recentRepositories = recentRepositories.filter { url in
+                    var isDirectory: ObjCBool = false
+                    let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                    return exists && isDirectory.boolValue
+                }
+                
+                saveRecentRepositories()
+            } catch {
+                print("Error loading recent repositories: \(error)")
+            }
+        }
+    }
+    
+    private func saveRecentRepositories() {
+        do {
+            let paths = recentRepositories.map { $0.path }
+            let data = try JSONEncoder().encode(paths)
+            UserDefaults.standard.set(data, forKey: "recentRepositories")
+        } catch {
+            print("Error saving recent repositories: \(error)")
+        }
+    }
+}

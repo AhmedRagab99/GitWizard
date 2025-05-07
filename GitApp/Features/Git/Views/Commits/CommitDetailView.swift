@@ -52,7 +52,7 @@ struct CommitDetailView: View {
             HStack {
                 CommitDetailHeader(
                     commit: commit,
-                    refs: commit.branches ?? [],
+                    refs: commit.branches,
                     viewModel: viewModel
                 )
 

@@ -57,7 +57,7 @@ actor GitService {
 
     // MARK: - Commit Operations
     func getCommits(in directory: URL, branch: String? = nil) async throws -> [Commit] {
-        var gitLog = GitLog(directory: directory)
+        let gitLog = GitLog(directory: directory)
         if let branch = branch {
             gitLog.revisionRange = branch
         }
