@@ -84,7 +84,7 @@ class RepositoryViewModel {
                     if recentRepositories.count > 10 {
                         recentRepositories.removeLast()
                     }
-                    saveRecentRepositories()
+                    saveRepositoryList()
                 }
                 
                 cloneProgress = 1.0
@@ -102,7 +102,7 @@ class RepositoryViewModel {
     
     func removeFromRecentRepositories(_ url: URL) {
         recentRepositories.removeAll { $0 == url }
-        saveRecentRepositories()
+        saveRepositoryList()
     }
     
     private func saveRepositoryList() {
@@ -116,7 +116,7 @@ class RepositoryViewModel {
         }
     }
     
-    private func loadRepositoryList() {
+     func loadRepositoryList() {
         let decoder = JSONDecoder()
         if let clonedData = UserDefaults.standard.data(forKey: "clonedRepositories")
            {
@@ -144,32 +144,4 @@ class RepositoryViewModel {
         }
     }
     
-    func loadRecentRepositories() async {
-        if let data = UserDefaults.standard.data(forKey: "recentRepositories") {
-            do {
-                let paths = try JSONDecoder().decode([String].self, from: data)
-                recentRepositories = paths.map { URL(fileURLWithPath: $0) }
-                
-                recentRepositories = recentRepositories.filter { url in
-                    var isDirectory: ObjCBool = false
-                    let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
-                    return exists && isDirectory.boolValue
-                }
-                
-                saveRecentRepositories()
-            } catch {
-                print("Error loading recent repositories: \(error)")
-            }
-        }
-    }
-    
-    private func saveRecentRepositories() {
-        do {
-            let paths = recentRepositories.map { $0.path }
-            let data = try JSONEncoder().encode(paths)
-            UserDefaults.standard.set(data, forKey: "recentRepositories")
-        } catch {
-            print("Error saving recent repositories: \(error)")
-        }
-    }
 }

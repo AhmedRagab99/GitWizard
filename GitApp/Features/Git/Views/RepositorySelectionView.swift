@@ -138,7 +138,7 @@ struct RepositorySelectionView: View {
         }
         .onAppear {
             Task {
-                await viewModel.loadRecentRepositories()
+                await viewModel.loadRepositoryList()
             }
         }
 
