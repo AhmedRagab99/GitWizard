@@ -395,24 +395,43 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            if isRemote {
-                try await gitService.checkoutBranch(to: branch, in: url)
-            } else {
-                try await gitService.switchBranch(to: branch.name, in: url)
-            }
             currentBranch = branch
             selectedBranch = branch
             syncState.branch = branch
+            
+            
+            if isRemote {
+                try await gitService.checkoutBranch(to: branch, in: url)
+                updateDataFromRemoteCheckout(from: branch)
+               
+            } else {
+                try await gitService.switchBranch(to: branch.name, in: url)                
+            }
+       
+            updateDataFromLocalCheckout()
+            
 
-            // Update LogStore with new branch
-            logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
-
-            // Check sync state
-            await loadRepositoryData(from: url)
-            await refreshState()
+            
+            await loadChanges()
         } catch {
             errorMessage = "Checkout failed: \(error.localizedDescription)"
         }
+    }
+    
+    private func updateDataFromLocalCheckout() {
+        self.branches = branches.map { branch in
+            var updatedBranch = branch
+            updatedBranch.isCurrent = branch.name == currentBranch?.name ?? ""
+            return updatedBranch
+        }
+    }
+    
+    private func updateDataFromRemoteCheckout(from branch: Branch) {
+        self.remotebranches.removeAll(where: {$0.name == branch.name})
+        
+        var tempBranch = branch
+        tempBranch.isCurrent = true
+        self.branches.append(tempBranch)
     }
 
 
@@ -424,7 +443,7 @@ class GitViewModel {
 
         
             // Refresh repository data
-//            await loadRepositoryData(from: url)
+            await loadRepositoryData(from: url)
 
             // Refresh changes
             await loadChanges()
