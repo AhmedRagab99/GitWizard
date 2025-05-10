@@ -5,6 +5,14 @@
 //  Created by Ahmed Ragab on 10/05/2025.
 //
 
+import SwiftUI
+
+enum CommitSource: String, CaseIterable, Identifiable {
+    case workingCopyParent = "Working copy parent"
+    case specifiedCommit = "Specified commit"
+    var id: String { rawValue }
+}
+
 
 // MARK: - Create Branch Sheet
 struct CreateBranchSheet: View {
@@ -18,11 +26,7 @@ struct CreateBranchSheet: View {
     @State private var showCommitPicker: Bool = false
     @State private var checkoutNewBranch: Bool = true
 
-    enum CommitSource: String, CaseIterable, Identifiable {
-        case workingCopyParent = "Working copy parent"
-        case specifiedCommit = "Specified commit"
-        var id: String { rawValue }
-    }
+   
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
