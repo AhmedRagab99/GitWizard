@@ -12,10 +12,12 @@ final class GitStash: Git {
 
     let directory: URL
     let message: String
+    let keepStaged: Bool
 
-    init(directory: URL, message: String = "") {
+    init(directory: URL, message: String = "", keepStaged: Bool = false) {
         self.directory = directory
         self.message = message
+        self.keepStaged = keepStaged
     }
 
     var arguments: [String] {
@@ -24,6 +26,9 @@ final class GitStash: Git {
             "stash",
             "--include-untracked",
         ]
+        if keepStaged {
+            args.append("--keep-index")
+        }
         if !message.isEmpty {
             args.append("-m")
             args.append(message)

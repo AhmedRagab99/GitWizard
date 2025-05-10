@@ -120,6 +120,17 @@ struct GitClientView: View {
                         .frame(width: 80)
                     }
                     .buttonStyle(.plain)
+                    
+                    Button(action: { showStashSheet = true }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "archivebox")
+                                .font(.system(size: 20))
+                            Text("Stash")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 Divider()
@@ -156,7 +167,12 @@ struct GitClientView: View {
             }
         }
         .sheet(isPresented: $showStashSheet) {
-            StashSheet(viewModel: viewModel)
+            CreateStashSheet(
+                isPresented: $showStashSheet,
+                onStash: { message, keepStaged in
+                    Task { await viewModel.createStash(message: message, keepStaged: keepStaged) }
+                }
+            )
         }
         .sheet(isPresented: $showCreateBranchSheet) {
             CreateBranchSheet(
@@ -254,36 +270,4 @@ enum ModernUI {
 //    }
 //}
 
-// MARK: - Sheets
-struct StashSheet: View {
-    @Bindable var viewModel: GitViewModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var message: String = ""
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section {
-                    TextField("Stash message", text: $message)
-                }
-            }
-            .navigationTitle("Stash Changes")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Stash") {
-                        Task {
-//                            await viewModel.stash(message: message)
-                            dismiss()
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 

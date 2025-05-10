@@ -198,6 +198,32 @@ class GitViewModel {
         }
     }
 
+    /// Create a new stash with message and keepStaged option
+       func createStash(message: String, keepStaged: Bool) async {
+           guard let url = repositoryURL else { return }
+           isLoading = true
+           defer { isLoading = false }
+           do {
+               try await gitService.createStash(message, in: url, keepStaged: keepStaged)
+               await loadRepositoryData(from: url)
+           } catch {
+               errorMessage = "Error creating stash: \(error.localizedDescription)"
+           }
+       }
+
+       /// Apply a stash by index
+       func applyStash(at index: Int) async {
+           guard let url = repositoryURL else { return }
+           isLoading = true
+           defer { isLoading = false }
+           do {
+               try await gitService.applyStash(index, in: url)
+               await loadRepositoryData(from: url)
+           } catch {
+               errorMessage = "Error applying stash: \(error.localizedDescription)"
+           }
+       }
+
     func performPull() async {
         guard let url = repositoryURL else {
             errorMessage = "No repository selected"
@@ -581,13 +607,26 @@ class GitViewModel {
             // Optionally check out the new branch
             if checkout {
                 try await gitService.switchBranch(to: name, in: url)
-                
+
             }
             // Refresh branches and current branch state
             await loadRepositoryData(from: url)
 //            updateDataFromLocalCheckout()
         } catch {
             errorMessage = "Error creating branch: \(error.localizedDescription)"
+        }
+    }
+
+    /// Delete a stash by index
+    func deleteStash(at index: Int) async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await gitService.dropStash(index, in: url)
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Error deleting stash: \(error.localizedDescription)"
         }
     }
 }

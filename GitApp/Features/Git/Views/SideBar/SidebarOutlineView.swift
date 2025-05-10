@@ -9,6 +9,7 @@ struct SwiftUISidebarView: View {
     var onBranchAction: (BranchContextAction, Branch) -> Void
     var onRemoteAction: (RemoteContextAction, Branch) -> Void
     var onTagAction: (TagContextAction, Tag) -> Void
+    var onStashAction: (StashContextAction, Stash) -> Void
     var refresh: () -> Void
     // Add providers for context menus or specific actions if needed
     // var menuProvider: ((SidebarItem) -> Menu<Button<Label<Text, Image>>>)? = nil
@@ -100,6 +101,15 @@ struct SwiftUISidebarView: View {
             Button("Delete Tag") {
                 onTagAction(.delete, tag); refresh()
             }
+        case .stash(let s):
+            Button("Apply Stash") {
+                onStashAction(.apply,s); refresh()
+            }
+            
+            Button("Delete Stash") {
+                onStashAction(.delete,s); refresh()
+            }
+            
         default:
             EmptyView()
         }
@@ -148,6 +158,13 @@ struct SwiftUISidebarView: View {
                 iconColor: .secondary,
                 textColor: isSelected ? .white : .primary
             )
+        case .stash(let stash):
+            SidebarCellView(
+                icon: "stash.fill",
+                text: stash.message,
+                isSelected: isSelected,
+                iconColor: .secondary,
+                textColor: isSelected ? .white: .primary)
         }
     }
 }
@@ -252,3 +269,4 @@ struct ModernPillBadgeView: View {
 enum BranchContextAction { case checkout, merge, rebase, pull, push, diff, rename, delete, copyName, createPR }
 enum RemoteContextAction { case checkout, track, copyName }
 enum TagContextAction { case copyName, delete }
+enum StashContextAction {case apply,delete}

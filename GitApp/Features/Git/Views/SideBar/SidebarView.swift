@@ -20,6 +20,7 @@ enum SidebarItem: Identifiable, Equatable,Hashable {
     case remote(BranchNode)
     case tag(Tag)
     case section(String)
+    case stash(Stash)
     var id: String {
         switch self {
         case .workspace(let w): return "workspace-\(w.id)"
@@ -27,6 +28,7 @@ enum SidebarItem: Identifiable, Equatable,Hashable {
         case .remote(let r): return "remote-\(r.id)"
         case .tag(let t): return "tag-\(t.id)"
         case .section(let s): return "section-\(s)"
+        case .stash(let s): return "stash-\(s.id)"
         }
     }
     var children: [SidebarItem]? {
@@ -105,6 +107,7 @@ struct SidebarView: View {
             onBranchAction: handleBranchAction,
             onRemoteAction: handleRemoteAction,
             onTagAction: handleTagAction,
+            onStashAction: handleStashAction,
             refresh: refreshSidebar
         )
         .frame(minWidth: 240)        
@@ -116,6 +119,9 @@ struct SidebarView: View {
             refreshSidebar()
         }
         .onChange(of: viewModel.remotebranches) {
+            refreshSidebar()
+        }
+        .onChange(of: viewModel.stashes) {
             refreshSidebar()
         }
         .onChange(of: selectedSidebarItem) { newValue in
@@ -162,6 +168,20 @@ struct SidebarView: View {
             }
             refreshSidebar()
         }
+    
+    private func handleStashAction(_ action: StashContextAction, _ tag: Stash)  {
+        switch action {
+        case .apply:
+            Task {
+               await viewModel.applyStash(at: tag.index)
+            }
+        case .delete:
+            Task {
+               await viewModel.deleteStash(at: tag.index)
+            }
+        }
+        refreshSidebar()
+    }
 
     private func refreshSidebar() {
         var items: [SidebarItem] = []
@@ -176,9 +196,14 @@ struct SidebarView: View {
         items.append(.section("Remotes"))
         let remoteTree = buildBranchTreeRevised(from: viewModel.remotebranches)
         items.append(contentsOf: remoteTree.map { .remote($0) })
+        // Stashes Section
+        items.append(.section("Stashes"))
+        items.append(contentsOf: viewModel.stashes.map { .stash($0) })
         // Tags section
         items.append(.section("Tags"))
         items.append(contentsOf: viewModel.tags.map { .tag($0) })
+        
+        
         sidebarItems = items
     }
 

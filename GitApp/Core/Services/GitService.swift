@@ -234,8 +234,8 @@ actor GitService {
         try await Process.output(GitCheckout(directory: url, commitHash: path))
     }
 
-    func createStash(_ message: String, in url: URL) async throws {
-        _ = try await Process.output(GitStashCreate(directory: url, message: message))
+    func createStash(_ message: String, in url: URL, keepStaged: Bool = false) async throws {
+        _ = try await Process.output(GitStash(directory: url, message: message, keepStaged: keepStaged))
     }
 
     func applyStash(_ index: Int, in url: URL) async throws {
