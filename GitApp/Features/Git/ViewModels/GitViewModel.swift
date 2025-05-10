@@ -629,6 +629,18 @@ class GitViewModel {
             errorMessage = "Error deleting stash: \(error.localizedDescription)"
         }
     }
+
+    func push(branch: Branch, pushTags: Bool) async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await gitService.push(in: url, refspec: branch.name, pushTags: pushTags)
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Push failed: \(error.localizedDescription)"
+        }
+    }
 }
 
 extension GitViewModel {

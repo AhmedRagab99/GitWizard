@@ -107,8 +107,8 @@ actor GitService {
         try await Process.output(GitPull(directory: directory, refspec: refspec))
     }
 
-    func push(in directory: URL, refspec: String = "HEAD") async throws {
-        try await Process.output(GitPush(directory: directory, refspec: refspec))
+    func push(in directory: URL, refspec: String = "HEAD", pushTags: Bool = false) async throws {
+        try await Process.output(GitPush(directory: directory, refspec: refspec, pushTags: pushTags))
     }
 
     // MARK: - Tag Operations
