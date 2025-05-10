@@ -8,22 +8,49 @@
 import Foundation
 
 final class GitPull: Git {
-    internal init(directory: URL, refspec: String) {
-        self.directory = directory
-        self.refspec = refspec
-    }
-    
     typealias OutputModel = Void
-    var arguments: [String] {
-        [
-            "git",
-            "pull",
-            "origin",
-            refspec,
-        ]
-    }
     var directory: URL
-    var refspec: String
+    var remote: String
+    var remoteBranch: String
+    var localBranch: String
+    var commitMerged: Bool
+    var includeMessages: Bool
+    var createNewCommit: Bool
+    var rebaseInsteadOfMerge: Bool
 
-    func parse(for stdOut: String) -> Void {}
+    init(directory: URL, remote: String = "origin", remoteBranch: String = "", localBranch: String = "", commitMerged: Bool = false, includeMessages: Bool = false, createNewCommit: Bool = false, rebaseInsteadOfMerge: Bool = false) {
+        self.directory = directory
+        self.remote = remote
+        self.remoteBranch = remoteBranch
+        self.localBranch = localBranch
+        self.commitMerged = commitMerged
+        self.includeMessages = includeMessages
+        self.createNewCommit = createNewCommit
+        self.rebaseInsteadOfMerge = rebaseInsteadOfMerge
+    }
+
+    var arguments: [String] {
+        var args: [String] = ["git", "pull", remote]
+        if !remoteBranch.isEmpty {
+            args.append(remoteBranch)
+        }
+        if !localBranch.isEmpty {
+            args.append(":" + localBranch)
+        }
+        if rebaseInsteadOfMerge {
+            args.append("--rebase")
+        }
+        if commitMerged {
+            args.append("--commit")
+        }
+        if includeMessages {
+            args.append("--log")
+        }
+        if createNewCommit {
+            args.append("--no-ff")
+        }
+        return args
+    }
+
+    func parse(for output: String) throws -> Void {}
 }

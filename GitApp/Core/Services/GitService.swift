@@ -103,8 +103,17 @@ actor GitService {
         try await Process.output(GitFetch(directory: directory))
     }
 
-    func pull(in directory: URL, refspec: String = "HEAD") async throws {
-        try await Process.output(GitPull(directory: directory, refspec: refspec))
+    func pull(in directory: URL, remote: String = "origin", remoteBranch: String = "", localBranch: String = "", commitMerged: Bool = false, includeMessages: Bool = false, createNewCommit: Bool = false, rebaseInsteadOfMerge: Bool = false) async throws {
+        try await Process.output(GitPull(
+            directory: directory,
+            remote: remote,
+            remoteBranch: remoteBranch,
+            localBranch: localBranch,
+            commitMerged: commitMerged,
+            includeMessages: includeMessages,
+            createNewCommit: createNewCommit,
+            rebaseInsteadOfMerge: rebaseInsteadOfMerge
+        ))
     }
 
     func push(in directory: URL, refspec: String = "HEAD", pushTags: Bool = false) async throws {

@@ -58,6 +58,7 @@ struct SwiftUISidebarView: View {
                 }
                 Menu("Push to") {
                     // TODO: List remotes/branches
+                    
                 }
                 Menu("Track Remote Branch") {
                     // TODO: List remotes/branches

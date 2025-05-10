@@ -234,10 +234,32 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.pull(in: url,refspec: currentBranch?.name ?? "HEAD")
+            try await gitService.pull(in: url)
             // Refresh repository data
             await refreshState()
 //            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Pull failed: \(error.localizedDescription)"
+        }
+    }
+    
+    func pull(remote: String, remoteBranch: String, localBranch: String, options: PullSheet.PullOptions) async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            // You may need to update your gitService.pull to accept these options and pass the correct arguments
+            try await gitService.pull(
+                in: url,
+                remote: remote,
+                remoteBranch: remoteBranch,
+                localBranch: localBranch,
+                commitMerged: options.commitMerged,
+                includeMessages: options.includeMessages,
+                createNewCommit: options.createNewCommit,
+                rebaseInsteadOfMerge: options.rebaseInsteadOfMerge
+            )
+            await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Pull failed: \(error.localizedDescription)"
         }
@@ -535,21 +557,6 @@ class GitViewModel {
     }
 
     // MARK: - Sync Operations
-    func pull() async {
-        guard let url = repositoryURL else { return }
-        do {
-            isLoading = true
-            defer { isLoading = false }
-
-            try await gitService.pull(in: url)
-            try await syncState.sync()
-
-            // Reload repository data
-            await loadRepositoryData(from: url)
-        } catch {
-            errorMessage = "Error pulling changes: \(error.localizedDescription)"
-        }
-    }
 
     func push() async {
         guard let url = repositoryURL else { return }
