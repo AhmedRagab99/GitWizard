@@ -36,6 +36,8 @@ struct GitClientView: View {
                 }
             }
         }
+        .loading(viewModel.isLoading)
+        .errorAlert(viewModel.errorMessage)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 // Primary Actions Group

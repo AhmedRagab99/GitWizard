@@ -110,6 +110,8 @@ struct RepositorySelectionView: View {
             }
 //            .listStyle(.insetGrouped)
         }
+//        .loading(viewModel.isLoading)
+        .errorAlert(viewModel.errorMessage)
         .sheet(isPresented: $isShowingCloneSheet) {
             CloneRepositoryView(viewModel: viewModel)
         }
@@ -123,9 +125,9 @@ struct RepositorySelectionView: View {
                 if let url = urls.first {
                     selectedRepository = url
                     viewModel.addImportedRepository(url)
-                    
+
                 }
-            
+
             case .failure(let error):
                 errorMessage = error.localizedDescription
                 isShowingErrorAlert = true

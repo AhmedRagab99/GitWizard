@@ -98,7 +98,7 @@ struct PushSheet: View {
             if let current = currentBranch {
                 selectedBranches = [current.name]
             }
-        }
+        }        
     }
 }
 

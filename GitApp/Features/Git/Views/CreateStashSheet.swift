@@ -44,6 +44,6 @@ struct CreateStashSheet: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(.windowBackgroundColor))
         )
-        .shadow(radius: 20)
+        .shadow(radius: 20)        
     }
 }

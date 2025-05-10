@@ -99,6 +99,7 @@ struct CloneRepositoryView: View {
             }
         }
         .frame(minWidth: 400, minHeight: 200)
+        .errorAlert(viewModel.errorMessage)
     }
 
     private func extractRepoName() {

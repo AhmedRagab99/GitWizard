@@ -59,5 +59,7 @@ struct HistoryView: View {
                 .transition(.move(edge: .bottom))
             }
         }
+        .loading(viewModel.isLoading)
+        .errorAlert(viewModel.errorMessage)
     }
 }

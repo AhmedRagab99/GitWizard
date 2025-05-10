@@ -106,6 +106,8 @@ struct CommitView: View {
                 Task { await viewModel.loadChanges() }
             }
         }
+        .loading(viewModel.isLoading)
+        .errorAlert(viewModel.errorMessage)
     }
 
     // Summary row similar to SourceTree
