@@ -27,7 +27,7 @@ class GitViewModel {
             }
         }
     }
-     
+
      var isSearchingRepositories = false
      var selectedBranch: Branch? {
         didSet {
@@ -58,9 +58,9 @@ class GitViewModel {
     private let gitService = GitService()
 
     init() {
-        
+
         loadWorkspaceCommands()
-       
+
     }
 
     func isGitRepository(at: URL) async -> Bool {
@@ -172,12 +172,12 @@ class GitViewModel {
                 logStore.directory = url
                 logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
                 await logStore.refresh()
-            
+
         }
     }
 
 
-   
+
 
     // --- Git Actions ---
     func performFetch() async {
@@ -240,7 +240,7 @@ class GitViewModel {
         errorMessage = "Commit functionality not implemented yet"
     }
 
-   
+
 
 
     func loadCommitDetails(_ commit: Commit, in url: URL) async {
@@ -257,7 +257,7 @@ class GitViewModel {
         }
     }
 
-    
+
 
     func loadChanges() async {
         guard let url = repositoryURL else { return }
@@ -398,26 +398,26 @@ class GitViewModel {
             currentBranch = branch
             selectedBranch = branch
             syncState.branch = branch
-            
-            
+
+
             if isRemote {
                 try await gitService.checkoutBranch(to: branch, in: url)
                 updateDataFromRemoteCheckout(from: branch)
-               
-            } else {
-                try await gitService.switchBranch(to: branch.name, in: url)                
-            }
-       
-            updateDataFromLocalCheckout()
-            
 
-            
+            } else {
+                try await gitService.switchBranch(to: branch.name, in: url)
+            }
+
+            updateDataFromLocalCheckout()
+
+
+
             await loadChanges()
         } catch {
             errorMessage = "Checkout failed: \(error.localizedDescription)"
         }
     }
-    
+
     private func updateDataFromLocalCheckout() {
         self.branches = branches.map { branch in
             var updatedBranch = branch
@@ -425,10 +425,10 @@ class GitViewModel {
             return updatedBranch
         }
     }
-    
+
     private func updateDataFromRemoteCheckout(from branch: Branch) {
         self.remotebranches.removeAll(where: {$0.name == branch.name})
-        
+
         var tempBranch = branch
         tempBranch.isCurrent = true
         self.branches.append(tempBranch)
@@ -441,7 +441,7 @@ class GitViewModel {
         isLoading = true
         defer { isLoading = false }
 
-        
+
             // Refresh repository data
             await loadRepositoryData(from: url)
 
@@ -458,10 +458,10 @@ class GitViewModel {
 //                logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
                 await logStore.refresh()
 //            }
-        
+
     }
-    
-    
+
+
     func selectRepository(_ url: URL) {
         repositoryURL = url
         Task {
@@ -538,7 +538,7 @@ class GitViewModel {
         }
     }
 
-  
+
 
     func copyCommitHash(_ hash: String) {
         let pasteboard = NSPasteboard.general
@@ -564,6 +564,30 @@ class GitViewModel {
         Task {
             guard let url = repositoryURL else { return }
             await loadCommitDetails(commit, in: url)
+        }
+    }
+
+    /// Create a new branch and optionally check it out
+    func createBranch(named name: String, checkout: Bool = true) async {
+        guard let url = repositoryURL else {
+            errorMessage = "No repository selected"
+            return
+        }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            // Create the branch
+            try await gitService.createBranch(name, in: url)
+            // Optionally check out the new branch
+            if checkout {
+                try await gitService.switchBranch(to: name, in: url)
+                
+            }
+            // Refresh branches and current branch state
+            await loadRepositoryData(from: url)
+//            updateDataFromLocalCheckout()
+        } catch {
+            errorMessage = "Error creating branch: \(error.localizedDescription)"
         }
     }
 }

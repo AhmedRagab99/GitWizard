@@ -77,7 +77,7 @@ struct CommitGraphVisualization: View {
         case .merge: return .purple
         case .rebase: return .orange
         case .cherryPick: return .green
-        case .revert: return .red        
+        case .revert: return .red
         }
     }
 }
