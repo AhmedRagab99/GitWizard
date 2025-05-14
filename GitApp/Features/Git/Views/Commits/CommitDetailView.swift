@@ -15,6 +15,7 @@ struct CommitDetailView: View {
     @Bindable var viewModel: GitViewModel
     @State private var detailHeight: CGFloat = 400 // Default height
     var onClose: () -> Void // Add closure for handling close action
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,25 +26,25 @@ struct CommitDetailView: View {
             }
         }
         .frame(height: detailHeight)
-        .background(ModernUI.colors.background)
+        .background(Color(NSColor.textBackgroundColor))
         .animation(.easeOut(duration: 0.2), value: detailHeight)
         .onAppear {
-            withAnimation(ModernUI.animation.delay(0.3)) {
+            withAnimation(.easeInOut(duration: 0.3)) {
                 isLoading = false
             }
         }
     }
 
     private var loadingView: some View {
-        VStack(spacing: ModernUI.spacing) {
+        VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.5)
                 .padding()
             Text("Loading commit details...")
-                .foregroundColor(ModernUI.colors.secondaryText)
+                .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ModernUI.colors.background)
+        .background(Color(NSColor.textBackgroundColor))
     }
 
     private var contentView: some View {
@@ -53,19 +54,13 @@ struct CommitDetailView: View {
                 CommitDetailHeader(
                     commit: commit,
                     refs: commit.branches,
-                    viewModel: viewModel
+                    viewModel: viewModel,
+                    onClose: onClose
                 )
 
                 Spacer()
 
-                // Close Button
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(ModernUI.colors.secondaryText)
-                        .font(.system(size: 20))
-                }
-                .buttonStyle(.plain)
-                .padding(.trailing, ModernUI.padding)
+           
             }
             .padding(ModernUI.padding)
             .background(ModernUI.colors.background)

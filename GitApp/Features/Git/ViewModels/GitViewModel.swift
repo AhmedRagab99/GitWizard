@@ -242,7 +242,7 @@ class GitViewModel {
             errorMessage = "Pull failed: \(error.localizedDescription)"
         }
     }
-    
+
     func pull(remote: String, remoteBranch: String, localBranch: String, options: PullSheet.PullOptions) async {
         guard let url = repositoryURL else { return }
         isLoading = true

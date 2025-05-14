@@ -110,8 +110,8 @@ struct SidebarView: View {
             onStashAction: handleStashAction,
             refresh: refreshSidebar
         )
-        .frame(minWidth: 240)        
-        
+        .frame(minWidth: 240)
+
         .onChange(of: viewModel.branches) {
             refreshSidebar()
         }
@@ -202,8 +202,8 @@ struct SidebarView: View {
         // Tags section
         items.append(.section("Tags"))
         items.append(contentsOf: viewModel.tags.map { .tag($0) })
-        
-        
+
+
         sidebarItems = items
     }
 

@@ -41,7 +41,7 @@ struct Commit: Hashable, Identifiable {
         case rebase
         case cherryPick
         case revert
-        
+
         var  commitIcon:  (name: String, color: Color) {
             switch self {
             case .merge:
