@@ -255,12 +255,12 @@ actor GitService {
         try await Process.output(GitStashDrop(directory: url, index: index))
     }
 
-    func stageChunk(_ chunk: Chunk, in fileDiff: FileDiff, directory: URL) async throws {
-        _ = try await Process.output(GitStageChunk(directory: directory, filePath: fileDiff.fromFilePath, chunk: chunk))
+    func stageChunk(_ chunk: Chunk, in fileDiff: FileDiff, directory: URL) async throws  {
+        try await Process.output(GitAddPatch(directory: directory, inputs: Array(arrayLiteral: chunk.unstageString)))
     }
 
     func unstageChunk(_ chunk: Chunk, in fileDiff: FileDiff, directory: URL) async throws {
-        _ = try await Process.output(GitUnstageChunk(directory: directory, filePath: fileDiff.fromFilePath, chunk: chunk))
+        try await Process.output(GitRestorePatch(directory: directory, inputs: Array(arrayLiteral: chunk.stageString)))
     }
 
     func resetChunk(_ chunk: Chunk, in fileDiff: FileDiff, directory: URL) async throws {

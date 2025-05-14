@@ -49,19 +49,13 @@ struct CommitDetailView: View {
 
     private var contentView: some View {
         VStack(spacing: 0) {
-            // Header Section with Commit Info and Close Button
-            HStack {
+            // Header Section with Commit Info and Close Button            
                 CommitDetailHeader(
                     commit: commit,
                     refs: commit.branches,
                     viewModel: viewModel,
                     onClose: onClose
                 )
-
-                Spacer()
-
-           
-            }
             .padding(ModernUI.padding)
             .background(ModernUI.colors.background)
             .modernShadow(.small)

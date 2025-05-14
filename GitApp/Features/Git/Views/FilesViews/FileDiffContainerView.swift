@@ -45,12 +45,18 @@ struct FileDiffContainerView: View {
             // Diff content
             FileDiffView(
                 fileDiff: fileDiff,
-                onStage: { chunk in viewModel.stageChunk(chunk, in: fileDiff) },
-                onUnstage: { chunk in viewModel.unstageChunk(chunk, in: fileDiff) },
-                onReset: { chunk in viewModel.resetChunk(chunk, in: fileDiff) }
+                onStage: { chunk in
+                    viewModel.stageChunk(chunk, in: fileDiff)
+                },
+                onUnstage: { chunk in
+                    viewModel.unstageChunk(chunk, in: fileDiff)
+                },
+                onReset: { chunk in
+                    viewModel.resetChunk(chunk, in: fileDiff)
+                }
             )
             .background(Color(.windowBackgroundColor))
-            .cornerRadius(12)
+//            .cornerRadius(12)
         }
         .background(
             RoundedRectangle(cornerRadius: 14)

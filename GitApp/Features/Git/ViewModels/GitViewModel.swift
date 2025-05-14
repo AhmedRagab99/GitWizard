@@ -41,6 +41,7 @@ class GitViewModel {
      var stagedDiff: Diff?
      var unstagedDiff: Diff?
      var untrackedFiles: [String] = []
+
     var syncState = SyncState()
     var commits = [Commit]()
 
@@ -323,6 +324,7 @@ class GitViewModel {
             // Update untracked files
             self.untrackedFiles = status.untrackedFiles
 
+
             // Update selected file diff if needed
             if let selectedPath = selectedFileDiff?.fromFilePath {
                 if let stagedFile = stagedDiff.fileDiffs.first(where: { $0.fromFilePath == selectedPath }) {
@@ -332,7 +334,8 @@ class GitViewModel {
                 }
             }
         } catch {
-            print("Error loading changes: \(error)")
+
+            errorMessage = "Error loading changes: \(error)"
         }
     }
 
@@ -341,7 +344,7 @@ class GitViewModel {
 
         Task {
             do {
-                try await gitService.stageChunk(chunk, in: fileDiff, directory: url)
+               try await gitService.stageChunk(chunk, in: fileDiff, directory: url)
                 await loadChanges()
             } catch {
                 errorMessage = "Error staging chunk: \(error.localizedDescription)"
