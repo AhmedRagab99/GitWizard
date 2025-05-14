@@ -11,6 +11,12 @@ struct GitClientView: View {
     @State private var showStashSheet = false
     @State private var showDeleteAlert = false
     @State private var columnVisibility = NavigationSplitViewVisibility.all
+    @State private var showCreateBranchSheet = false
+    @State private var newBranchName = ""
+    @State private var stashMessage = ""
+    @State private var keepStaged = false
+    @State private var showPushSheet = false
+    @State private var showPullSheet = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -30,14 +36,14 @@ struct GitClientView: View {
                 }
             }
         }
+        .loading(viewModel.isLoading)
+        .errorAlert(viewModel.errorMessage)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 // Primary Actions Group
                 Group {
                     Button(action: {
-                        Task {
-                            await viewModel.performPull()
-                        }
+                            showPullSheet = true
                     }) {
                         VStack(spacing: 4) {
                             Image(systemName: "arrow.down.circle.fill")
@@ -58,9 +64,7 @@ struct GitClientView: View {
                     .buttonStyle(.plain)
 
                     Button(action: {
-                        Task {
-                            await viewModel.performPush()
-                        }
+                        showPushSheet = true
                     }) {
                         VStack(spacing: 4) {
                             Image(systemName: "arrow.up.circle.fill")
@@ -105,6 +109,30 @@ struct GitClientView: View {
                         }
                     }
                     .buttonStyle(.plain)
+
+                    Button(action: {
+                        showCreateBranchSheet = true
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "plus.square.on.square")
+                                .font(.system(size: 20))
+                            Text("New Branch")
+                                .font(.caption)
+                        }
+                        .frame(width: 80)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: { showStashSheet = true }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "archivebox")
+                                .font(.system(size: 20))
+                            Text("Stash")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 Divider()
@@ -140,21 +168,69 @@ struct GitClientView: View {
                 }
             }
         }
+        .sheet(isPresented: $showPushSheet) {
+            PushSheet(
+                isPresented: $showPushSheet,
+                branches: viewModel.branches,
+                currentBranch: viewModel.currentBranch,
+                onPush: { selectedBranches, pushTags in
+                    Task {
+                        for branch in selectedBranches {
+                            await viewModel.push(branch: branch, pushTags: pushTags)
+                        }
+                    }
+                }
+            )
+        }
         .sheet(isPresented: $showStashSheet) {
-            StashSheet(viewModel: viewModel)
+            CreateStashSheet(
+                isPresented: $showStashSheet,
+                onStash: { message, keepStaged in
+                    Task {
+                        await viewModel.createStash(message: message, keepStaged: keepStaged)
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showPullSheet) {
+            PullSheet(
+                isPresented: $showPullSheet,
+                remotes: ["origin"],
+                remoteBranches: viewModel.remotebranches.map { $0.name },
+                localBranches: viewModel.branches.map { $0.name },
+                currentRemote: "origin",
+                currentRemoteBranch: viewModel.currentBranch?.name ?? "",
+                currentLocalBranch: viewModel.currentBranch?.name ?? "",
+                onPull: { remote, remoteBranch, localBranch, options in
+                    Task {
+                        await viewModel.pull(remote: remote, remoteBranch: remoteBranch, localBranch: localBranch, options: options)
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showCreateBranchSheet) {
+            CreateBranchSheet(
+                isPresented: $showCreateBranchSheet,
+                currentBranch: viewModel.currentBranch?.name ?? "",
+                onCreate: { branchName, commitSource, specifiedCommit, checkout in
+                    Task {
+                        await viewModel.createBranch(named: branchName, checkout: checkout)
+                    }
+                }
+            )
         }
         .onAppear {
             viewModel.selectRepository(url)
-            
+
         }
         .alert("Delete Branch", isPresented: $showDeleteAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
-                if let branch = viewModel.currentBranch {
-                    Task {
+//                if let branch = viewModel.currentBranch {
+//                    Task {
 //                        await viewModel.deleteBranch(branch)
-                    }
-                }
+//                    }
+//                }
             }
         } message: {
             Text("Are you sure you want to delete this branch?")
@@ -228,35 +304,6 @@ enum ModernUI {
 //    }
 //}
 
-// MARK: - Sheets
-struct StashSheet: View {
-    @Bindable var viewModel: GitViewModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var message: String = ""
 
-    var body: some View {
-        NavigationView {
-            Form {
-                Section {
-                    TextField("Stash message", text: $message)
-                }
-            }
-            .navigationTitle("Stash Changes")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Stash") {
-                        Task {
-//                            await viewModel.stash(message: message)
-                            dismiss()
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+
+

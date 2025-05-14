@@ -1,6 +1,10 @@
 import Foundation
 
-struct GitUnstageAll: Git {
+final class GitUnstageAll: Git {
+    internal init(directory: URL) {
+        self.directory = directory
+    }
+    
     typealias OutputModel = String
     var arguments: [String] {
         [

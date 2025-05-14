@@ -11,8 +11,8 @@ struct HistoryView: View {
     @Bindable var viewModel: GitViewModel
     @State private var selectedCommit: Commit?
     @State private var isLoadingMore = false
-    @GestureState private var dragOffset = CGSize.zero
-    
+    @State private var detailViewHeight: CGFloat = 400 // Default height
+
     var body: some View {
         VStack(spacing: 0) {
             // Commit list
@@ -37,39 +37,29 @@ struct HistoryView: View {
                         }
                     }
                 }
-                
-               
             }
             .listStyle(.plain)
             .refreshable {
                 await viewModel.logStore.refresh()
             }
-            
-            // Commit details with close button and drag gesture
+
+            // Commit details with close button
             if let selectedCommit = selectedCommit {
-                
                 CommitDetailView(
                     commit: selectedCommit,
                     details: viewModel.commitDetails,
-                    viewModel: viewModel
-                )
-                .offset(y: dragOffset.height)
-                .gesture(
-                    DragGesture()
-                        .updating($dragOffset) { value, state, _ in
-                            state = value.translation
+                    viewModel: viewModel,
+                    onClose: {
+                        withAnimation(.easeInOut) {
+                            self.selectedCommit = nil
+                            viewModel.commitDetails = nil
                         }
-                        .onEnded { value in
-                            if value.translation.height > 100 {
-                                withAnimation {
-                                    self.selectedCommit = nil
-                                }
-                            }
-                        }
+                    }
                 )
                 .transition(.move(edge: .bottom))
             }
-            
         }
+        .loading(viewModel.isLoading)
+        .errorAlert(viewModel.errorMessage)
     }
 }

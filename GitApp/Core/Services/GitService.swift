@@ -57,7 +57,7 @@ actor GitService {
 
     // MARK: - Commit Operations
     func getCommits(in directory: URL, branch: String? = nil) async throws -> [Commit] {
-        var gitLog = GitLog(directory: directory)
+        let gitLog = GitLog(directory: directory)
         if let branch = branch {
             gitLog.revisionRange = branch
         }
@@ -103,12 +103,21 @@ actor GitService {
         try await Process.output(GitFetch(directory: directory))
     }
 
-    func pull(in directory: URL, refspec: String = "HEAD") async throws {
-        try await Process.output(GitPull(directory: directory, refspec: refspec))
+    func pull(in directory: URL, remote: String = "origin", remoteBranch: String = "", localBranch: String = "", commitMerged: Bool = false, includeMessages: Bool = false, createNewCommit: Bool = false, rebaseInsteadOfMerge: Bool = false) async throws {
+        try await Process.output(GitPull(
+            directory: directory,
+            remote: remote,
+            remoteBranch: remoteBranch,
+            localBranch: localBranch,
+            commitMerged: commitMerged,
+            includeMessages: includeMessages,
+            createNewCommit: createNewCommit,
+            rebaseInsteadOfMerge: rebaseInsteadOfMerge
+        ))
     }
 
-    func push(in directory: URL, refspec: String = "HEAD") async throws {
-        try await Process.output(GitPush(directory: directory, refspec: refspec))
+    func push(in directory: URL, refspec: String = "HEAD", pushTags: Bool = false) async throws {
+        try await Process.output(GitPush(directory: directory, refspec: refspec, pushTags: pushTags))
     }
 
     // MARK: - Tag Operations
@@ -234,8 +243,8 @@ actor GitService {
         try await Process.output(GitCheckout(directory: url, commitHash: path))
     }
 
-    func createStash(_ message: String, in url: URL) async throws {
-        _ = try await Process.output(GitStashCreate(directory: url, message: message))
+    func createStash(_ message: String, in url: URL, keepStaged: Bool = false) async throws {
+        _ = try await Process.output(GitStash(directory: url, message: message, keepStaged: keepStaged))
     }
 
     func applyStash(_ index: Int, in url: URL) async throws {

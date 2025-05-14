@@ -3,11 +3,6 @@ import Combine
 import Foundation
 import Observation
 
-
-// Remove Branch struct definition since it's now in Models/Branch.swift
-
-// --- Git View Model ---
-
 @Observable
 class GitViewModel {
     // --- Published Properties (State) ---
@@ -32,23 +27,8 @@ class GitViewModel {
             }
         }
     }
-     var foundRepositories: [URL] = []
+
      var isSearchingRepositories = false
-     var permissionError: String?
-     var isCloning = false
-     var cloneProgress: Double = 0.0
-     var cloneStatus: String = ""
-     var cloneURL: String = ""
-     var cloneDirectory: URL?
-     var isShowingCloneSheet = false
-     var isShowingImportSheet = false
-     var isAddingLocalRepo = false
-     var isShowingAddLocalSheet = false
-     var localRepoPath: URL?
-     var localRepoName: String = ""
-     var importProgress: ImportProgress?
-     var isImporting = false
-     var importStatus: String = ""
      var selectedBranch: Branch? {
         didSet {
             if let branch = selectedBranch, let url = repositoryURL {
@@ -58,13 +38,9 @@ class GitViewModel {
     }
      var currentBranch: Branch?
      var commitDetails: CommitDetails?
-     var clonedRepositories: [URL] = []
-     var importedRepositories: [URL] = []
-     var selectedRepository: URL?
      var stagedDiff: Diff?
      var unstagedDiff: Diff?
      var untrackedFiles: [String] = []
-     var recentRepositories: [URL] = []
     var syncState = SyncState()
     var commits = [Commit]()
 
@@ -82,13 +58,13 @@ class GitViewModel {
     private let gitService = GitService()
 
     init() {
-        setupBindings()
+
         loadWorkspaceCommands()
-        loadRepositoryList()
+
     }
 
     func isGitRepository(at: URL) async -> Bool {
-            return try await gitService.isGitRepository(at: at)
+            return  await gitService.isGitRepository(at: at)
     }
 
     private func loadWorkspaceCommands() {
@@ -189,7 +165,6 @@ class GitViewModel {
 
     private func loadCommits(for branch: Branch, in url: URL) {
         Task {
-            do {
                 isLoading = true
                 defer { isLoading = false }
 
@@ -197,66 +172,12 @@ class GitViewModel {
                 logStore.directory = url
                 logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
                 await logStore.refresh()
-            } catch {
-                errorMessage = "Error loading commits: \(error.localizedDescription)"
-            }
+
         }
     }
 
-    // --- Bindings Setup ---
-    private func setupBindings() {
-        // Use Combine's publisher for selectedFileDiff
-        NotificationCenter.default.publisher(for: NSNotification.Name("SelectedFileDiffChanged"))
-            .compactMap { notification -> FileDiff? in
-                return notification.object as? FileDiff
-            }
-            .sink { [weak self] fileDiff in
-                guard let self = self,
-                      let commit = self.selectedCommit,
-                      let url = self.repositoryURL else { return }
 
-                self.isLoading = true
-                defer { self.isLoading = false }
 
-                Task {
-                    do {
-                        let diff = try await self.gitService.getDiff(in: url)
-                        self.diffContent = diff
-                    } catch {
-                        self.errorMessage = "Error loading diff: \(error.localizedDescription)"
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Use Combine's publisher for selectedCommit
-        NotificationCenter.default.publisher(for: NSNotification.Name("SelectedCommitChanged"))
-            .compactMap { notification -> Commit? in
-                return notification.object as? Commit
-            }
-            .sink { [weak self] commit in
-                guard let self = self else { return }
-                if commit == nil {
-                    self.selectedFileDiff = nil
-                    self.diffContent = nil
-                    self.commitDetails = nil
-                } else if let url = self.repositoryURL {
-                    Task {
-                        await self.loadCommitDetails(commit, in: url)
-                    }
-                }
-            }
-            .store(in: &cancellables)
-    }
-
-    // Helper methods to post notifications
-    func notifySelectedFileDiffChanged(_ fileDiff: FileDiff?) {
-        NotificationCenter.default.post(name: NSNotification.Name("SelectedFileDiffChanged"), object: fileDiff)
-    }
-
-    func notifySelectedCommitChanged(_ commit: Commit?) {
-        NotificationCenter.default.post(name: NSNotification.Name("SelectedCommitChanged"), object: commit)
-    }
 
     // --- Git Actions ---
     func performFetch() async {
@@ -277,6 +198,32 @@ class GitViewModel {
         }
     }
 
+    /// Create a new stash with message and keepStaged option
+       func createStash(message: String, keepStaged: Bool) async {
+           guard let url = repositoryURL else { return }
+           isLoading = true
+           defer { isLoading = false }
+           do {
+               try await gitService.createStash(message, in: url, keepStaged: keepStaged)
+               await loadRepositoryData(from: url)
+           } catch {
+               errorMessage = "Error creating stash: \(error.localizedDescription)"
+           }
+       }
+
+       /// Apply a stash by index
+       func applyStash(at index: Int) async {
+           guard let url = repositoryURL else { return }
+           isLoading = true
+           defer { isLoading = false }
+           do {
+               try await gitService.applyStash(index, in: url)
+               await loadRepositoryData(from: url)
+           } catch {
+               errorMessage = "Error applying stash: \(error.localizedDescription)"
+           }
+       }
+
     func performPull() async {
         guard let url = repositoryURL else {
             errorMessage = "No repository selected"
@@ -287,10 +234,32 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.pull(in: url,refspec: currentBranch?.name ?? "HEAD")
+            try await gitService.pull(in: url)
             // Refresh repository data
             await refreshState()
 //            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Pull failed: \(error.localizedDescription)"
+        }
+    }
+    
+    func pull(remote: String, remoteBranch: String, localBranch: String, options: PullSheet.PullOptions) async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            // You may need to update your gitService.pull to accept these options and pass the correct arguments
+            try await gitService.pull(
+                in: url,
+                remote: remote,
+                remoteBranch: remoteBranch,
+                localBranch: localBranch,
+                commitMerged: options.commitMerged,
+                includeMessages: options.includeMessages,
+                createNewCommit: options.createNewCommit,
+                rebaseInsteadOfMerge: options.rebaseInsteadOfMerge
+            )
+            await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Pull failed: \(error.localizedDescription)"
         }
@@ -319,133 +288,8 @@ class GitViewModel {
         errorMessage = "Commit functionality not implemented yet"
     }
 
-    func searchForRepositories(in directory: URL) {
-        isSearchingRepositories = true
-        defer { isSearchingRepositories = false }
 
-        Task {
-            do {
-                foundRepositories = try await gitService.findGitRepositories(in: directory)
-                if foundRepositories.isEmpty {
-                    errorMessage = "No Git repositories found in the selected directory"
-                }
-            } catch let error as NSError {
-                if error.domain == NSCocoaErrorDomain && error.code == 257 {
-                    permissionError = "Permission denied to access \(directory.lastPathComponent). Please grant access in System Settings."
-                } else {
-                    errorMessage = "Error searching directories: \(error.localizedDescription)"
-                }
-            } catch {
-                errorMessage = "An unexpected error occurred: \(error.localizedDescription)"
-            }
-        }
-    }
 
-    func removeFromRecentRepositories(_ url: URL) {
-        recentRepositories.removeAll { $0 == url }
-        saveRecentRepositories()
-    }
-
-    func cloneRepository(from url: String, to directory: URL) async throws -> Bool {
-        guard !url.isEmpty else {
-            errorMessage = "Please enter a repository URL"
-            return false
-        }
-
-        isCloning = true
-        cloneProgress = 0.0
-        cloneStatus = "Starting clone..."
-
-        defer {
-            isCloning = false
-            cloneProgress = 0.0
-            cloneStatus = ""
-        }
-
-        do {
-            let success = try await gitService.cloneRepository(from: url, to: directory)
-
-            if success {
-                let repoName = url.components(separatedBy: "/").last?.replacingOccurrences(of: ".git", with: "") ?? "repository"
-                let repoPath = directory.appendingPathComponent(repoName)
-
-                // Add to cloned repositories
-                addClonedRepository(repoPath)
-
-                // Set as current repository and selected repository
-                repositoryURL = repoPath
-                selectedRepository = repoPath
-
-                // Add to recent repositories
-                if !recentRepositories.contains(repoPath) {
-                    recentRepositories.insert(repoPath, at: 0)
-                    if recentRepositories.count > 10 {
-                        recentRepositories.removeLast()
-                    }
-                    saveRecentRepositories()
-                }
-
-                // Load repository data
-                await loadRepositoryData(from: repoPath)
-
-                // Update progress
-                cloneProgress = 1.0
-                cloneStatus = "Clone completed successfully"
-
-                return true
-            }
-            return false
-        } catch {
-            errorMessage = "Clone failed: \(error.localizedDescription)"
-            return false
-        }
-    }
-
-    func importRepository(from url: URL) {
-        Task {
-            do {
-                if try await gitService.isGitRepository(at: url) {
-                    addImportedRepository(url)
-                    repositoryURL = url
-                    isShowingImportSheet = false
-                    await loadRepositoryData(from: url)
-                } else {
-                    errorMessage = "Selected directory is not a Git repository"
-                }
-            } catch {
-                errorMessage = "Error importing repository: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    func addLocalRepository(at url: URL) async {
-        isImporting = true
-        importProgress = ImportProgress(current: 0, total: 100, status: "Preparing repository...")
-
-        do {
-            // Validate Git repository
-            importStatus = "Validating Git repository..."
-            guard try await gitService.isGitRepository(at: url) else {
-                errorMessage = "Selected directory is not a Git repository"
-                isImporting = false
-                importProgress = nil
-                return
-            }
-
-            // Set as current repository
-            repositoryURL = url
-
-            // Load repository data
-            await loadRepositoryData(from: url)
-
-            isShowingAddLocalSheet = false
-        } catch {
-            errorMessage = "Failed to add repository: \(error.localizedDescription)"
-        }
-
-        isImporting = false
-        importProgress = nil
-    }
 
     func loadCommitDetails(_ commit: Commit, in url: URL) async {
         isLoading = true
@@ -461,54 +305,7 @@ class GitViewModel {
         }
     }
 
-    private func saveRepositoryList() {
-        let encoder = JSONEncoder()
-        do {
-            let clonedData = try encoder.encode(clonedRepositories.map { $0.path })
-            let importedData = try encoder.encode(importedRepositories.map { $0.path })
-            UserDefaults.standard.set(clonedData, forKey: "clonedRepositories")
-            UserDefaults.standard.set(importedData, forKey: "importedRepositories")
-        } catch {
-            print("Failed to save repository list: \(error)")
-        }
-    }
 
-    private func loadRepositoryList() {
-        let decoder = JSONDecoder()
-        if let clonedData = UserDefaults.standard.data(forKey: "clonedRepositories"),
-           let importedData = UserDefaults.standard.data(forKey: "importedRepositories") {
-            do {
-                let clonedPaths = try decoder.decode([String].self, from: clonedData)
-                let importedPaths = try decoder.decode([String].self, from: importedData)
-                clonedRepositories = clonedPaths.map { URL(fileURLWithPath: $0) }
-                importedRepositories = importedPaths.map { URL(fileURLWithPath: $0) }
-            } catch {
-                print("Failed to load repository list: \(error)")
-            }
-        }
-    }
-
-    func addClonedRepository(_ url: URL) {
-        if !clonedRepositories.contains(url) {
-            clonedRepositories.append(url)
-            saveRepositoryList()
-        }
-    }
-
-    func addImportedRepository(_ url: URL) {
-        if !importedRepositories.contains(url) {
-            importedRepositories.append(url)
-            saveRepositoryList()
-        }
-    }
-
-    func selectRepository(_ url: URL) {
-        selectedRepository = url
-        repositoryURL = url
-        Task {
-            await loadRepositoryData(from: url)
-        }
-    }
 
     func loadChanges() async {
         guard let url = repositoryURL else { return }
@@ -646,80 +443,45 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            if isRemote {
-                try await gitService.checkoutBranch(to: branch, in: url)
-            } else {
-                try await gitService.switchBranch(to: branch.name, in: url)
-            }
             currentBranch = branch
             selectedBranch = branch
             syncState.branch = branch
 
-            // Update LogStore with new branch
-            logStore.searchTokens = [SearchToken(kind: .revisionRange, text: branch.name)]
 
-            // Check sync state
-            await loadRepositoryData(from: url)
+            if isRemote {
+                try await gitService.checkoutBranch(to: branch, in: url)
+                updateDataFromRemoteCheckout(from: branch)
+
+            } else {
+                try await gitService.switchBranch(to: branch.name, in: url)
+            }
+
+            updateDataFromLocalCheckout()
+
+
+
+            await loadChanges()
         } catch {
             errorMessage = "Checkout failed: \(error.localizedDescription)"
         }
     }
 
-    func openRepository(at url: URL) async throws {
-        do {
-            guard try await gitService.isGitRepository(at: url) else {
-                throw NSError(domain: "GitApp", code: 1, userInfo: [NSLocalizedDescriptionKey: "Selected directory is not a Git repository"])
-            }
-
-            // Add to recent repositories if not already present
-            if !recentRepositories.contains(url) {
-                recentRepositories.insert(url, at: 0)
-                // Keep only the last 10 repositories
-                if recentRepositories.count > 10 {
-                    recentRepositories.removeLast()
-                }
-                saveRecentRepositories()
-            }
-
-            // Set as current repository
-            repositoryURL = url
-
-            // Load repository data
-            await loadRepositoryData(from: url)
-        } catch {
-            throw error
+    private func updateDataFromLocalCheckout() {
+        self.branches = branches.map { branch in
+            var updatedBranch = branch
+            updatedBranch.isCurrent = branch.name == currentBranch?.name ?? ""
+            return updatedBranch
         }
     }
 
-    func loadRecentRepositories() async {
-        if let data = UserDefaults.standard.data(forKey: "recentRepositories") {
-            do {
-                let paths = try JSONDecoder().decode([String].self, from: data)
-                recentRepositories = paths.map { URL(fileURLWithPath: $0) }
+    private func updateDataFromRemoteCheckout(from branch: Branch) {
+        self.remotebranches.removeAll(where: {$0.name == branch.name})
 
-                // Validate repositories still exist and are valid
-                recentRepositories = recentRepositories.filter { url in
-                    var isDirectory: ObjCBool = false
-                    let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
-                    return exists && isDirectory.boolValue
-                }
-
-                saveRecentRepositories()
-            } catch {
-                print("Error loading recent repositories: \(error)")
-            }
-        }
+        var tempBranch = branch
+        tempBranch.isCurrent = true
+        self.branches.append(tempBranch)
     }
 
-    private func saveRecentRepositories() {
-        do {
-            let paths = recentRepositories.map { $0.path }
-            let data = try JSONEncoder().encode(paths)
-            UserDefaults.standard.set(data, forKey: "recentRepositories")
-        } catch {
-            print("Error saving recent repositories: \(error)")
-        }
-    }
 
     func refreshState() async {
         guard let url = repositoryURL else { return }
@@ -727,30 +489,37 @@ class GitViewModel {
         isLoading = true
         defer { isLoading = false }
 
-        do {
+
             // Refresh repository data
-//            await loadRepositoryData(from: url)
+            await loadRepositoryData(from: url)
 
             // Refresh changes
             await loadChanges()
 
             // Refresh current branch
-            if let currentBranchName = try await gitService.getCurrentBranch(in: url) {
-                currentBranch = branches.first { $0.name == currentBranchName }
-                selectedBranch = currentBranch
+//            if let currentBranchName = try await gitService.getCurrentBranch(in: url) {
+//                currentBranch = branches.first { $0.name == currentBranchName }
+//                selectedBranch = currentBranch
 
                 // Update LogStore
                 logStore.directory = url
-                logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
+//                logStore.searchTokens = [SearchToken(kind: .revisionRange, text: currentBranchName)]
                 await logStore.refresh()
-            }
-        } catch {
-            errorMessage = "Error refreshing state: \(error.localizedDescription)"
+//            }
+
+    }
+
+
+    func selectRepository(_ url: URL) {
+        repositoryURL = url
+        Task {
+            await loadRepositoryData(from: url)
         }
     }
 
+
     func checkoutCommit(_ hash: String) async {
-        guard let repoURL = selectedRepository else {
+        guard let repoURL = repositoryURL else {
             errorMessage = "No repository selected"
             return
         }
@@ -788,21 +557,6 @@ class GitViewModel {
     }
 
     // MARK: - Sync Operations
-    func pull() async {
-        guard let url = repositoryURL else { return }
-        do {
-            isLoading = true
-            defer { isLoading = false }
-
-            try await gitService.pull(in: url)
-            try await syncState.sync()
-
-            // Reload repository data
-            await loadRepositoryData(from: url)
-        } catch {
-            errorMessage = "Error pulling changes: \(error.localizedDescription)"
-        }
-    }
 
     func push() async {
         guard let url = repositoryURL else { return }
@@ -817,32 +571,7 @@ class GitViewModel {
         }
     }
 
-    // MARK: - File Operations
-    func getStatus() async {
-        guard let url = repositoryURL else { return }
-        do {
-            isLoading = true
-            defer { isLoading = false }
 
-            let status = try await gitService.getStatus(in: url)
-
-        } catch {
-            errorMessage = "Error getting status: \(error.localizedDescription)"
-        }
-    }
-
-    func addFiles(pathspec: String? = nil) async {
-        guard let url = repositoryURL else { return }
-        do {
-            isLoading = true
-            defer { isLoading = false }
-
-            try await gitService.addFiles(in: url, pathspec: pathspec)
-            await getStatus()
-        } catch {
-            errorMessage = "Error adding files: \(error.localizedDescription)"
-        }
-    }
 
     func copyCommitHash(_ hash: String) {
         let pasteboard = NSPasteboard.general
@@ -868,6 +597,55 @@ class GitViewModel {
         Task {
             guard let url = repositoryURL else { return }
             await loadCommitDetails(commit, in: url)
+        }
+    }
+
+    /// Create a new branch and optionally check it out
+    func createBranch(named name: String, checkout: Bool = true) async {
+        guard let url = repositoryURL else {
+            errorMessage = "No repository selected"
+            return
+        }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            // Create the branch
+            try await gitService.createBranch(name, in: url)
+            // Optionally check out the new branch
+            if checkout {
+                try await gitService.switchBranch(to: name, in: url)
+
+            }
+            // Refresh branches and current branch state
+            await loadRepositoryData(from: url)
+//            updateDataFromLocalCheckout()
+        } catch {
+            errorMessage = "Error creating branch: \(error.localizedDescription)"
+        }
+    }
+
+    /// Delete a stash by index
+    func deleteStash(at index: Int) async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await gitService.dropStash(index, in: url)
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Error deleting stash: \(error.localizedDescription)"
+        }
+    }
+
+    func push(branch: Branch, pushTags: Bool) async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await gitService.push(in: url, refspec: branch.name, pushTags: pushTags)
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Push failed: \(error.localizedDescription)"
         }
     }
 }

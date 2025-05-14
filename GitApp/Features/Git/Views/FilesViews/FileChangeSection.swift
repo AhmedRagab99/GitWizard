@@ -77,7 +77,7 @@ struct FileChangeSection: View {
 
             Image(systemName: statusIcon)
                 .foregroundColor(statusColor)
-            Text(fileDiff.filePathDisplay)
+            Text(fileDiff.fromFilePath)
                 .font(.headline)
             Spacer()
 

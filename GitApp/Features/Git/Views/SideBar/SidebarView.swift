@@ -7,14 +7,20 @@
 
 import SwiftUI
 import Foundation
-// SidebarItem enum for sidebar selection logic
-  enum SidebarItem: Identifiable, Equatable {
+
+
+enum SidebarItem: Identifiable, Equatable,Hashable {
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
     static func == (lhs: SidebarItem, rhs: SidebarItem) -> Bool { lhs.id == rhs.id }
     case workspace(WorkspaceSidebarItem)
     case branch(BranchNode)
     case remote(BranchNode)
     case tag(Tag)
     case section(String)
+    case stash(Stash)
     var id: String {
         switch self {
         case .workspace(let w): return "workspace-\(w.id)"
@@ -22,6 +28,7 @@ import Foundation
         case .remote(let r): return "remote-\(r.id)"
         case .tag(let t): return "tag-\(t.id)"
         case .section(let s): return "section-\(s)"
+        case .stash(let s): return "stash-\(s.id)"
         }
     }
     var children: [SidebarItem]? {
@@ -90,48 +97,33 @@ struct SidebarView: View {
     @Binding var selectedWorkspaceItem: WorkspaceSidebarItem
     @State private var filterText: String = ""
     @State private var selectedSidebarItem: SidebarItem? = .workspace(.history)
+    @State private var sidebarItems: [SidebarItem] = []
 
     var body: some View {
-        SidebarOutlineView(
+        SwiftUISidebarView(
             items: sidebarItems,
             selectedItem: $selectedSidebarItem,
-            menuProvider: { item in
-                switch item {
-                case .branch(let node):
-                    let menu = NSMenu()
-                    menu.addItem(ClosureMenuItem(title: "Checkout \(node.name)") {
-                        if let branch = node.branch { Task { await viewModel.checkoutBranch(branch) } }
-                    })
-                    menu.addItem(.separator())
-                    menu.addItem(ClosureMenuItem(title: "Pull origin/\(node.name)") {
-                        Task { await viewModel.performPull() }
-                    })
-                    menu.addItem(ClosureMenuItem(title: "Push to origin/\(node.name)") {
-                        Task { await viewModel.performPush() }
-                    })
-                    menu.addItem(.separator())
-                    menu.addItem(ClosureMenuItem(title: "Copy Full Name") {
-                        if let branch = node.branch { viewModel.copyCommitHash(branch.name) }
-                    })
-                    return menu
-                default: return nil
-                }
-            },
-            branchCellProvider: { node, isSelected in
-                // Build a custom NSView or NSHostingView here using push/pull counts from viewModel
-                // Example: show arrow.down and arrow.up with numbers, and badge for HEAD
-                // You can use a SwiftUI view and wrap it with NSHostingView for best results
-                let view = BranchSidebarCellSwiftUIView(
-                    node: node,
-                    isSelected: isSelected,
-                    isHead: node.branch?.isCurrent == true,
-                    pushCount: viewModel.syncState.commitsAhead ?? 0,
-                    pullCount: viewModel.syncState.shouldPull ? 1 : 0 // Replace with your actual logic
-                )
-                return NSHostingView(rootView: view)
-            }
+            selectedWorkspaceItem: $selectedWorkspaceItem,
+            onBranchAction: handleBranchAction,
+            onRemoteAction: handleRemoteAction,
+            onTagAction: handleTagAction,
+            onStashAction: handleStashAction,
+            refresh: refreshSidebar
         )
-        .frame(minWidth: 240)
+        .frame(minWidth: 240)        
+        
+        .onChange(of: viewModel.branches) {
+            refreshSidebar()
+        }
+        .onChange(of: viewModel.tags) {
+            refreshSidebar()
+        }
+        .onChange(of: viewModel.remotebranches) {
+            refreshSidebar()
+        }
+        .onChange(of: viewModel.stashes) {
+            refreshSidebar()
+        }
         .onChange(of: selectedSidebarItem) { newValue in
             if case let .workspace(item) = newValue {
                 selectedWorkspaceItem = item
@@ -139,8 +131,59 @@ struct SidebarView: View {
         }
     }
 
-    // Build the sidebar items array using your logic
-    var sidebarItems: [SidebarItem] {
+    private func handleBranchAction(_ action: BranchContextAction, _ branch: Branch) {
+            switch action {
+            case .checkout:
+                Task { await viewModel.checkoutBranch(branch) }
+            case .pull:
+                Task { await viewModel.performPull() }
+            case .push:
+                Task { await viewModel.performPush() }
+            case .copyName:
+                viewModel.copyCommitHash(branch.name)
+            // ... handle other actions ...
+            default: break
+            }
+            refreshSidebar()
+        }
+
+        private func handleRemoteAction(_ action: RemoteContextAction, _ branch: Branch) {
+            switch action {
+            case .checkout:
+                Task { await viewModel.checkoutBranch(branch, isRemote: true) }
+            case .copyName:
+                viewModel.copyCommitHash(branch.name)
+            // ... handle other actions ...
+            default: break
+            }
+            refreshSidebar()
+        }
+
+        private func handleTagAction(_ action: TagContextAction, _ tag: Tag) {
+            switch action {
+            case .copyName:
+                viewModel.copyCommitHash(tag.name)
+            // ... handle other actions ...
+            default: break
+            }
+            refreshSidebar()
+        }
+    
+    private func handleStashAction(_ action: StashContextAction, _ tag: Stash)  {
+        switch action {
+        case .apply:
+            Task {
+               await viewModel.applyStash(at: tag.index)
+            }
+        case .delete:
+            Task {
+               await viewModel.deleteStash(at: tag.index)
+            }
+        }
+        refreshSidebar()
+    }
+
+    private func refreshSidebar() {
         var items: [SidebarItem] = []
         // Workspace section
         items.append(.section("Workspace"))
@@ -153,10 +196,15 @@ struct SidebarView: View {
         items.append(.section("Remotes"))
         let remoteTree = buildBranchTreeRevised(from: viewModel.remotebranches)
         items.append(contentsOf: remoteTree.map { .remote($0) })
+        // Stashes Section
+        items.append(.section("Stashes"))
+        items.append(contentsOf: viewModel.stashes.map { .stash($0) })
         // Tags section
         items.append(.section("Tags"))
         items.append(contentsOf: viewModel.tags.map { .tag($0) })
-        return items
+        
+        
+        sidebarItems = items
     }
 
     // Use your existing buildBranchTreeRevised logic
@@ -306,54 +354,3 @@ struct BranchNodeRow: View {
     }
 }
 
-final class ClosureMenuItem: NSMenuItem {
-    private var actionClosure: (() -> Void)?
-    convenience init(title: String, keyEquivalent: String = "", action: @escaping () -> Void) {
-        self.init(title: title, action: #selector(performAction), keyEquivalent: keyEquivalent)
-        self.target = self
-        self.actionClosure = action
-    }
-    @objc private func performAction() { actionClosure?() }
-}
-
-struct BranchSidebarCellSwiftUIView: View {
-    let node: BranchNode
-    let isSelected: Bool
-    let isHead: Bool
-    let pushCount: Int
-    let pullCount: Int
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: node.isFolder ? "folder.fill" : "arrow.triangle.branch")
-                .foregroundColor(.secondary)
-            Text(node.name)
-                .fontWeight(isHead ? .semibold : .regular)
-            if isHead {
-                Text("HEAD")
-                    .font(.caption2)
-                    .padding(.horizontal, 6)
-                    .background(Capsule().fill(Color.blue.opacity(0.2)))
-            }
-            Spacer()
-            if pullCount > 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "arrow.down")
-                    Text("\(pullCount)")
-                }
-                .foregroundColor(.blue)
-            }
-            if pushCount > 0 {
-                HStack(spacing: 2) {
-                    Image(systemName: "arrow.up")
-                    Text("\(pushCount)")
-                }
-                .foregroundColor(.orange)
-            }
-        }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
-        .cornerRadius(6)
-    }
-}

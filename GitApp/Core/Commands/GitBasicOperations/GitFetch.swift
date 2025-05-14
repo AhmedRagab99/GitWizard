@@ -8,7 +8,15 @@
 
 import Foundation
 
-struct GitFetch: Git {
+final class GitFetch: Git {
+    internal init(arguments: [String] = [
+        "git",
+        "fetch",
+    ], directory: URL) {
+        self.arguments = arguments
+        self.directory = directory
+    }
+    
     typealias OutputModel = Void
     var arguments = [
         "git",

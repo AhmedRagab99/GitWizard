@@ -8,7 +8,11 @@
 
 import Foundation
 
-struct GitStatus: Git {
+final class GitStatus: Git {
+    internal init(directory: URL) {
+        self.directory = directory
+    }
+    
     typealias OutputModel = Status
     var arguments: [String] {
         [
