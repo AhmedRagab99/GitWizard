@@ -159,7 +159,7 @@ sequenceDiagram
 ## 📱 Requirements
 
 - macOS 14.0+
-- Xcode 14.0+
+- Xcode 16.0+
 - Swift 5.7+
 
 ## 🚀 Getting Started
