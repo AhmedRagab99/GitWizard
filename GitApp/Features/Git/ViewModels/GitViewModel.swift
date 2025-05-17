@@ -28,6 +28,12 @@ class GitViewModel {
         }
     }
 
+    // Search related properties
+    var searchText: String = ""
+    var searchAuthor: String = ""
+    var searchContent: String = ""
+    var searchAllMatch: Bool = false
+
      var isSearchingRepositories = false
      var selectedBranch: Branch? {
         didSet {
@@ -660,10 +666,10 @@ class GitViewModel {
         do {
             for branch in branches {
                 if !isRemote {
-                    
+
                     // Delete local branch
                     try await gitService.deleteBranch(branch.name, in: url)
-                    
+
                     // Delete remote branch if requested
                     if deleteRemote {
                         try await gitService.deleteBranch(branch.name, in: url, isRemote: true)
@@ -692,6 +698,52 @@ class GitViewModel {
         } catch {
             errorMessage = "Error renaming branch: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Search Operations
+
+    func handleSearch(_ query: String) async {
+        guard !query.isEmpty else {
+            // Reset search when query is empty
+            logStore.searchTokens = []
+            await logStore.refresh()
+            return
+        }
+
+        var searchTokens: [SearchToken] = []
+
+        // Add message/content search
+        if !query.isEmpty {
+            searchTokens.append(SearchToken(kind: .grep, text: query))
+        }
+
+        // Add author search if specified
+        if !searchAuthor.isEmpty {
+            searchTokens.append(SearchToken(kind: .author, text: searchAuthor))
+        }
+
+        // Add content search if specified
+        if !searchContent.isEmpty {
+            searchTokens.append(SearchToken(kind: .s, text: searchContent))
+        }
+
+        // Set all match flag if needed
+        if searchAllMatch {
+            searchTokens.append(SearchToken(kind: .grepAllMatch, text: ""))
+        }
+
+        // Update search tokens and refresh
+        logStore.searchTokens = searchTokens
+        await logStore.refresh()
+    }
+
+    func resetSearch() async {
+        searchText = ""
+        searchAuthor = ""
+        searchContent = ""
+        searchAllMatch = false
+        logStore.searchTokens = []
+        await logStore.refresh()
     }
 }
 

@@ -75,7 +75,7 @@ struct BranchNode: Identifiable {
 enum WorkspaceSidebarItem: String, CaseIterable, Identifiable {
     case workingCopy = "Working Copy"
     case history = "History"
-    case stashes = "Stashes"
+//    case stashes = "Stashes"
 //    case pullRequests = "Pull Requests"
 //    case branchesReview = "Branches Review"
 //    case settings = "Settings"
@@ -84,7 +84,7 @@ enum WorkspaceSidebarItem: String, CaseIterable, Identifiable {
         switch self {
         case .workingCopy: return "folder"
         case .history: return "clock"
-        case .stashes: return "archivebox"
+//        case .stashes: return "archivebox"
 //        case .pullRequests: return "arrow.triangle.branch"
 //        case .branchesReview: return "point.topleft.down.curvedto.point.bottomright.up"
 //        case .settings: return "gearshape"

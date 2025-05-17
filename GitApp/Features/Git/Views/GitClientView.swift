@@ -17,6 +17,7 @@ struct GitClientView: View {
     @State private var keepStaged = false
     @State private var showPushSheet = false
     @State private var showPullSheet = false
+    @State private var showSearchFilters = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -33,6 +34,19 @@ struct GitClientView: View {
                     Text(" coming soon...")
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        }
+        .searchable(text: $viewModel.searchText, prompt: "Search commits...")
+        .searchScopes($showSearchFilters) {
+            SearchFilterView(viewModel: viewModel)
+        }
+        .onChange(of: viewModel.searchText) { oldValue, newValue in
+            // Debounce search to avoid too many updates
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                if viewModel.searchText == newValue { // Only proceed if the text hasn't changed
+                    await viewModel.handleSearch(newValue)
                 }
             }
         }
@@ -235,6 +249,57 @@ struct GitClientView: View {
     }
 }
 
+struct SearchFilterView: View {
+    @Bindable var viewModel: GitViewModel
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Author filter
+            HStack {
+                Text("Author:")
+                    .foregroundStyle(.secondary)
+                TextField("Filter by author", text: $viewModel.searchAuthor)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: viewModel.searchAuthor) { _, _ in
+                        Task {
+                            await viewModel.handleSearch(viewModel.searchText)
+                        }
+                    }
+            }
+
+            // Content filter
+            HStack {
+                Text("Content:")
+                    .foregroundStyle(.secondary)
+                TextField("Filter by content", text: $viewModel.searchContent)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: viewModel.searchContent) { _, _ in
+                        Task {
+                            await viewModel.handleSearch(viewModel.searchText)
+                        }
+                    }
+            }
+
+            // All match toggle
+            Toggle("Match all filters", isOn: $viewModel.searchAllMatch)
+                .onChange(of: viewModel.searchAllMatch) { _, _ in
+                    Task {
+                        await viewModel.handleSearch(viewModel.searchText)
+                    }
+                }
+
+            // Reset button
+            Button("Reset Filters") {
+                Task {
+                    await viewModel.resetSearch()
+                }
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding()
+        .frame(width: 300)
+    }
+}
 
 // Syntax Highlighting Colors
 enum SyntaxTheme {

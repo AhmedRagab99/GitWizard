@@ -12,6 +12,7 @@ struct CommitDetailHeader: View {
     let refs: [String]
     @Bindable var viewModel: GitViewModel
      var onClose: () -> Void // Add closure for handling close action
+    @StateObject private var toastManager = ToastManager()
 
     private var commitIcon: String {
         switch commit.commitType {
@@ -51,6 +52,7 @@ struct CommitDetailHeader: View {
                 HStack(spacing: 8) {
                     Button(action: {
                         viewModel.copyCommitHash(commit.hash)
+                        toastManager.show(message: "Commit hash copied", type: .success)
                     }) {
                         Label("Copy Hash", systemImage: "doc.on.doc")
                     }
@@ -136,5 +138,6 @@ struct CommitDetailHeader: View {
                 }
             }
         }
+        .toast(toastManager: toastManager)
     }
 }
