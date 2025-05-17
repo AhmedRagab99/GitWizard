@@ -270,4 +270,8 @@ actor GitService {
     func unstageAllChanges(in directory: URL) async throws {
         _ = try await Process.output(GitUnstageAll(directory: directory))
     }
+
+    func renameBranch(_ oldName: String, to newName: String, in directory: URL) async throws {
+        try await Process.output(GitBranchRename(directory: directory, oldBranchName: oldName, newBranchName: newName))
+    }
 }

@@ -652,18 +652,24 @@ class GitViewModel {
         }
     }
 
-    func deleteBranches(_ branches: [Branch], deleteRemote: Bool) async {
+    func deleteBranches(_ branches: [Branch], deleteRemote: Bool = false,isRemote: Bool = false) async {
         guard let url = repositoryURL else { return }
         isLoading = true
         defer { isLoading = false }
 
         do {
             for branch in branches {
-                // Delete local branch
-                try await gitService.deleteBranch(branch.name, in: url)
-
-                // Delete remote branch if requested
-                if deleteRemote {
+                if !isRemote {
+                    
+                    // Delete local branch
+                    try await gitService.deleteBranch(branch.name, in: url)
+                    
+                    // Delete remote branch if requested
+                    if deleteRemote {
+                        try await gitService.deleteBranch(branch.name, in: url, isRemote: true)
+                    }
+                }
+                else {
                     try await gitService.deleteBranch(branch.name, in: url, isRemote: true)
                 }
             }
@@ -672,6 +678,19 @@ class GitViewModel {
             await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Error deleting branches: \(error.localizedDescription)"
+        }
+    }
+
+    func renameBranch(_ branch: Branch, to newName: String) async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await gitService.renameBranch(branch.name, to: newName, in: url)
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Error renaming branch: \(error.localizedDescription)"
         }
     }
 }

@@ -10,6 +10,7 @@ struct SwiftUISidebarView: View {
     var onRemoteAction: (RemoteContextAction, Branch) -> Void
     var onTagAction: (TagContextAction, Tag) -> Void
     var onStashAction: (StashContextAction, Stash) -> Void
+    var onBranchDoubleClick: (Branch) -> Void
     var refresh: () -> Void
     // Add providers for context menus or specific actions if needed
     // var menuProvider: ((SidebarItem) -> Menu<Button<Label<Text, Image>>>)? = nil
@@ -26,12 +27,17 @@ struct SwiftUISidebarView: View {
                         selectedItem = .workspace(selectedWorkspaceItem)
                     }
                 }
+                .onTapGesture(count: 2) {
+                    if case let .branch(node) = item, let branch = node.branch {
+                        onBranchDoubleClick(branch)
+                    }
+                }
                 .contextMenu {
                     contextMenu(for: item)
                 }
         }
         .listStyle(.sidebar) // Use the sidebar list style for appropriate appearance
-//        .background(Color(nsColor: NSColor(named: "SidebarBackground") ?? NSColor(calibratedRed: 23/255, green: 34/255, blue: 56/255, alpha: 1))) // Match background
+        .background(Color(nsColor: NSColor(named: "SidebarBackground") ?? NSColor(calibratedRed: 23/255, green: 34/255, blue: 56/255, alpha: 1))) // Match background
     }
 
     // Context menu builder
@@ -55,13 +61,6 @@ struct SwiftUISidebarView: View {
                 }
                 Button("Push to origin/\(branch.name) (tracked)") {
                     onBranchAction(.push, branch); refresh()
-                }
-                Menu("Push to") {
-                    // TODO: List remotes/branches
-                    
-                }
-                Menu("Track Remote Branch") {
-                    // TODO: List remotes/branches
                 }
                 Divider()
                 Button("Diff Against Current") {
@@ -94,6 +93,9 @@ struct SwiftUISidebarView: View {
                 Button("Copy Remote Branch Name to Clipboard") {
                     onRemoteAction(.copyName, branch); refresh()
                 }
+                Button("Delete Remote Branch") {
+                    onRemoteAction(.delete,branch); refresh()
+                }
             }
         case .tag(let tag):
             Button("Copy Tag Name to Clipboard") {
@@ -106,11 +108,11 @@ struct SwiftUISidebarView: View {
             Button("Apply Stash") {
                 onStashAction(.apply,s); refresh()
             }
-            
+
             Button("Delete Stash") {
                 onStashAction(.delete,s); refresh()
             }
-            
+
         default:
             EmptyView()
         }
@@ -268,6 +270,6 @@ struct ModernPillBadgeView: View {
 // MARK: - Context Menu Action Enums
 
 enum BranchContextAction { case checkout, merge, rebase, pull, push, diff, rename, delete, copyName, createPR }
-enum RemoteContextAction { case checkout, track, copyName }
+enum RemoteContextAction { case checkout, track, copyName,delete }
 enum TagContextAction { case copyName, delete }
 enum StashContextAction {case apply,delete}
