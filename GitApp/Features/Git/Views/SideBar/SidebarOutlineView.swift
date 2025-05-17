@@ -37,7 +37,6 @@ struct SwiftUISidebarView: View {
                 }
         }
         .listStyle(.sidebar) // Use the sidebar list style for appropriate appearance
-        .background(Color(nsColor: NSColor(named: "SidebarBackground") ?? NSColor(calibratedRed: 23/255, green: 34/255, blue: 56/255, alpha: 1))) // Match background
     }
 
     // Context menu builder

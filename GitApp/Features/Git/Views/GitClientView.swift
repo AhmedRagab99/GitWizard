@@ -1,11 +1,12 @@
 import SwiftUI
-
-// Import all models
 import Foundation
 import AppKit
 
+// Import ThemeManager
+
 struct GitClientView: View {
     @Bindable var viewModel: GitViewModel
+    var themeManager = ThemeManager()
     var url: URL
     @State private var selectedWorkspaceItem: WorkspaceSidebarItem = .history
     @State private var showStashSheet = false
@@ -54,6 +55,21 @@ struct GitClientView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 // Primary Actions Group
                 Group {
+                    // Theme Toggle
+                    Button(action: {
+                        themeManager.isDarkMode.toggle()
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName:"sun.max.fill")
+                                .font(.system(size: 20))
+                            Text("Switch Theme")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Switch Theme")
+                    
                     Button(action: {
                             showPullSheet = true
                     }) {
@@ -148,23 +164,11 @@ struct GitClientView: View {
                     .buttonStyle(.plain)
                 }
 
-//                Divider()
-//                    .padding(.horizontal, 8)
+                Divider()
+                    .padding(.horizontal, 8)
 
                 // Secondary Actions Group
-                Group {
-//                    Button(action: {
-//                        // Show merge sheet
-//                    }) {
-//                        VStack(spacing: 4) {
-//                            Image(systemName: "arrow.triangle.merge")
-//                                .font(.system(size: 20))
-//                            Text("Merge")
-//                                .font(.caption)
-//                        }
-//                        .frame(width: 60)
-//                    }
-//                    .buttonStyle(.plain)
+                               
 
                     Button(action: {
                         showDeleteAlert = true
@@ -178,7 +182,6 @@ struct GitClientView: View {
                         .frame(width: 60)
                     }
                     .buttonStyle(.plain)
-                }
             }
         }
         .loading(viewModel.isLoading)
