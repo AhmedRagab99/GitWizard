@@ -41,9 +41,15 @@ struct FileChangeSection: View {
                         ChunkView(
                             chunk: chunk,
                             language: language,
-                            onStage: { viewModel.stageChunk(chunk, in: fileDiff) },
-                            onUnstage: { viewModel.unstageChunk(chunk, in: fileDiff) },
-                            onReset: { viewModel.resetChunk(chunk, in: fileDiff) }
+                            onStage: {
+                                viewModel.stageChunk(chunk, in: fileDiff)
+                            },
+                            onUnstage: {
+                                viewModel.unstageChunk(chunk, in: fileDiff)
+                            },
+                            onReset: {
+                                viewModel.resetChunk(chunk, in: fileDiff)
+                            }
                         )
                     }
                 }

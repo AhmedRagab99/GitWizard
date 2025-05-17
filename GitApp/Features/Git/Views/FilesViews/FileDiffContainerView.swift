@@ -45,44 +45,25 @@ struct FileDiffContainerView: View {
             // Diff content
             FileDiffView(
                 fileDiff: fileDiff,
-                onStage: { chunk in viewModel.stageChunk(chunk, in: fileDiff) },
-                onUnstage: { chunk in viewModel.unstageChunk(chunk, in: fileDiff) },
-                onReset: { chunk in viewModel.resetChunk(chunk, in: fileDiff) }
+                onStage: { chunk in
+                    viewModel.stageChunk(chunk, in: fileDiff)
+                },
+                onUnstage: { chunk in
+                    viewModel.unstageChunk(chunk, in: fileDiff)
+                },
+                onReset: { chunk in
+                    viewModel.resetChunk(chunk, in: fileDiff)
+                }
             )
             .background(Color(.windowBackgroundColor))
-            .cornerRadius(12)
+//            .cornerRadius(12)
         }
         .background(
             RoundedRectangle(cornerRadius: 14)
                 .fill(Color(.controlBackgroundColor))
                 .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
         )
-        .padding(8)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button(action: {
-                        viewModel.stageChunk(fileDiff.chunks.first!, in: fileDiff)
-                    }) {
-                        Label("Stage All", systemImage: "plus.circle")
-                    }
-
-                    Button(action: {
-                        viewModel.unstageChunk(fileDiff.chunks.first!, in: fileDiff)
-                    }) {
-                        Label("Unstage All", systemImage: "minus.circle")
-                    }
-
-                    Button(action: {
-                        viewModel.resetChunk(fileDiff.chunks.first!, in: fileDiff)
-                    }) {
-                        Label("Reset All", systemImage: "arrow.uturn.backward.circle")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
-        }
+        .padding(8)       
     }
 }
 

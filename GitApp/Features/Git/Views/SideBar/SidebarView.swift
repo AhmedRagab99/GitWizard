@@ -75,19 +75,19 @@ struct BranchNode: Identifiable {
 enum WorkspaceSidebarItem: String, CaseIterable, Identifiable {
     case workingCopy = "Working Copy"
     case history = "History"
-    case stashes = "Stashes"
-    case pullRequests = "Pull Requests"
-    case branchesReview = "Branches Review"
-    case settings = "Settings"
+//    case stashes = "Stashes"
+//    case pullRequests = "Pull Requests"
+//    case branchesReview = "Branches Review"
+//    case settings = "Settings"
     var id: String { rawValue }
     var icon: String {
         switch self {
         case .workingCopy: return "folder"
         case .history: return "clock"
-        case .stashes: return "archivebox"
-        case .pullRequests: return "arrow.triangle.branch"
-        case .branchesReview: return "point.topleft.down.curvedto.point.bottomright.up"
-        case .settings: return "gearshape"
+//        case .stashes: return "archivebox"
+//        case .pullRequests: return "arrow.triangle.branch"
+//        case .branchesReview: return "point.topleft.down.curvedto.point.bottomright.up"
+//        case .settings: return "gearshape"
         }
     }
 }
@@ -98,6 +98,9 @@ struct SidebarView: View {
     @State private var filterText: String = ""
     @State private var selectedSidebarItem: SidebarItem? = .workspace(.history)
     @State private var sidebarItems: [SidebarItem] = []
+    @State private var showRenameSheet = false
+    @State private var branchToRename: Branch?
+    @StateObject private var toastManager = ToastManager()
 
     var body: some View {
         SwiftUISidebarView(
@@ -108,10 +111,25 @@ struct SidebarView: View {
             onRemoteAction: handleRemoteAction,
             onTagAction: handleTagAction,
             onStashAction: handleStashAction,
+            onBranchDoubleClick: { branch in
+                branchToRename = branch
+                showRenameSheet = true
+            },
             refresh: refreshSidebar
         )
-        .frame(minWidth: 240)        
-        
+        .frame(minWidth: 240)
+        .toast(toastManager: toastManager)
+        .sheet(isPresented: $showRenameSheet) {
+            if let branch = branchToRename {
+                RenameBranchSheet(
+                    isPresented: $showRenameSheet,
+                    branch: branch,
+                    onRename: { newName in
+                        await viewModel.renameBranch(branch, to: newName)
+                    }
+                )
+            }
+        }
         .onChange(of: viewModel.branches) {
             refreshSidebar()
         }
@@ -132,43 +150,51 @@ struct SidebarView: View {
     }
 
     private func handleBranchAction(_ action: BranchContextAction, _ branch: Branch) {
-            switch action {
-            case .checkout:
-                Task { await viewModel.checkoutBranch(branch) }
-            case .pull:
-                Task { await viewModel.performPull() }
-            case .push:
-                Task { await viewModel.performPush() }
-            case .copyName:
-                viewModel.copyCommitHash(branch.name)
-            // ... handle other actions ...
-            default: break
-            }
-            refreshSidebar()
+        switch action {
+        case .checkout:
+            Task { await viewModel.checkoutBranch(branch) }
+        case .pull:
+            Task { await viewModel.performPull() }
+        case .push:
+            Task { await viewModel.performPush() }
+        case .copyName:
+            viewModel.copyCommitHash(branch.name)
+            toastManager.show(message: "Branch name copied to clipboard", type: .success)
+        case .rename:
+            branchToRename = branch
+            showRenameSheet = true
+        case .delete:
+            Task { await viewModel.deleteBranches([branch],deleteRemote: false) }
+        default: break
         }
+        refreshSidebar()
+    }
 
-        private func handleRemoteAction(_ action: RemoteContextAction, _ branch: Branch) {
-            switch action {
-            case .checkout:
-                Task { await viewModel.checkoutBranch(branch, isRemote: true) }
-            case .copyName:
-                viewModel.copyCommitHash(branch.name)
-            // ... handle other actions ...
-            default: break
-            }
-            refreshSidebar()
+    private func handleRemoteAction(_ action: RemoteContextAction, _ branch: Branch) {
+        switch action {
+        case .checkout:
+            Task { await viewModel.checkoutBranch(branch, isRemote: true) }
+        case .copyName:
+            viewModel.copyCommitHash(branch.name)
+            toastManager.show(message: "Branch name copied to clipboard", type: .success)
+        case .delete:
+            Task { await viewModel.deleteBranches([branch],isRemote: true )}
+        // ... handle other actions ...
+        default: break
         }
+        refreshSidebar()
+    }
 
-        private func handleTagAction(_ action: TagContextAction, _ tag: Tag) {
-            switch action {
-            case .copyName:
-                viewModel.copyCommitHash(tag.name)
-            // ... handle other actions ...
-            default: break
-            }
-            refreshSidebar()
+    private func handleTagAction(_ action: TagContextAction, _ tag: Tag) {
+        switch action {
+        case .copyName:
+            viewModel.copyCommitHash(tag.name)
+        // ... handle other actions ...
+        default: break
         }
-    
+        refreshSidebar()
+    }
+
     private func handleStashAction(_ action: StashContextAction, _ tag: Stash)  {
         switch action {
         case .apply:
@@ -202,8 +228,8 @@ struct SidebarView: View {
         // Tags section
         items.append(.section("Tags"))
         items.append(contentsOf: viewModel.tags.map { .tag($0) })
-        
-        
+
+
         sidebarItems = items
     }
 

@@ -28,6 +28,12 @@ class GitViewModel {
         }
     }
 
+    // Search related properties
+    var searchText: String = ""
+    var searchAuthor: String = ""
+    var searchContent: String = ""
+    var searchAllMatch: Bool = false
+
      var isSearchingRepositories = false
      var selectedBranch: Branch? {
         didSet {
@@ -41,6 +47,7 @@ class GitViewModel {
      var stagedDiff: Diff?
      var unstagedDiff: Diff?
      var untrackedFiles: [String] = []
+
     var syncState = SyncState()
     var commits = [Commit]()
 
@@ -242,7 +249,7 @@ class GitViewModel {
             errorMessage = "Pull failed: \(error.localizedDescription)"
         }
     }
-    
+
     func pull(remote: String, remoteBranch: String, localBranch: String, options: PullSheet.PullOptions) async {
         guard let url = repositoryURL else { return }
         isLoading = true
@@ -323,6 +330,7 @@ class GitViewModel {
             // Update untracked files
             self.untrackedFiles = status.untrackedFiles
 
+
             // Update selected file diff if needed
             if let selectedPath = selectedFileDiff?.fromFilePath {
                 if let stagedFile = stagedDiff.fileDiffs.first(where: { $0.fromFilePath == selectedPath }) {
@@ -332,7 +340,8 @@ class GitViewModel {
                 }
             }
         } catch {
-            print("Error loading changes: \(error)")
+
+            errorMessage = "Error loading changes: \(error)"
         }
     }
 
@@ -341,7 +350,7 @@ class GitViewModel {
 
         Task {
             do {
-                try await gitService.stageChunk(chunk, in: fileDiff, directory: url)
+               try await gitService.stageChunk(chunk, in: fileDiff, directory: url)
                 await loadChanges()
             } catch {
                 errorMessage = "Error staging chunk: \(error.localizedDescription)"
@@ -647,6 +656,94 @@ class GitViewModel {
         } catch {
             errorMessage = "Push failed: \(error.localizedDescription)"
         }
+    }
+
+    func deleteBranches(_ branches: [Branch], deleteRemote: Bool = false,isRemote: Bool = false) async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            for branch in branches {
+                if !isRemote {
+
+                    // Delete local branch
+                    try await gitService.deleteBranch(branch.name, in: url)
+
+                    // Delete remote branch if requested
+                    if deleteRemote {
+                        try await gitService.deleteBranch(branch.name, in: url, isRemote: true)
+                    }
+                }
+                else {
+                    try await gitService.deleteBranch(branch.name, in: url, isRemote: true)
+                }
+            }
+
+            // Refresh repository data
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Error deleting branches: \(error.localizedDescription)"
+        }
+    }
+
+    func renameBranch(_ branch: Branch, to newName: String) async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await gitService.renameBranch(branch.name, to: newName, in: url)
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Error renaming branch: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Search Operations
+
+    func handleSearch(_ query: String) async {
+        guard !query.isEmpty else {
+            // Reset search when query is empty
+            logStore.searchTokens = []
+            await logStore.refresh()
+            return
+        }
+
+        var searchTokens: [SearchToken] = []
+
+        // Add message/content search
+        if !query.isEmpty {
+            searchTokens.append(SearchToken(kind: .grep, text: query))
+        }
+
+        // Add author search if specified
+        if !searchAuthor.isEmpty {
+            searchTokens.append(SearchToken(kind: .author, text: searchAuthor))
+        }
+
+        // Add content search if specified
+        if !searchContent.isEmpty {
+            searchTokens.append(SearchToken(kind: .s, text: searchContent))
+        }
+
+        // Set all match flag if needed
+        if searchAllMatch {
+            searchTokens.append(SearchToken(kind: .grepAllMatch, text: ""))
+        }
+
+        // Update search tokens and refresh
+        logStore.searchTokens = searchTokens
+        await logStore.refresh()
+    }
+
+    func resetSearch() async {
+        searchText = ""
+        searchAuthor = ""
+        searchContent = ""
+        searchAllMatch = false
+        logStore.searchTokens = []
+        await logStore.refresh()
     }
 }
 

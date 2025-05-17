@@ -15,6 +15,7 @@ struct GitBranchDelete: Git {
             "--delete",
         ]
         if isRemote {
+            arg.append("origin")
             arg.append("-r")
         }
         arg.append(branchName)

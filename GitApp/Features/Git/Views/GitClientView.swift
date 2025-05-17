@@ -1,11 +1,12 @@
 import SwiftUI
-
-// Import all models
 import Foundation
 import AppKit
 
+// Import ThemeManager
+
 struct GitClientView: View {
     @Bindable var viewModel: GitViewModel
+    var themeManager = ThemeManager()
     var url: URL
     @State private var selectedWorkspaceItem: WorkspaceSidebarItem = .history
     @State private var showStashSheet = false
@@ -17,6 +18,7 @@ struct GitClientView: View {
     @State private var keepStaged = false
     @State private var showPushSheet = false
     @State private var showPullSheet = false
+    @State private var showSearchFilters = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -30,18 +32,44 @@ struct GitClientView: View {
                     HistoryView(viewModel: viewModel)
                 } else {
                     // Optionally, add a search view or placeholder
-                    Text("Search coming soon...")
+                    Text(" coming soon...")
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
-        .loading(viewModel.isLoading)
-        .errorAlert(viewModel.errorMessage)
+        .searchable(text: $viewModel.searchText, prompt: "Search commits...")
+        .searchScopes($showSearchFilters) {
+            SearchFilterView(viewModel: viewModel)
+        }
+        .onChange(of: viewModel.searchText) { oldValue, newValue in
+            // Debounce search to avoid too many updates
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                if viewModel.searchText == newValue { // Only proceed if the text hasn't changed
+                    await viewModel.handleSearch(newValue)
+                }
+            }
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 // Primary Actions Group
                 Group {
+                    // Theme Toggle
+                    Button(action: {
+                        themeManager.isDarkMode.toggle()
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName:"sun.max.fill")
+                                .font(.system(size: 20))
+                            Text("Switch Theme")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Switch Theme")
+                    
                     Button(action: {
                             showPullSheet = true
                     }) {
@@ -89,6 +117,7 @@ struct GitClientView: View {
 
                     Button(action: {
                         // Show commit sheet
+                        selectedWorkspaceItem = .workingCopy
                     }) {
                         VStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
@@ -139,19 +168,7 @@ struct GitClientView: View {
                     .padding(.horizontal, 8)
 
                 // Secondary Actions Group
-                Group {
-                    Button(action: {
-                        // Show merge sheet
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "arrow.triangle.merge")
-                                .font(.system(size: 20))
-                            Text("Merge")
-                                .font(.caption)
-                        }
-                        .frame(width: 60)
-                    }
-                    .buttonStyle(.plain)
+                               
 
                     Button(action: {
                         showDeleteAlert = true
@@ -165,9 +182,10 @@ struct GitClientView: View {
                         .frame(width: 60)
                     }
                     .buttonStyle(.plain)
-                }
             }
         }
+        .loading(viewModel.isLoading)
+        .errorAlert(viewModel.errorMessage)
         .sheet(isPresented: $showPushSheet) {
             PushSheet(
                 isPresented: $showPushSheet,
@@ -219,25 +237,72 @@ struct GitClientView: View {
                 }
             )
         }
+        .sheet(isPresented: $showDeleteAlert) {
+            DeleteBranchesView(
+                isPresented: $showDeleteAlert,
+                branches: viewModel.branches,
+                onDelete: { branches, deleteRemote in
+                    await viewModel.deleteBranches(branches, deleteRemote: deleteRemote)
+                }
+            )
+        }
         .onAppear {
             viewModel.selectRepository(url)
-
-        }
-        .alert("Delete Branch", isPresented: $showDeleteAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-//                if let branch = viewModel.currentBranch {
-//                    Task {
-//                        await viewModel.deleteBranch(branch)
-//                    }
-//                }
-            }
-        } message: {
-            Text("Are you sure you want to delete this branch?")
         }
     }
 }
 
+struct SearchFilterView: View {
+    @Bindable var viewModel: GitViewModel
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Author filter
+            HStack {
+                Text("Author:")
+                    .foregroundStyle(.secondary)
+                TextField("Filter by author", text: $viewModel.searchAuthor)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: viewModel.searchAuthor) { _, _ in
+                        Task {
+                            await viewModel.handleSearch(viewModel.searchText)
+                        }
+                    }
+            }
+
+            // Content filter
+            HStack {
+                Text("Content:")
+                    .foregroundStyle(.secondary)
+                TextField("Filter by content", text: $viewModel.searchContent)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: viewModel.searchContent) { _, _ in
+                        Task {
+                            await viewModel.handleSearch(viewModel.searchText)
+                        }
+                    }
+            }
+
+            // All match toggle
+            Toggle("Match all filters", isOn: $viewModel.searchAllMatch)
+                .onChange(of: viewModel.searchAllMatch) { _, _ in
+                    Task {
+                        await viewModel.handleSearch(viewModel.searchText)
+                    }
+                }
+
+            // Reset button
+            Button("Reset Filters") {
+                Task {
+                    await viewModel.resetSearch()
+                }
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding()
+        .frame(width: 300)
+    }
+}
 
 // Syntax Highlighting Colors
 enum SyntaxTheme {

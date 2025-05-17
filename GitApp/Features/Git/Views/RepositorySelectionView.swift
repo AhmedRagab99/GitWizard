@@ -78,8 +78,13 @@ struct RepositorySelectionView: View {
                             RoundedRectangle(cornerRadius: 8)
                                 .fill(url == selectedRepository ? Color.accentColor.opacity(0.15) : Color.clear)
                         )
-
                         .contextMenu {
+                            Button(role: .destructive) {
+                                handleWindow(with: url)
+                            } label: {
+                                Label("Open Repo", systemImage: "folder")
+                            }
+                            
                             Button(role: .destructive) {
                                 viewModel.removeFromRecentRepositories(url)
                                 if url == selectedRepository {
@@ -88,12 +93,7 @@ struct RepositorySelectionView: View {
                             } label: {
                                 Label("Remove from Recent", systemImage: "trash")
                             }
-
-                            Button(role: .destructive) {
-                                handleWindow(with: url)
-                            } label: {
-                                Label("Open Repo", systemImage: "folder")
-                            }
+                        
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
