@@ -5,20 +5,15 @@ A modern, SwiftUI-based Git client for macOS that provides an intuitive interfac
 ## 📸 Screenshots
 
 ### Main Interface
-![Main Interface](https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=1200&auto=format&fit=crop&q=80)
-*Main application interface showing repository overview and branch management*
+ ## History View 
 
-### Commit History
-![Commit History](https://images.unsplash.com/photo-1555066931-bf19f8fd8865?w=1200&auto=format&fit=crop&q=80)
-*Detailed commit history with diff visualization*
+<img width="1503" alt="Image" src="https://github.com/user-attachments/assets/87fbf454-9c6c-4556-a217-4000f2c1c263" />
+*History View with showing commits,branches,remotes and commit detail*
 
-### Branch Management
-![Branch Management](https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=1200&auto=format&fit=crop&q=80)
-*Branch operations and management interface*
+### Commit View
 
-### File Diff View
-![File Diff](https://images.unsplash.com/photo-1555066931-bf19f8fd8865?w=1200&auto=format&fit=crop&q=80)
-*File difference visualization with syntax highlighting*
+<img width="1714" alt="Image" src="https://github.com/user-attachments/assets/2ff4f608-0d92-4f04-af0a-08136ebbd255" />
+*Commit View and Staged and unstaged files*
 
 ## 🏗 Architecture
 
