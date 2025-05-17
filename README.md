@@ -194,4 +194,3 @@ SOFTWARE.
 
 ## 👥 Contributing
 
-[Add contribution guidelines here]
