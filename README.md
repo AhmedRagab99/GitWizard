@@ -11,24 +11,11 @@ A modern, SwiftUI-based Git client that brings the power of Git to your fingerti
 
 [Features](#-key-features) • [Architecture](#-architecture) • [Installation](#-getting-started) • 
 
-<img width="1714" alt="GitApp Interface" src="https://github.com/user-attachments/assets/2ff4f608-0d92-4f04-af0a-08136ebbd255" />
+
+<img width="1714" alt="Image" src="https://github.com/user-attachments/assets/87fbf454-9c6c-4556-a217-4000f2c1c263" />
+
 
 </div>
-## 📸 Screenshots
-
-### Main Interface
- ## History View 
-
-<img width="1503" alt="Image" src="https://github.com/user-attachments/assets/87fbf454-9c6c-4556-a217-4000f2c1c263" />
-*History View with showing commits,branches,remotes and commit detail*
-
-### Commit View
-
-<img width="1714" alt="Image" src="https://github.com/user-attachments/assets/2ff4f608-0d92-4f04-af0a-08136ebbd255" />
-*Commit View and Staged and unstaged files*
-
-
-
 
 
 ## 🎯 Key Features
