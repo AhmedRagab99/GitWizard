@@ -15,6 +15,19 @@ A modern, SwiftUI-based Git client for macOS that provides an intuitive interfac
 <img width="1714" alt="Image" src="https://github.com/user-attachments/assets/2ff4f608-0d92-4f04-af0a-08136ebbd255" />
 *Commit View and Staged and unstaged files*
 
+
+
+
+
+## 🎯 Key Features
+
+- Repository Management
+- Branch Operations
+- Commit History
+- File Diff Viewing
+- Stash Management
+- Tag Management
+- Merge Operations
 ## 🏗 Architecture
 
 The project follows MVVM (Model-View-ViewModel) architecture with a clear separation of concerns:
@@ -81,15 +94,6 @@ sequenceDiagram
     VM-->>V: UI Update
 ```
 
-## 🎯 Key Features
-
-- Repository Management
-- Branch Operations
-- Commit History
-- File Diff Viewing
-- Stash Management
-- Tag Management
-- Merge Operations
 
 ## 📦 Core Components
 
@@ -120,27 +124,7 @@ sequenceDiagram
 - `LogStore`: Commit history management
 - `SyncState`: Repository synchronization state
 
-## 🎨 UI Components
 
-### Main Views
-
-- `GitClientView`: Main application interface
-- `RepositorySelectionView`: Repository selection and management
-- `HistoryView`: Commit history visualization
-- `CommitView`: Commit details and operations
-- `CloneRepositoryView`: Repository cloning interface
-
-### Feature Views
-
-- Branch Management
-  - `CreateBranchSheet`
-  - `RenameBranchSheet`
-  - `DeleteBranchesView`
-- Stash Operations
-  - `CreateStashSheet`
-- Sync Operations
-  - `PullSheet`
-  - `PushSheet`
 
 ## 🛠 Technical Stack
 
@@ -150,11 +134,6 @@ sequenceDiagram
 - Git command-line interface integration
 - Modern Swift features and best practices
 
-## 🔒 Security
-
-- Secure credential handling
-- Safe file operations
-- Protected Git operations
 
 ## 📱 Requirements
 
@@ -170,27 +149,7 @@ sequenceDiagram
 
 ## 📝 License
 
-MIT License
-
-Copyright (c) 2024 GitApp
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 👥 Contributing
 
