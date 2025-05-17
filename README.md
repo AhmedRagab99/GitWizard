@@ -1,7 +1,19 @@
-# GitApp - Modern Git Client for macOS
+# 🚀 GitApp - Modern Git Client for macOS
 
-A modern, SwiftUI-based Git client for macOS that provides an intuitive interface for version control operations.
+<div align="center">
 
+![Swift](https://img.shields.io/badge/Swift-5.7-orange.svg)
+![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey.svg)
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+![Xcode](https://img.shields.io/badge/Xcode-16.0+-blue.svg)
+
+A modern, SwiftUI-based Git client that brings the power of Git to your fingertips with a beautiful, intuitive interface.
+
+[Features](#-key-features) • [Architecture](#-architecture) • [Installation](#-getting-started) • 
+
+<img width="1714" alt="GitApp Interface" src="https://github.com/user-attachments/assets/2ff4f608-0d92-4f04-af0a-08136ebbd255" />
+
+</div>
 ## 📸 Screenshots
 
 ### Main Interface
