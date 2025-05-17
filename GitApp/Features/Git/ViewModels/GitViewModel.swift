@@ -663,7 +663,7 @@ class GitViewModel {
                 try await gitService.deleteBranch(branch.name, in: url)
 
                 // Delete remote branch if requested
-                if deleteRemote && branch.isRemote {
+                if deleteRemote {
                     try await gitService.deleteBranch(branch.name, in: url, isRemote: true)
                 }
             }
