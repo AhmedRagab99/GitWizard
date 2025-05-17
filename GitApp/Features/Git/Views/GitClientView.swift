@@ -30,14 +30,12 @@ struct GitClientView: View {
                     HistoryView(viewModel: viewModel)
                 } else {
                     // Optionally, add a search view or placeholder
-                    Text("Search coming soon...")
+                    Text(" coming soon...")
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
-        .loading(viewModel.isLoading)
-        .errorAlert(viewModel.errorMessage)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 // Primary Actions Group
@@ -89,6 +87,7 @@ struct GitClientView: View {
 
                     Button(action: {
                         // Show commit sheet
+                        selectedWorkspaceItem = .workingCopy
                     }) {
                         VStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
@@ -135,23 +134,23 @@ struct GitClientView: View {
                     .buttonStyle(.plain)
                 }
 
-                Divider()
-                    .padding(.horizontal, 8)
+//                Divider()
+//                    .padding(.horizontal, 8)
 
                 // Secondary Actions Group
                 Group {
-                    Button(action: {
-                        // Show merge sheet
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "arrow.triangle.merge")
-                                .font(.system(size: 20))
-                            Text("Merge")
-                                .font(.caption)
-                        }
-                        .frame(width: 60)
-                    }
-                    .buttonStyle(.plain)
+//                    Button(action: {
+//                        // Show merge sheet
+//                    }) {
+//                        VStack(spacing: 4) {
+//                            Image(systemName: "arrow.triangle.merge")
+//                                .font(.system(size: 20))
+//                            Text("Merge")
+//                                .font(.caption)
+//                        }
+//                        .frame(width: 60)
+//                    }
+//                    .buttonStyle(.plain)
 
                     Button(action: {
                         showDeleteAlert = true
@@ -168,6 +167,8 @@ struct GitClientView: View {
                 }
             }
         }
+        .loading(viewModel.isLoading)
+        .errorAlert(viewModel.errorMessage)
         .sheet(isPresented: $showPushSheet) {
             PushSheet(
                 isPresented: $showPushSheet,
@@ -219,21 +220,17 @@ struct GitClientView: View {
                 }
             )
         }
+        .sheet(isPresented: $showDeleteAlert) {
+            DeleteBranchesView(
+                isPresented: $showDeleteAlert,
+                branches: viewModel.branches,
+                onDelete: { branches, deleteRemote in
+                    await viewModel.deleteBranches(branches, deleteRemote: deleteRemote)
+                }
+            )
+        }
         .onAppear {
             viewModel.selectRepository(url)
-
-        }
-        .alert("Delete Branch", isPresented: $showDeleteAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-//                if let branch = viewModel.currentBranch {
-//                    Task {
-//                        await viewModel.deleteBranch(branch)
-//                    }
-//                }
-            }
-        } message: {
-            Text("Are you sure you want to delete this branch?")
         }
     }
 }

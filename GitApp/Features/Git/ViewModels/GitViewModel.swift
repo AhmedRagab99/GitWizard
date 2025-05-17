@@ -651,6 +651,29 @@ class GitViewModel {
             errorMessage = "Push failed: \(error.localizedDescription)"
         }
     }
+
+    func deleteBranches(_ branches: [Branch], deleteRemote: Bool) async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            for branch in branches {
+                // Delete local branch
+                try await gitService.deleteBranch(branch.name, in: url)
+
+                // Delete remote branch if requested
+                if deleteRemote && branch.isRemote {
+                    try await gitService.deleteBranch(branch.name, in: url, isRemote: true)
+                }
+            }
+
+            // Refresh repository data
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Error deleting branches: \(error.localizedDescription)"
+        }
+    }
 }
 
 extension GitViewModel {

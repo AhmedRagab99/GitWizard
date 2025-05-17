@@ -7,6 +7,7 @@ struct Branch: Hashable, Identifiable {
     var id: String {
         name
     }
+    var isRemote: Bool { false }
     var name: String
     var isCurrent: Bool
     var point: String {

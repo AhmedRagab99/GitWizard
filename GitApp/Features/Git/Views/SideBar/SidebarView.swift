@@ -76,18 +76,18 @@ enum WorkspaceSidebarItem: String, CaseIterable, Identifiable {
     case workingCopy = "Working Copy"
     case history = "History"
     case stashes = "Stashes"
-    case pullRequests = "Pull Requests"
-    case branchesReview = "Branches Review"
-    case settings = "Settings"
+//    case pullRequests = "Pull Requests"
+//    case branchesReview = "Branches Review"
+//    case settings = "Settings"
     var id: String { rawValue }
     var icon: String {
         switch self {
         case .workingCopy: return "folder"
         case .history: return "clock"
         case .stashes: return "archivebox"
-        case .pullRequests: return "arrow.triangle.branch"
-        case .branchesReview: return "point.topleft.down.curvedto.point.bottomright.up"
-        case .settings: return "gearshape"
+//        case .pullRequests: return "arrow.triangle.branch"
+//        case .branchesReview: return "point.topleft.down.curvedto.point.bottomright.up"
+//        case .settings: return "gearshape"
         }
     }
 }
