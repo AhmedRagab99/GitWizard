@@ -10,14 +10,27 @@ import Foundation
 struct GitAddPatch: InteractiveGit {
     typealias OutputModel = Void
     var arguments: [String] {
-        [
+        var args = [
             "git",
             "add",
-            "--patch",
+            "--patch"
         ]
+
+        if let path = filePath {
+            args.append(path)
+        }
+
+        return args
     }
     var directory: URL
     var inputs: [String]
+    var filePath: String?
+
+    init(directory: URL, inputs: [String], filePath: String? = nil) {
+        self.directory = directory
+        self.inputs = inputs
+        self.filePath = filePath
+    }
 
     func parse(for stdOut: String) -> Void {}
 }

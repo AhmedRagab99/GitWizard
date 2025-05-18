@@ -347,11 +347,27 @@ class GitViewModel {
     func stageChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
         guard let url = repositoryURL else { return }
 
+        // Mark this chunk as to be staged (this will set stageString to "y")
+        var updatedChunk = chunk
+        updatedChunk.stage = true
+
+        // Update all other chunks to not be staged
+        let otherChunks = fileDiff.chunks.filter { $0.id != chunk.id }
+        let updatedOtherChunks = otherChunks.map {
+            var c = $0
+            c.stage = false
+            return c
+        }
+
+        isLoading = true
+
         Task {
             do {
-               try await gitService.stageChunk(chunk, in: fileDiff, directory: url)
+                try await gitService.stageChunk(updatedChunk, in: fileDiff, directory: url)
+                isLoading = false
                 await loadChanges()
             } catch {
+                isLoading = false
                 errorMessage = "Error staging chunk: \(error.localizedDescription)"
             }
         }
@@ -360,11 +376,27 @@ class GitViewModel {
     func unstageChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
         guard let url = repositoryURL else { return }
 
+        // Mark this chunk as to be unstaged (this will set unstageString to "y")
+        var updatedChunk = chunk
+        updatedChunk.stage = false
+
+        // Update all other chunks to not be unstaged
+        let otherChunks = fileDiff.chunks.filter { $0.id != chunk.id }
+        let updatedOtherChunks = otherChunks.map {
+            var c = $0
+            c.stage = true
+            return c
+        }
+
+        isLoading = true
+
         Task {
             do {
-                try await gitService.unstageChunk(chunk, in: fileDiff, directory: url)
+                try await gitService.unstageChunk(updatedChunk, in: fileDiff, directory: url)
+                isLoading = false
                 await loadChanges()
             } catch {
+                isLoading = false
                 errorMessage = "Error unstaging chunk: \(error.localizedDescription)"
             }
         }
@@ -395,11 +427,15 @@ class GitViewModel {
     func resetChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
         guard let url = repositoryURL else { return }
 
+        isLoading = true
+
         Task {
             do {
                 try await gitService.resetChunk(chunk, in: fileDiff, directory: url)
+                isLoading = false
                 await loadChanges()
             } catch {
+                isLoading = false
                 errorMessage = "Error resetting chunk: \(error.localizedDescription)"
             }
         }

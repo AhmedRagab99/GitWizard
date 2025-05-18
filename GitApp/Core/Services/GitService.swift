@@ -284,15 +284,47 @@ actor GitService {
     }
 
     func stageChunk(_ chunk: Chunk, in fileDiff: FileDiff, directory: URL) async throws  {
-        try await Process.output(GitAddPatch(directory: directory, inputs: Array(arrayLiteral: chunk.unstageString)))
+        // Get the file path from the fileDiff
+        let filePath = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+
+        // Create inputs array with 'y' to stage the chunk when Git prompts
+        // We use stageString here which will be 'y' when the chunk should be staged
+        var inputs = [chunk.stageString]
+
+        // Add more 'n' responses in case there are multiple chunks in the interactive prompt
+        inputs.append(contentsOf: Array(repeating: "n", count: 10))
+
+        // Execute the git add --patch command with the file path
+        try await Process.output(GitAddPatch(directory: directory, inputs: inputs, filePath: filePath))
     }
 
     func unstageChunk(_ chunk: Chunk, in fileDiff: FileDiff, directory: URL) async throws {
-        try await Process.output(GitRestorePatch(directory: directory, inputs: Array(arrayLiteral: chunk.stageString)))
+        // Get the file path from the fileDiff
+        let filePath = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+
+        // Create inputs array with 'y' to unstage the chunk when Git prompts
+        // We use unstageString here which will be 'y' when the chunk should be unstaged
+        var inputs = [chunk.unstageString]
+
+        // Add more 'n' responses in case there are multiple chunks in the interactive prompt
+        inputs.append(contentsOf: Array(repeating: "n", count: 10))
+
+        // Execute the git restore --staged --patch command with the file path
+        try await Process.output(GitRestorePatch(directory: directory, inputs: inputs, filePath: filePath))
     }
 
     func resetChunk(_ chunk: Chunk, in fileDiff: FileDiff, directory: URL) async throws {
-        _ = try await Process.output(GitResetChunk(directory: directory, filePath: fileDiff.filePathDisplay, chunk: chunk))
+        // Get the file path from the fileDiff
+        let filePath = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+
+        // Create inputs array with 'y' to reset the chunk when Git prompts
+        var inputs = ["y"]
+
+        // Add more 'n' responses in case there are multiple chunks in the interactive prompt
+        inputs.append(contentsOf: Array(repeating: "n", count: 10))
+
+        // Execute the git checkout -p command with the file path
+        _ = try await Process.output(GitResetChunk(directory: directory, filePath: filePath, inputs: inputs))
     }
 
     func unstageAllChanges(in directory: URL) async throws {
