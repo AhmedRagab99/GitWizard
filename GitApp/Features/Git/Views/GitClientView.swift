@@ -18,6 +18,7 @@ struct GitClientView: View {
     @State private var keepStaged = false
     @State private var showPushSheet = false
     @State private var showPullSheet = false
+    @State private var showMergeSheet = false
     @State private var showSearchFilters = false
 
     var body: some View {
@@ -69,7 +70,7 @@ struct GitClientView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Switch Theme")
-                    
+
                     Button(action: {
                             showPullSheet = true
                     }) {
@@ -88,6 +89,19 @@ struct GitClientView: View {
                                     .offset(x: 2, y: -2)
                             }
                         }
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: {
+                        showMergeSheet = true
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.merge")
+                                .font(.system(size: 20))
+                            Text("Merge")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
                     }
                     .buttonStyle(.plain)
 
@@ -168,7 +182,7 @@ struct GitClientView: View {
                     .padding(.horizontal, 8)
 
                 // Secondary Actions Group
-                               
+
 
                     Button(action: {
                         showDeleteAlert = true
@@ -224,6 +238,12 @@ struct GitClientView: View {
                         await viewModel.pull(remote: remote, remoteBranch: remoteBranch, localBranch: localBranch, options: options)
                     }
                 }
+            )
+        }
+        .sheet(isPresented: $showMergeSheet) {
+            MergeSheet(
+                viewModel: viewModel,
+                isPresented: $showMergeSheet
             )
         }
         .sheet(isPresented: $showCreateBranchSheet) {

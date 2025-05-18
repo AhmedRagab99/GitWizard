@@ -130,8 +130,22 @@ actor GitService {
     }
 
     // MARK: - Merge Operations
-    func merge(in directory: URL, branchName: String) async throws {
-        try await Process.output(GitMerge(directory: directory, branchName: branchName))
+    func merge(
+        in directory: URL,
+        branchName: String,
+        commitMerged: Bool = true,
+        includeMessages: Bool = false,
+        createNewCommit: Bool = false,
+        rebaseInsteadOfMerge: Bool = false
+    ) async throws {
+        try await Process.output(GitMerge(
+            directory: directory,
+            branchName: branchName,
+            commitMerged: commitMerged,
+            includeMessages: includeMessages,
+            createNewCommit: createNewCommit,
+            rebaseInsteadOfMerge: rebaseInsteadOfMerge
+        ))
     }
 
     func revert(in directory: URL, commit: String, parentNumber: Int? = nil) async throws {
@@ -223,8 +237,22 @@ actor GitService {
         try await Process.output(GitCheckout(directory: url, commitHash: name))
     }
 
-    func mergeBranch(_ name: String, in url: URL) async throws {
-        try await Process.output(GitMerge(directory: url, branchName: name))
+    func mergeBranch(
+        _ name: String,
+        in url: URL,
+        commitMerged: Bool = true,
+        includeMessages: Bool = false,
+        createNewCommit: Bool = false,
+        rebaseInsteadOfMerge: Bool = false
+    ) async throws {
+        try await Process.output(GitMerge(
+            directory: url,
+            branchName: name,
+            commitMerged: commitMerged,
+            includeMessages: includeMessages,
+            createNewCommit: createNewCommit,
+            rebaseInsteadOfMerge: rebaseInsteadOfMerge
+        ))
     }
 
     func commit(_ message: String, in url: URL) async throws {

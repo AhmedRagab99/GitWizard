@@ -745,6 +745,39 @@ class GitViewModel {
         logStore.searchTokens = []
         await logStore.refresh()
     }
+
+    // MARK: - Merge Operations
+    func mergeBranch(
+        _ branchName: String,
+        commitMerged: Bool = true,
+        includeMessages: Bool = false,
+        createNewCommit: Bool = false,
+        rebaseInsteadOfMerge: Bool = false
+    ) async {
+        guard let url = repositoryURL else {
+            errorMessage = "No repository selected"
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await gitService.merge(
+                in: url,
+                branchName: branchName,
+                commitMerged: commitMerged,
+                includeMessages: includeMessages,
+                createNewCommit: createNewCommit,
+                rebaseInsteadOfMerge: rebaseInsteadOfMerge
+            )
+
+            // Refresh repository data after merge
+            await refreshState()
+        } catch {
+            errorMessage = "Merge failed: \(error.localizedDescription)"
+        }
+    }
 }
 
 extension GitViewModel {
