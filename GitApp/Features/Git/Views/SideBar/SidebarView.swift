@@ -102,6 +102,12 @@ struct SidebarView: View {
     @State private var branchToRename: Branch?
     @StateObject private var toastManager = ToastManager()
 
+    // Branch checkout confirmation states
+    @State private var showCheckoutConfirmation = false
+    @State private var branchToCheckout: Branch?
+    @State private var isRemoteCheckout = false
+    @State private var discardLocalChanges = false
+
     var body: some View {
         SwiftUISidebarView(
             items: sidebarItems,
@@ -130,6 +136,38 @@ struct SidebarView: View {
                 )
             }
         }
+        .confirmationDialog(
+            "Confirm Branch Switch",
+            isPresented: $showCheckoutConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("OK") {
+                if let branch = branchToCheckout {
+                    Task {
+                        await viewModel.checkoutBranch(branch, isRemote: isRemoteCheckout, discardLocalChanges: discardLocalChanges)
+                    }
+                }
+            }
+
+            Button("Discard local changes", role: .destructive) {
+                if let branch = branchToCheckout {
+                    discardLocalChanges = true
+                    Task {
+                        await viewModel.checkoutBranch(branch, isRemote: isRemoteCheckout, discardLocalChanges: true)
+                    }
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                branchToCheckout = nil
+            }
+        } message: {
+            if let branch = branchToCheckout {
+                Text("Are you sure you want to switch your working copy to the branch '\(branch.name)'?")
+            } else {
+                Text("Are you sure you want to switch branches?")
+            }
+        }
         .onChange(of: viewModel.branches) {
             refreshSidebar()
         }
@@ -152,7 +190,11 @@ struct SidebarView: View {
     private func handleBranchAction(_ action: BranchContextAction, _ branch: Branch) {
         switch action {
         case .checkout:
-            Task { await viewModel.checkoutBranch(branch) }
+            // Show checkout confirmation dialog
+            branchToCheckout = branch
+            isRemoteCheckout = false
+            discardLocalChanges = false
+            showCheckoutConfirmation = true
         case .pull:
             Task { await viewModel.performPull() }
         case .push:
@@ -173,7 +215,11 @@ struct SidebarView: View {
     private func handleRemoteAction(_ action: RemoteContextAction, _ branch: Branch) {
         switch action {
         case .checkout:
-            Task { await viewModel.checkoutBranch(branch, isRemote: true) }
+            // Show checkout confirmation dialog
+            branchToCheckout = branch
+            isRemoteCheckout = true
+            discardLocalChanges = false
+            showCheckoutConfirmation = true
         case .copyName:
             viewModel.copyCommitHash(branch.name)
             toastManager.show(message: "Branch name copied to clipboard", type: .success)

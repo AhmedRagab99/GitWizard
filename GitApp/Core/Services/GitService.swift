@@ -43,16 +43,16 @@ actor GitService {
         try await Process.output(GitCurrentBranch(directory: directory))
     }
 
-    func switchBranch(to branchName: String, in directory: URL) async throws {
-        try await Process.output(GitSwitch(directory: directory, branchName: branchName))
+    func switchBranch(to branchName: String, in directory: URL, discardLocalChanges: Bool = false) async throws {
+        try await Process.output(GitSwitch(directory: directory, branchName: branchName, discardLocalChanges: discardLocalChanges))
     }
 
-    func checkoutBranch(to branchName: Branch, in directory: URL) async throws {
-        try await Process.output(GitCheckoutB(directory: directory, newBranchName: branchName.name,startPoint: branchName.point))
+    func checkoutBranch(to branchName: Branch, in directory: URL, discardLocalChanges: Bool = false) async throws {
+        try await Process.output(GitCheckoutB(directory: directory, newBranchName: branchName.name, startPoint: branchName.point, discardLocalChanges: discardLocalChanges))
     }
 
-    func deleteBranch(_ branchName: String, in directory: URL, isRemote: Bool = false) async throws {
-        try await Process.output(GitBranchDelete(directory: directory, isRemote: isRemote, branchName: branchName))
+    func deleteBranch(_ branchName: String, in directory: URL, isRemote: Bool = false, forceDelete: Bool = false) async throws {
+        try await Process.output(GitBranchDelete(directory: directory, isRemote: isRemote, branchName: branchName, forceDelete: forceDelete))
     }
 
     // MARK: - Commit Operations
@@ -215,8 +215,8 @@ actor GitService {
         try await Process.output(GitAdd(directory: url))
     }
 
-    func checkoutCommit(_ hash: String, in url: URL) async throws {
-        try await Process.output(GitCheckout(directory: url, commitHash: hash))
+    func checkoutCommit(_ hash: String, in directory: URL, discardLocalChanges: Bool = false) async throws {
+        try await Process.output(GitCheckout(directory: directory, commitHash: hash, discardLocalChanges: discardLocalChanges))
     }
 
     func getCommitDetails(_ hash: String, in url: URL) async throws -> CommitDetails {
