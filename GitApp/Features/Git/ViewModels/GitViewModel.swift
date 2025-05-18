@@ -435,8 +435,6 @@ class GitViewModel {
                     }
                 }
 
-                // Notify observers of the change
-                objectWillChange.send()
 
             } catch {
                 isLoading = false
@@ -505,9 +503,7 @@ class GitViewModel {
                     }
                 }
 
-                // Notify observers of the change
-                objectWillChange.send()
-
+             
             } catch {
                 isLoading = false
                 errorMessage = "Error unstaging chunk: \(error.localizedDescription)"
@@ -570,8 +566,7 @@ class GitViewModel {
                     }
                 }
 
-                // Notify observers of the change
-                objectWillChange.send()
+             
 
             } catch {
                 isLoading = false
@@ -601,7 +596,6 @@ class GitViewModel {
                     $0.fromFilePath == path || $0.toFilePath == path
                 }) {
                     selectedFileDiff = unstagedFile
-                    objectWillChange.send()
                 }
             }
         } catch {
@@ -630,7 +624,6 @@ class GitViewModel {
                     $0.fromFilePath == path || $0.toFilePath == path
                 }) {
                     selectedFileDiff = stagedFile
-                    objectWillChange.send()
                 }
             }
         } catch {
