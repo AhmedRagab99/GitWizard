@@ -95,16 +95,7 @@ struct CommitView: View {
                                             )
                                         }
                                     }
-//                                    Section(header: FileStatusHeader(status: .untracked, count: viewModel.untrackedFiles.count)) {
-//                                        ForEach(viewModel.untrackedFiles, id: \.self) { path in
-//                                            UntrackedFileRow(
-//                                                path: path,
-//                                                action: { Task { await viewModel.stageFile(path: path) } },
-//                                                onIgnore: { Task { await viewModel.addToGitignore(path: path) } },
-//                                                onTrash: { Task { await viewModel.moveToTrash(path: path) } }
-//                                            )
-//                                        }
-//                                    }
+
                                 }
                             }
                         } else {

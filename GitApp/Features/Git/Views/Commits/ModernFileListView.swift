@@ -46,7 +46,7 @@ struct ModernFileListView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     ForEach(groupedFiles, id: \ .status) { group in
-                        Section(header: FileStatusHeader(status: group.status, count: group.files.count)) {
+//                        Section(header: FileStatusHeader(status: group.status, count: group.files.count)) {
                             ForEach(group.files, id: \ .fromFilePath) { file in
                                 ModernFileRow(
                                     fileDiff: file,
@@ -63,7 +63,7 @@ struct ModernFileListView: View {
                                 )
                                 .onTapGesture { selectedFile = file }
                             }
-                        }
+//                        }
                     }
                 }
                 .padding(.vertical, 2)
