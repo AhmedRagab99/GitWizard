@@ -14,6 +14,12 @@ struct ModernFileRow: View {
     let actionColor: Color
     let action: () -> Void
     @State private var isHovered: Bool = false
+    var onStage: (() -> Void)? = nil
+    var onUnstage: (() -> Void)? = nil
+    var onReset: (() -> Void)? = nil
+    var onIgnore: (() -> Void)? = nil
+    var onTrash: (() -> Void)? = nil
+    var isStaged: Bool = false
 
     var body: some View {
         HStack(spacing: 14) {
@@ -26,10 +32,10 @@ struct ModernFileRow: View {
                     .font(.system(size: 15, weight: .medium))
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(fileDiff.fromFilePath.components(separatedBy: "/").last ?? "")
+                Text(fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath.components(separatedBy: "/").last ?? "" : fileDiff.fromFilePath.components(separatedBy: "/").last ?? "")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(isSelected ? .primary : .secondary)
-                Text(fileDiff.fromFilePath)
+                Text(fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -71,5 +77,67 @@ struct ModernFileRow: View {
         .onHover { hovering in isHovered = hovering }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(fileDiff.fromFilePath), status: \(fileDiff.status.rawValue)")
+        .help("""
+        Status: \(fileDiff.status.rawValue) (\(fileDiff.status.shortDescription))
+        From: \(fileDiff.fromFilePath.isEmpty ? "None" : fileDiff.fromFilePath)
+        To: \(fileDiff.toFilePath.isEmpty ? "None" : fileDiff.toFilePath)
+        Lines Added: \(fileDiff.lineStats.added)
+        Lines Removed: \(fileDiff.lineStats.removed)
+        Header: \(fileDiff.header)
+        """)
+        .contextMenu {
+            if let onStage = onStage {
+                Button {
+                    onStage()
+                } label: {
+                    Label("Stage File", systemImage: "plus.circle")
+                }
+            }
+
+            if let onUnstage = onUnstage {
+                Button {
+                    onUnstage()
+                } label: {
+                    Label("Unstage File", systemImage: "minus.circle")
+                }
+            }
+
+            if let onReset = onReset {
+                Button {
+                    onReset()
+                } label: {
+                    Label("Reset File (Discard Changes)", systemImage: "arrow.counterclockwise")
+                }
+                .foregroundColor(.red)
+            }
+
+            Divider()
+
+            if let onIgnore = onIgnore {
+                Button {
+                    onIgnore()
+                } label: {
+                    Label("Add to .gitignore", systemImage: "eye.slash")
+                }
+            }
+
+            if let onTrash = onTrash {
+                Button(role: .destructive) {
+                    onTrash()
+                } label: {
+                    Label("Move to Trash", systemImage: "trash")
+                }
+            }
+
+            Divider()
+
+            Button {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath, forType: .string)
+            } label: {
+                Label("Copy Path", systemImage: "doc.on.clipboard")
+            }
+        }
     }
 }

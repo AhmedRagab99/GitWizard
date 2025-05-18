@@ -18,7 +18,19 @@ enum FileStatus: String {
     case ignored = "Ignored"
     case deleted = "Deleted"
 
-    
+    // File status codes from git
+    static func fromGitStatus(_ status: String) -> FileStatus {
+        switch status {
+        case "M": return .modified
+        case "A": return .added
+        case "D": return .deleted
+        case "R": return .renamed
+        case "C": return .copied
+        case "?": return .untracked
+        case "!": return .ignored
+        default: return .unknown
+        }
+    }
 
     var icon: String {
         switch self {
@@ -41,14 +53,10 @@ enum FileStatus: String {
         case .deleted: return .red
         case .renamed: return .orange
         case .untracked: return .gray
-        case .ignored:
-            return .gray
-        case .removed:
-            return .red
-        case .copied:
-            return .yellow
-        case .unknown:
-            return .gray
+        case .ignored: return .gray
+        case .removed: return .red
+        case .copied: return .yellow
+        case .unknown: return .purple
         }
     }
 
@@ -71,13 +79,36 @@ struct FileDiff: Identifiable, Hashable {
     var id: String { raw }
     var header: String
     var status: FileStatus {
-        if fromFilePath.isEmpty && !toFilePath.isEmpty {
+        // Check if header contains file mode information that indicates file status
+        if header.contains("new file mode") {
+            return .added
+        } else if header.contains("deleted file mode") {
+            return .removed
+        } else if fromFilePath.isEmpty && !toFilePath.isEmpty {
             return .added
         } else if !fromFilePath.isEmpty && toFilePath.isEmpty {
             return .removed
         } else if fromFilePath != toFilePath {
             return .renamed
         } else {
+            // For binary files or renames, check extended header info
+            for line in extendedHeaderLines {
+                if line.contains("new file") {
+                    return .added
+                } else if line.contains("deleted file") {
+                    return .removed
+                }
+            }
+
+            // Check for /dev/null which indicates added or removed files
+            if fromFileToFileLines.contains(where: { $0.contains("/dev/null") }) {
+                if fromFileToFileLines.first(where: { $0.hasPrefix("--- ") })?.contains("/dev/null") ?? false {
+                    return .added
+                } else if fromFileToFileLines.first(where: { $0.hasPrefix("+++ ") })?.contains("/dev/null") ?? false {
+                    return .removed
+                }
+            }
+
             return .modified
         }
     }
@@ -174,6 +205,15 @@ struct FileDiff: Identifiable, Hashable {
         chunks = Self.extractChunks(from: splited).map { Chunk(raw: $0) }
     }
 
+    // Init from untracked file
+    init(untrackedFile path: String) {
+        self.raw = "diff --git a/\(path) b/\(path)\nnew file mode 100644"
+        self.header = "diff --git a/\(path) b/\(path)"
+        self.extendedHeaderLines = ["new file mode 100644"]
+        self.fromFileToFileLines = []
+        self.chunks = []
+    }
+
     func updateAll(stage: Bool) -> Self {
         guard !chunks.isEmpty else {
             var newSelf = self
@@ -202,5 +242,14 @@ struct FileDiff: Identifiable, Hashable {
             return [unstageString]
         }
         return chunks.map { $0.unstageString }
+    }
+
+    // MARK: - Hashable implementation
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    static func == (lhs: FileDiff, rhs: FileDiff) -> Bool {
+        return lhs.id == rhs.id
     }
 }

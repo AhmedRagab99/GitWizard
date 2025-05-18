@@ -13,6 +13,13 @@ struct ModernFileListView: View {
     let actionIcon: String
     let actionColor: Color
     let action: (FileDiff) -> Void
+    var onStage: ((FileDiff) -> Void)? = nil
+    var onUnstage: ((FileDiff) -> Void)? = nil
+    var onReset: ((FileDiff) -> Void)? = nil
+    var onIgnore: ((FileDiff) -> Void)? = nil
+    var onTrash: ((FileDiff) -> Void)? = nil
+    var isStaged: Bool = false
+    var showUntrackedFiles: Bool = true
 
     private var groupedFiles: [(status: FileStatus, files: [FileDiff])] {
         Dictionary(grouping: files, by: { $0.status })
@@ -39,18 +46,24 @@ struct ModernFileListView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     ForEach(groupedFiles, id: \ .status) { group in
-                        Section(header: FileStatusHeader(status: group.status, count: group.files.count)) {
+//                        Section(header: FileStatusHeader(status: group.status, count: group.files.count)) {
                             ForEach(group.files, id: \ .fromFilePath) { file in
                                 ModernFileRow(
                                     fileDiff: file,
                                     isSelected: selectedFile?.fromFilePath == file.fromFilePath,
                                     actionIcon: actionIcon,
                                     actionColor: actionColor,
-                                    action: { action(file) }
+                                    action: { action(file) },
+                                    onStage: onStage != nil ? { onStage?(file) } : nil,
+                                    onUnstage: onUnstage != nil ? { onUnstage?(file) } : nil,
+                                    onReset: onReset != nil ? { onReset?(file) } : nil,
+                                    onIgnore: onIgnore != nil ? { onIgnore?(file) } : nil,
+                                    onTrash: onTrash != nil ? { onTrash?(file) } : nil,
+                                    isStaged: isStaged
                                 )
                                 .onTapGesture { selectedFile = file }
                             }
-                        }
+//                        }
                     }
                 }
                 .padding(.vertical, 2)

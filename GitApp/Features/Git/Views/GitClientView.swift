@@ -260,9 +260,9 @@ struct GitClientView: View {
         .sheet(isPresented: $showDeleteAlert) {
             DeleteBranchesView(
                 isPresented: $showDeleteAlert,
-                branches: viewModel.branches,
-                onDelete: { branches, deleteRemote in
-                    await viewModel.deleteBranches(branches, deleteRemote: deleteRemote)
+                branches: viewModel.branches + viewModel.remotebranches,
+                onDelete: { branches, deleteRemote, isRemote in
+                    await viewModel.deleteBranches(branches, deleteRemote: deleteRemote, isRemote: isRemote)
                 }
             )
         }

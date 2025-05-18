@@ -9,6 +9,8 @@ struct FileDiffView: View {
     @State private var expandedChunks: Set<String> = []
     @State private var fontSize: CGFloat = 13
     @State private var showLineNumbers = true
+    @State private var operationInProgress: Bool = false
+    @State private var operatedChunks: Set<String> = []
 
     var body: some View {
         ScrollView(.vertical) {
@@ -17,6 +19,7 @@ struct FileDiffView: View {
                     VStack(spacing: 0) {
                         chunkHeader(chunk)
                             .background(Color(.controlBackgroundColor))
+                            .opacity(operationInProgress && operatedChunks.contains(chunk.id) ? 0.6 : 1.0)
                             .onTapGesture {
                                 withAnimation(.easeInOut(duration: 0.18)) {
                                     if expandedChunks.contains(chunk.id) {
@@ -36,11 +39,20 @@ struct FileDiffView: View {
                     .cornerRadius(8)
                     .padding(.vertical, 2)
                     .padding(.horizontal, 4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(operatedChunks.contains(chunk.id) ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                            .opacity(operatedChunks.contains(chunk.id) ? 1.0 : 0.0)
+                    )
+                    .animation(.easeInOut(duration: 0.2), value: operatedChunks.contains(chunk.id))
                 }
             }
             .padding(.vertical, 6)
         }
         .background(Color(.windowBackgroundColor))
+        .onChange(of: fileDiff.id) {
+            operatedChunks.removeAll()
+        }
     }
 
     private func chunkHeader(_ chunk: Chunk) -> some View {
@@ -54,21 +66,41 @@ struct FileDiffView: View {
                 .lineLimit(1)
             Spacer()
             HStack(spacing: 8) {
-                Button(action: { onStage(chunk) }) {
+                Button(action: {
+                    performOperation {
+                        operatedChunks.insert(chunk.id)
+                        onStage(chunk)
+                    }
+                }) {
                     Image(systemName: "plus.circle")
                         .foregroundColor(.green)
                 }
                 .buttonStyle(.plain)
-                Button(action: { onUnstage(chunk) }) {
+                .disabled(operationInProgress)
+
+                Button(action: {
+                    performOperation {
+                        operatedChunks.insert(chunk.id)
+                        onUnstage(chunk)
+                    }
+                }) {
                     Image(systemName: "minus.circle")
                         .foregroundColor(.orange)
                 }
                 .buttonStyle(.plain)
-                Button(action: { onReset(chunk) }) {
+                .disabled(operationInProgress)
+
+                Button(action: {
+                    performOperation {
+                        operatedChunks.insert(chunk.id)
+                        onReset(chunk)
+                    }
+                }) {
                     Image(systemName: "arrow.uturn.backward.circle")
                         .foregroundColor(.gray)
                 }
                 .buttonStyle(.plain)
+                .disabled(operationInProgress)
             }
         }
         .padding(.horizontal, 8)
@@ -76,6 +108,21 @@ struct FileDiffView: View {
         .background(Color(.controlBackgroundColor))
         .cornerRadius(6)
         .shadow(color: Color.black.opacity(0.03), radius: 1, x: 0, y: 1)
+    }
+
+    private func performOperation(operation: @escaping () -> Void) {
+        operationInProgress = true
+
+        operatedChunks.removeAll()
+
+        operation()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            operationInProgress = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                operatedChunks.removeAll()
+            }
+        }
     }
 
     private func diffLineView(line: Chunk.Line) -> some View {
