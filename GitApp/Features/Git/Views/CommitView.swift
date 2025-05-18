@@ -6,6 +6,8 @@ struct CommitView: View {
     @State private var commitMessage: String = ""
     @State private var selectedFileItem: FileDiff?
     @State private var isCommitting: Bool = false
+    @State private var showResetConfirm: Bool = false
+    @State private var fileToReset: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,7 +29,21 @@ struct CommitView: View {
                                 selectedFile: $selectedFileItem,
                                 actionIcon: "minus.circle.fill",
                                 actionColor: .orange,
-                                action: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } }
+                                action: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
+                                onUnstage: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
+                                onReset: { file in
+                                    fileToReset = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                    showResetConfirm = true
+                                },
+                                onIgnore: { file in
+                                    let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                    Task { await viewModel.addToGitignore(path: path) }
+                                },
+                                onTrash: { file in
+                                    let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                    Task { await viewModel.moveToTrash(path: path) }
+                                },
+                                isStaged: true
                             )
                         } else {
                             EmptyStateView(message: "No staged changes")
@@ -35,21 +51,50 @@ struct CommitView: View {
                     }
                     SectionCard(
                         title: "Unstaged Changes",
-                        count: viewModel.unstagedDiff?.fileDiffs.count ?? 0,
+                        count: (viewModel.unstagedDiff?.fileDiffs.count ?? 0) + viewModel.untrackedFiles.count,
                         actionTitle: "Stage All",
                         action: { Task { await viewModel.stageAllChanges() } },
-                        showAction: (viewModel.unstagedDiff?.fileDiffs.isEmpty == false),
+                        showAction: ((viewModel.unstagedDiff?.fileDiffs.isEmpty == false) || !viewModel.untrackedFiles.isEmpty),
                         icon: "tray.fill",
                         iconColor: .orange
                     ) {
-                        if let unstagedDiff = viewModel.unstagedDiff, !unstagedDiff.fileDiffs.isEmpty {
-                            ModernFileListView(
-                                files: unstagedDiff.fileDiffs,
-                                selectedFile: $selectedFileItem,
-                                actionIcon: "plus.circle.fill",
-                                actionColor: .green,
-                                action: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } }
-                            )
+                        if let unstagedDiff = viewModel.unstagedDiff, !unstagedDiff.fileDiffs.isEmpty || !viewModel.untrackedFiles.isEmpty {
+                            VStack(spacing: 8) {
+                                ModernFileListView(
+                                    files: unstagedDiff.fileDiffs,
+                                    selectedFile: $selectedFileItem,
+                                    actionIcon: "plus.circle.fill",
+                                    actionColor: .green,
+                                    action: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
+                                    onStage: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
+                                    onReset: { file in
+                                        fileToReset = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                        showResetConfirm = true
+                                    },
+                                    onIgnore: { file in
+                                        let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                        Task { await viewModel.addToGitignore(path: path) }
+                                    },
+                                    onTrash: { file in
+                                        let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                        Task { await viewModel.moveToTrash(path: path) }
+                                    }
+                                )
+
+                                // Untracked files
+                                if !viewModel.untrackedFiles.isEmpty {
+                                    Section(header: FileStatusHeader(status: .untracked, count: viewModel.untrackedFiles.count)) {
+                                        ForEach(viewModel.untrackedFiles, id: \.self) { path in
+                                            UntrackedFileRow(
+                                                path: path,
+                                                action: { Task { await viewModel.stageFile(path: path) } },
+                                                onIgnore: { Task { await viewModel.addToGitignore(path: path) } },
+                                                onTrash: { Task { await viewModel.moveToTrash(path: path) } }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         } else {
                             EmptyStateView(message: "No unstaged changes")
                         }
@@ -102,12 +147,33 @@ struct CommitView: View {
             summaryRow
                 .padding(.horizontal, 16)
                 .padding(.vertical, 4)
-            .onAppear {
-                Task { await viewModel.loadChanges() }
-            }
+        }
+        .onAppear {
+            Task { await viewModel.loadChanges() }
         }
         .loading(viewModel.isLoading)
         .errorAlert(viewModel.errorMessage)
+        .confirmationDialog(
+            "Are you sure you want to reset this file? This will discard all changes.",
+            isPresented: $showResetConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Reset File", role: .destructive) {
+                if let path = fileToReset {
+                    Task {
+                        await viewModel.resetFile(path: path)
+                        fileToReset = nil
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                fileToReset = nil
+            }
+        } message: {
+            if let path = fileToReset {
+                Text("This will discard all changes to \(path.components(separatedBy: "/").last ?? path)")
+            }
+        }
     }
 
     // Summary row similar to SourceTree
@@ -115,8 +181,12 @@ struct CommitView: View {
         HStack(spacing: 16) {
             Label("\(viewModel.stagedDiff?.fileDiffs.count ?? 0) staged", systemImage: "checkmark.seal.fill")
                 .foregroundStyle(.green)
-            Label("\(viewModel.unstagedDiff?.fileDiffs.count ?? 0) unstaged", systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+            Label("\(viewModel.unstagedDiff?.fileDiffs.count ?? 0) modified", systemImage: "pencil")
+                .foregroundStyle(.blue)
+            if !viewModel.untrackedFiles.isEmpty {
+                Label("\(viewModel.untrackedFiles.count) untracked", systemImage: "plus")
+                    .foregroundStyle(.orange)
+            }
             Spacer()
             if let staged = viewModel.stagedDiff?.fileDiffs.count, staged > 0 {
                 Text("Ready to commit")
@@ -126,13 +196,6 @@ struct CommitView: View {
         }
     }
 }
-
-
-
-
-
-
-
 
 // MARK: - Empty State
 struct EmptyStateView: View {
@@ -144,6 +207,7 @@ struct EmptyStateView: View {
             .padding(12)
     }
 }
+
 
 // Utility for line stats
 extension FileDiff {

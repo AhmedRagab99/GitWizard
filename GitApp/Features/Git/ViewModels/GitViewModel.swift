@@ -340,7 +340,6 @@ class GitViewModel {
                 }
             }
         } catch {
-
             errorMessage = "Error loading changes: \(error)"
         }
     }
@@ -776,6 +775,88 @@ class GitViewModel {
             await refreshState()
         } catch {
             errorMessage = "Merge failed: \(error.localizedDescription)"
+        }
+    }
+
+    func resetFile(path: String) async {
+        guard let url = repositoryURL else { return }
+
+        do {
+            isLoading = true
+            defer { isLoading = false }
+
+            try await gitService.resetFile(path, in: url)
+            await loadChanges()
+        } catch {
+            errorMessage = "Error resetting file: \(error.localizedDescription)"
+        }
+    }
+
+    func addToGitignore(path: String) async {
+        guard let url = repositoryURL else { return }
+
+        do {
+            isLoading = true
+            defer { isLoading = false }
+
+            // Get the file name or pattern to ignore
+            let fileName = path.components(separatedBy: "/").last ?? path
+
+            // Path to .gitignore file
+            let gitignorePath = url.appendingPathComponent(".gitignore")
+
+            // Check if .gitignore exists and create it if needed
+            if !FileManager.default.fileExists(atPath: gitignorePath.path) {
+                try "\(fileName)".write(to: gitignorePath, atomically: true, encoding: .utf8)
+            } else {
+                // Read existing content
+                let existingContent = try String(contentsOf: gitignorePath, encoding: .utf8)
+
+                // Check if the file is already ignored
+                if !existingContent.contains(fileName) {
+                    // Add a newline if needed and append the new entry
+                    let newContent: String
+                    if existingContent.hasSuffix("\n") {
+                        newContent = existingContent + fileName + "\n"
+                    } else {
+                        newContent = existingContent + "\n" + fileName + "\n"
+                    }
+
+                    // Write updated content
+                    try newContent.write(to: gitignorePath, atomically: true, encoding: .utf8)
+                }
+            }
+
+            // Refresh repository status
+            await loadChanges()
+        } catch {
+            errorMessage = "Error adding file to .gitignore: \(error.localizedDescription)"
+        }
+    }
+
+    func moveToTrash(path: String) async {
+        guard let url = repositoryURL else { return }
+
+        do {
+            isLoading = true
+            defer { isLoading = false }
+
+            // Full path to the file
+            let filePath = url.appendingPathComponent(path)
+
+            // Check if file exists
+            if FileManager.default.fileExists(atPath: filePath.path) {
+                // Move file to trash
+                var resultingItemURL: NSURL?
+                try FileManager.default.trashItem(at: filePath, resultingItemURL: &resultingItemURL)
+
+                // Refresh repository status
+                await loadChanges()
+            } else {
+                errorMessage = "File not found: \(path)"
+            }
+        } catch {
+            errorMessage = "Error moving file to trash: \(error.localizedDescription)"
         }
     }
 }
