@@ -82,7 +82,7 @@ struct SwiftUISidebarView: View {
             }
         case .remote(let node):
             if let branch = node.branch {
-                Button("Checkout \(branch.name)") {
+                Button("Checkout \(branch.displayName)") {
                     onRemoteAction(.checkout, branch); refresh()
                 }
                 Button("Track Remote Branch") {

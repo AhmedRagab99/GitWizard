@@ -503,7 +503,7 @@ class GitViewModel {
                     }
                 }
 
-             
+
             } catch {
                 isLoading = false
                 errorMessage = "Error unstaging chunk: \(error.localizedDescription)"
@@ -566,7 +566,7 @@ class GitViewModel {
                     }
                 }
 
-             
+
 
             } catch {
                 isLoading = false
@@ -883,32 +883,69 @@ class GitViewModel {
         }
     }
 
-    func deleteBranches(_ branches: [Branch], deleteRemote: Bool = false,isRemote: Bool = false) async {
+    /// Delete branches with various options
+    /// - Parameters:
+    ///   - branches: The array of branches to delete
+    ///   - deleteRemote: If true and branches are local, also delete their remote tracking branches
+    ///   - isRemote: If true, branches are treated as remote branches
+    func deleteBranches(_ branches: [Branch], deleteRemote: Bool = false, isRemote: Bool = false) async {
         guard let url = repositoryURL else { return }
         isLoading = true
         defer { isLoading = false }
 
         do {
+            print("Starting branch deletion operation...")
+            print("Delete remote: \(deleteRemote), Is remote: \(isRemote)")
+
             for branch in branches {
+                print("Processing branch: \(branch.name), isRemote: \(branch.isRemote)")
+
+                // Case 1: Deleting local branches
                 if !isRemote {
+                    // Skip current branch
+                    if branch.isCurrent {
+                        print("Skipping current branch: \(branch.name)")
+                        continue
+                    }
 
                     // Delete local branch
+                    print("Deleting local branch: \(branch.name)")
                     try await gitService.deleteBranch(branch.name, in: url)
 
-                    // Delete remote branch if requested
+                    // Case 2: Deleting both local and remote branches
                     if deleteRemote {
-                        try await gitService.deleteBranch(branch.name, in: url, isRemote: true)
+                        // Use remotebranches to check for corresponding remote branch
+                        let remoteBranchName = "origin/" + branch.name
+                        // Specifically use remotebranches collection to check for remote existence
+                        let hasRemote = remotebranches.contains { $0.name == remoteBranchName }
+
+                        if hasRemote {
+                            print("Also deleting corresponding remote branch: \(branch.name)")
+                            try await gitService.deleteBranch(branch.name, in: url, isRemote: true)
+                        } else {
+                            print("No corresponding remote branch found in remotebranches collection for: \(branch.name)")
+                        }
                     }
                 }
-                else {
-                    try await gitService.deleteBranch(branch.name, in: url, isRemote: true)
+                // Case 3: Deleting remote branches only
+                else if branch.isRemote {
+                    // Ensure this branch actually exists in the remotebranches collection
+                    let exists = remotebranches.contains { $0.name == branch.name }
+                    if exists {
+                        print("Deleting remote branch: \(branch.name) -> \(branch.remoteName)")
+                        try await gitService.deleteBranch(branch.remoteName, in: url, isRemote: true)
+                    } else {
+                        print("Skipping branch \(branch.name) as it wasn't found in remotebranches collection")
+                    }
                 }
             }
 
             // Refresh repository data
+            print("Branch deletion completed, refreshing repository data...")
             await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Error deleting branches: \(error.localizedDescription)"
+            print("Branch deletion error: \(error.localizedDescription)")
         }
     }
 

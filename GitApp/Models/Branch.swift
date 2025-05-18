@@ -7,7 +7,10 @@ struct Branch: Hashable, Identifiable {
     var id: String {
         name
     }
-    var isRemote: Bool { false }
+    var isRemote: Bool {
+        // Check if branch name starts with "origin/" which indicates a remote branch
+        return name.hasPrefix("origin/")
+    }
     var name: String
     var isCurrent: Bool
     var point: String {
@@ -20,6 +23,19 @@ struct Branch: Hashable, Identifiable {
         return name.hasPrefix(detachedPrefix)
     }
 
+    var displayName: String {
+        if isRemote {
+            return name.replacingOccurrences(of: "origin/", with: "")
+        }
+        return name
+    }
+
+    var remoteName: String {
+        if isRemote {
+            return name.replacingOccurrences(of: "origin/", with: "")
+        }
+        return name
+    }
 }
 
 extension [Branch] {

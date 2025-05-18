@@ -9,17 +9,24 @@ import Foundation
 
 struct GitBranchDelete: Git {
     var arguments: [String] {
-        var arg = [
-            "git",
-            "branch",
-            "--delete",
-        ]
         if isRemote {
-            arg.append("origin")
-            arg.append("-r")
+            // For remote branches, we need to push the delete to the remote
+            return [
+                "git",
+                "push",
+                "origin",
+                "--delete",
+                branchName.replacingOccurrences(of: "origin/", with: "") // Remove origin/ prefix if present
+            ]
+        } else {
+            // For local branches, use the standard branch delete command
+            return [
+                "git",
+                "branch",
+                "--delete",
+                branchName
+            ]
         }
-        arg.append(branchName)
-        return arg
     }
     var directory: URL
     var isRemote = false
