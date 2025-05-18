@@ -84,7 +84,7 @@ struct CommitView: View {
                                 // Untracked files
                                 if !viewModel.untrackedFiles.isEmpty {
                                     SectionCard(title: FileStatus.untracked.rawValue, count: viewModel.untrackedFiles.count, actionTitle: "", action: {
-                                        
+
                                     }, showAction: false, icon: FileStatus.untracked.icon, iconColor: FileStatus.untracked.color) {
                                         ForEach(viewModel.untrackedFiles, id: \.self) { path in
                                             UntrackedFileRow(
@@ -95,7 +95,6 @@ struct CommitView: View {
                                             )
                                         }
                                     }
-
                                 }
                             }
                         } else {
@@ -177,6 +176,22 @@ struct CommitView: View {
                 Text("This will discard all changes to \(path.components(separatedBy: "/").last ?? path)")
             }
         }
+        // Keep view model's selectedFileDiff and view's selectedFileItem in sync bidirectionally
+        .onChange(of: selectedFileItem) { oldValue, newValue in
+            viewModel.selectedFileDiff = newValue
+        }
+        .onChange(of: viewModel.selectedFileDiff) { oldValue, newValue in
+            if newValue?.id != selectedFileItem?.id {
+                selectedFileItem = newValue
+            }
+        }
+        // Update when stagedDiff or unstagedDiff changes
+        .onChange(of: viewModel.stagedDiff) { oldValue, newValue in
+            updateSelectedFile()
+        }
+        .onChange(of: viewModel.unstagedDiff) { oldValue, newValue in
+            updateSelectedFile()
+        }
     }
 
     // Summary row similar to SourceTree
@@ -195,6 +210,38 @@ struct CommitView: View {
                 Text("Ready to commit")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // Helper to update selectedFileItem after git operations
+    private func updateSelectedFile() {
+        if let selectedFileId = selectedFileItem?.id {
+            // Check if selected file is still available in staged or unstaged files
+            let stagedFiles = viewModel.stagedDiff?.fileDiffs ?? []
+            let unstagedFiles = viewModel.unstagedDiff?.fileDiffs ?? []
+
+            // Try to find file by ID first
+            if let stagedFile = stagedFiles.first(where: { $0.id == selectedFileId }) {
+                selectedFileItem = stagedFile
+            } else if let unstagedFile = unstagedFiles.first(where: { $0.id == selectedFileId }) {
+                selectedFileItem = unstagedFile
+            }
+            // If not found by ID, try to find by path
+            else if let selectedPath = selectedFileItem?.fromFilePath {
+                if let stagedFile = stagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
+                    selectedFileItem = stagedFile
+                } else if let unstagedFile = unstagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
+                    selectedFileItem = unstagedFile
+                }
+                // Use toFilePath as fallback for added files
+                else if let toPath = selectedFileItem?.toFilePath, !toPath.isEmpty {
+                    if let stagedFile = stagedFiles.first(where: { $0.toFilePath == toPath }) {
+                        selectedFileItem = stagedFile
+                    } else if let unstagedFile = unstagedFiles.first(where: { $0.toFilePath == toPath }) {
+                        selectedFileItem = unstagedFile
+                    }
+                }
             }
         }
     }

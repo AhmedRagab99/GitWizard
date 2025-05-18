@@ -317,6 +317,11 @@ class GitViewModel {
     func loadChanges() async {
         guard let url = repositoryURL else { return }
         do {
+            // Save the currently selected file info before refreshing
+            let selectedFilePath = selectedFileDiff?.fromFilePath
+            let selectedToFilePath = selectedFileDiff?.toFilePath
+            let wasSelectedFileStaged = selectedFileDiff?.chunks.contains(where: { $0.stage == true }) ?? false
+
             let status = try await gitService.getStatus(in: url)
 
             // Get staged changes
@@ -330,15 +335,41 @@ class GitViewModel {
             // Update untracked files
             self.untrackedFiles = status.untrackedFiles
 
-
-            // Update selected file diff if needed
-            if let selectedPath = selectedFileDiff?.fromFilePath {
+            // Update selected file diff if needed - with improved matching logic
+            if let selectedPath = selectedFilePath, !selectedPath.isEmpty {
+                // First try exact path match
                 if let stagedFile = stagedDiff.fileDiffs.first(where: { $0.fromFilePath == selectedPath }) {
                     selectedFileDiff = stagedFile
                 } else if let unstagedFile = unstagedDiff.fileDiffs.first(where: { $0.fromFilePath == selectedPath }) {
                     selectedFileDiff = unstagedFile
                 }
+                // Try matching with toFilePath if fromFilePath not found (for newly added files)
+                else if let toPath = selectedToFilePath, !toPath.isEmpty {
+                    if let stagedFile = stagedDiff.fileDiffs.first(where: { $0.toFilePath == toPath }) {
+                        selectedFileDiff = stagedFile
+                    } else if let unstagedFile = unstagedDiff.fileDiffs.first(where: { $0.toFilePath == toPath }) {
+                        selectedFileDiff = unstagedFile
+                    }
+                }
+                // If still not found, check if the file might have moved between staged/unstaged
+                else if wasSelectedFileStaged {
+                    // Was staged, check if it's now unstaged
+                    if let unstagedFile = unstagedDiff.fileDiffs.first(where: {
+                        $0.fromFilePath.isEmpty ? $0.toFilePath == selectedToFilePath : $0.fromFilePath == selectedPath
+                    }) {
+                        selectedFileDiff = unstagedFile
+                    }
+                } else {
+                    // Was unstaged, check if it's now staged
+                    if let stagedFile = stagedDiff.fileDiffs.first(where: {
+                        $0.fromFilePath.isEmpty ? $0.toFilePath == selectedToFilePath : $0.fromFilePath == selectedPath
+                    }) {
+                        selectedFileDiff = stagedFile
+                    }
+                }
             }
+
+
         } catch {
             errorMessage = "Error loading changes: \(error)"
         }
@@ -351,21 +382,62 @@ class GitViewModel {
         var updatedChunk = chunk
         updatedChunk.stage = true
 
-        // Update all other chunks to not be staged
-        let otherChunks = fileDiff.chunks.filter { $0.id != chunk.id }
-        let updatedOtherChunks = otherChunks.map {
-            var c = $0
-            c.stage = false
-            return c
-        }
+        // Store the original file path for selection tracking
+        let filePath = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+        let selectedFilePath = selectedFileDiff?.fromFilePath
+        let selectedToFilePath = selectedFileDiff?.toFilePath
+        let isSelectedFile = (fileDiff.id == selectedFileDiff?.id)
 
         isLoading = true
 
+        // Create a local copy of fileDiff to preserve ID
+        var updatedFileDiff = fileDiff
+
         Task {
             do {
-                try await gitService.stageChunk(updatedChunk, in: fileDiff, directory: url)
+                try await gitService.stageChunk(updatedChunk, in: updatedFileDiff, directory: url)
                 isLoading = false
+
+                // Reload all changes
                 await loadChanges()
+
+                // Update selection if needed
+                if isSelectedFile {
+                    // After reloading, try to find the updated file with the same paths
+                    let stagedFiles = stagedDiff?.fileDiffs ?? []
+                    let unstagedFiles = unstagedDiff?.fileDiffs ?? []
+
+                    // First check if the file is still in unstaged (partially staged)
+                    if let updatedFile = unstagedFiles.first(where: {
+                        $0.fromFilePath == filePath || $0.toFilePath == filePath
+                    }) {
+                        selectedFileDiff = updatedFile
+                    }
+                    // Then check if it was fully staged
+                    else if let stagedFile = stagedFiles.first(where: {
+                        $0.fromFilePath == filePath || $0.toFilePath == filePath
+                    }) {
+                        selectedFileDiff = stagedFile
+                    }
+                    // Finally, try to restore previous selection if nothing else works
+                    else if let selectedPath = selectedFilePath, !selectedPath.isEmpty {
+                        if let stagedFile = stagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
+                            selectedFileDiff = stagedFile
+                        } else if let unstagedFile = unstagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
+                            selectedFileDiff = unstagedFile
+                        } else if let toPath = selectedToFilePath, !toPath.isEmpty {
+                            if let stagedFile = stagedFiles.first(where: { $0.toFilePath == toPath }) {
+                                selectedFileDiff = stagedFile
+                            } else if let unstagedFile = unstagedFiles.first(where: { $0.toFilePath == toPath }) {
+                                selectedFileDiff = unstagedFile
+                            }
+                        }
+                    }
+                }
+
+                // Notify observers of the change
+                objectWillChange.send()
+
             } catch {
                 isLoading = false
                 errorMessage = "Error staging chunk: \(error.localizedDescription)"
@@ -380,24 +452,130 @@ class GitViewModel {
         var updatedChunk = chunk
         updatedChunk.stage = false
 
-        // Update all other chunks to not be unstaged
-        let otherChunks = fileDiff.chunks.filter { $0.id != chunk.id }
-        let updatedOtherChunks = otherChunks.map {
-            var c = $0
-            c.stage = true
-            return c
-        }
+        // Store the original file path for selection tracking
+        let filePath = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+        let selectedFilePath = selectedFileDiff?.fromFilePath
+        let selectedToFilePath = selectedFileDiff?.toFilePath
+        let isSelectedFile = (fileDiff.id == selectedFileDiff?.id)
 
         isLoading = true
 
+        // Create a local copy of fileDiff to preserve ID
+        var updatedFileDiff = fileDiff
+
         Task {
             do {
-                try await gitService.unstageChunk(updatedChunk, in: fileDiff, directory: url)
+                try await gitService.unstageChunk(updatedChunk, in: updatedFileDiff, directory: url)
                 isLoading = false
+
+                // Reload all changes
                 await loadChanges()
+
+                // Update selection if needed
+                if isSelectedFile {
+                    // After reloading, try to find the updated file with the same paths
+                    let stagedFiles = stagedDiff?.fileDiffs ?? []
+                    let unstagedFiles = unstagedDiff?.fileDiffs ?? []
+
+                    // First check if the file is still in staged (partially unstaged)
+                    if let stagedFile = stagedFiles.first(where: {
+                        $0.fromFilePath == filePath || $0.toFilePath == filePath
+                    }) {
+                        selectedFileDiff = stagedFile
+                    }
+                    // Then check if it was fully unstaged
+                    else if let unstagedFile = unstagedFiles.first(where: {
+                        $0.fromFilePath == filePath || $0.toFilePath == filePath
+                    }) {
+                        selectedFileDiff = unstagedFile
+                    }
+                    // Finally, try to restore previous selection if nothing else works
+                    else if let selectedPath = selectedFilePath, !selectedPath.isEmpty {
+                        if let unstagedFile = unstagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
+                            selectedFileDiff = unstagedFile
+                        } else if let stagedFile = stagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
+                            selectedFileDiff = stagedFile
+                        } else if let toPath = selectedToFilePath, !toPath.isEmpty {
+                            if let unstagedFile = unstagedFiles.first(where: { $0.toFilePath == toPath }) {
+                                selectedFileDiff = unstagedFile
+                            } else if let stagedFile = stagedFiles.first(where: { $0.toFilePath == toPath }) {
+                                selectedFileDiff = stagedFile
+                            }
+                        }
+                    }
+                }
+
+                // Notify observers of the change
+                objectWillChange.send()
+
             } catch {
                 isLoading = false
                 errorMessage = "Error unstaging chunk: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func resetChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
+        guard let url = repositoryURL else { return }
+
+        // Store the original file path for selection tracking
+        let filePath = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+        let selectedFilePath = selectedFileDiff?.fromFilePath
+        let selectedToFilePath = selectedFileDiff?.toFilePath
+        let isSelectedFile = (fileDiff.id == selectedFileDiff?.id)
+
+        isLoading = true
+
+        // Create a local copy of fileDiff to preserve ID
+        var updatedFileDiff = fileDiff
+
+        Task {
+            do {
+                try await gitService.resetChunk(chunk, in: updatedFileDiff, directory: url)
+                isLoading = false
+
+                // Reload all changes
+                await loadChanges()
+
+                // Update selection if needed
+                if isSelectedFile {
+                    // After reloading, try to find the updated file with the same paths
+                    let stagedFiles = stagedDiff?.fileDiffs ?? []
+                    let unstagedFiles = unstagedDiff?.fileDiffs ?? []
+
+                    // Check if the file still exists after reset
+                    if let unstagedFile = unstagedFiles.first(where: {
+                        $0.fromFilePath == filePath || $0.toFilePath == filePath
+                    }) {
+                        selectedFileDiff = unstagedFile
+                    }
+                    else if let stagedFile = stagedFiles.first(where: {
+                        $0.fromFilePath == filePath || $0.toFilePath == filePath
+                    }) {
+                        selectedFileDiff = stagedFile
+                    }
+                    // Finally, try to restore previous selection if nothing else works
+                    else if let selectedPath = selectedFilePath, !selectedPath.isEmpty {
+                        if let unstagedFile = unstagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
+                            selectedFileDiff = unstagedFile
+                        } else if let stagedFile = stagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
+                            selectedFileDiff = stagedFile
+                        } else if let toPath = selectedToFilePath, !toPath.isEmpty {
+                            if let unstagedFile = unstagedFiles.first(where: { $0.toFilePath == toPath }) {
+                                selectedFileDiff = unstagedFile
+                            } else if let stagedFile = stagedFiles.first(where: { $0.toFilePath == toPath }) {
+                                selectedFileDiff = stagedFile
+                            }
+                        }
+                    }
+                }
+
+                // Notify observers of the change
+                objectWillChange.send()
+
+            } catch {
+                isLoading = false
+                errorMessage = "Error resetting chunk: \(error.localizedDescription)"
             }
         }
     }
@@ -406,8 +584,26 @@ class GitViewModel {
         guard let url = repositoryURL else { return }
 
         do {
+            isLoading = true
+            defer { isLoading = false }
+
+            // Remember selection for better UX
+            let selectedPath = selectedFileDiff?.fromFilePath
+            let selectedToPath = selectedFileDiff?.toFilePath
+
             try await gitService.unstageFile(path, in: url)
             await loadChanges()
+
+            // Try to restore selection
+            if selectedPath == path || selectedToPath == path {
+                let unstagedFiles = unstagedDiff?.fileDiffs ?? []
+                if let unstagedFile = unstagedFiles.first(where: {
+                    $0.fromFilePath == path || $0.toFilePath == path
+                }) {
+                    selectedFileDiff = unstagedFile
+                    objectWillChange.send()
+                }
+            }
         } catch {
             errorMessage = "Error unstaging file: \(error.localizedDescription)"
         }
@@ -417,27 +613,28 @@ class GitViewModel {
         guard let url = repositoryURL else { return }
 
         do {
+            isLoading = true
+            defer { isLoading = false }
+
+            // Remember selection for better UX
+            let selectedPath = selectedFileDiff?.fromFilePath
+            let selectedToPath = selectedFileDiff?.toFilePath
+
             try await gitService.addFiles(in: url, pathspec: path)
             await loadChanges()
+
+            // Try to restore selection
+            if selectedPath == path || selectedToPath == path {
+                let stagedFiles = stagedDiff?.fileDiffs ?? []
+                if let stagedFile = stagedFiles.first(where: {
+                    $0.fromFilePath == path || $0.toFilePath == path
+                }) {
+                    selectedFileDiff = stagedFile
+                    objectWillChange.send()
+                }
+            }
         } catch {
             errorMessage = "Error staging file: \(error.localizedDescription)"
-        }
-    }
-
-    func resetChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
-        guard let url = repositoryURL else { return }
-
-        isLoading = true
-
-        Task {
-            do {
-                try await gitService.resetChunk(chunk, in: fileDiff, directory: url)
-                isLoading = false
-                await loadChanges()
-            } catch {
-                isLoading = false
-                errorMessage = "Error resetting chunk: \(error.localizedDescription)"
-            }
         }
     }
 
