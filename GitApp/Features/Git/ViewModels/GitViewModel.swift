@@ -667,7 +667,7 @@ class GitViewModel {
         }
     }
 
-    func checkoutBranch(_ branch: Branch,isRemote: Bool = false) async {
+    func checkoutBranch(_ branch: Branch, isRemote: Bool = false, discardLocalChanges: Bool = false) async {
         guard let url = repositoryURL else {
             errorMessage = "No repository selected"
             return
@@ -681,19 +681,14 @@ class GitViewModel {
             selectedBranch = branch
             syncState.branch = branch
 
-
             if isRemote {
-                try await gitService.checkoutBranch(to: branch, in: url)
+                try await gitService.checkoutBranch(to: branch, in: url, discardLocalChanges: discardLocalChanges)
                 updateDataFromRemoteCheckout(from: branch)
-
             } else {
-                try await gitService.switchBranch(to: branch.name, in: url)
+                try await gitService.switchBranch(to: branch.name, in: url, discardLocalChanges: discardLocalChanges)
             }
 
             updateDataFromLocalCheckout()
-
-
-
             await loadChanges()
         } catch {
             errorMessage = "Checkout failed: \(error.localizedDescription)"
@@ -752,14 +747,14 @@ class GitViewModel {
     }
 
 
-    func checkoutCommit(_ hash: String) async {
+    func checkoutCommit(_ hash: String, discardLocalChanges: Bool = false) async {
         guard let repoURL = repositoryURL else {
             errorMessage = "No repository selected"
             return
         }
 
         do {
-            try await gitService.checkoutCommit(hash, in: repoURL)
+            try await gitService.checkoutCommit(hash, in: repoURL, discardLocalChanges: discardLocalChanges)
             // Refresh the state
             await refreshState()
         } catch {
@@ -768,13 +763,13 @@ class GitViewModel {
     }
 
     // MARK: - Branch Operations
-    func switchBranch(to branch: Branch) async {
+    func switchBranch(to branch: Branch, discardLocalChanges: Bool = false) async {
         guard let url = repositoryURL else { return }
         do {
             isLoading = true
             defer { isLoading = false }
 
-            try await gitService.switchBranch(to: branch.name, in: url)
+            try await gitService.switchBranch(to: branch.name, in: url, discardLocalChanges: discardLocalChanges)
             currentBranch = branch
             selectedBranch = branch
             syncState.branch = branch
@@ -888,14 +883,15 @@ class GitViewModel {
     ///   - branches: The array of branches to delete
     ///   - deleteRemote: If true and branches are local, also delete their remote tracking branches
     ///   - isRemote: If true, branches are treated as remote branches
-    func deleteBranches(_ branches: [Branch], deleteRemote: Bool = false, isRemote: Bool = false) async {
+    ///   - forceDelete: If true, force delete branches even if not fully merged
+    func deleteBranches(_ branches: [Branch], deleteRemote: Bool = false, isRemote: Bool = false, forceDelete: Bool = false) async {
         guard let url = repositoryURL else { return }
         isLoading = true
         defer { isLoading = false }
 
         do {
             print("Starting branch deletion operation...")
-            print("Delete remote: \(deleteRemote), Is remote: \(isRemote)")
+            print("Delete remote: \(deleteRemote), Is remote: \(isRemote), Force delete: \(forceDelete)")
 
             for branch in branches {
                 print("Processing branch: \(branch.name), isRemote: \(branch.isRemote)")
@@ -910,7 +906,18 @@ class GitViewModel {
 
                     // Delete local branch
                     print("Deleting local branch: \(branch.name)")
-                    try await gitService.deleteBranch(branch.name, in: url)
+                    do {
+                        try await gitService.deleteBranch(branch.name, in: url, isRemote: false, forceDelete: forceDelete)
+                    } catch {
+                        // Check if error is about branch not being fully merged
+                        if error.localizedDescription.contains("not fully merged") {
+                            errorMessage = "Branch '\(branch.name)' is not fully merged. Use force delete option to proceed."
+                            throw error
+                        } else {
+                            // Rethrow other errors
+                            throw error
+                        }
+                    }
 
                     // Case 2: Deleting both local and remote branches
                     if deleteRemote {

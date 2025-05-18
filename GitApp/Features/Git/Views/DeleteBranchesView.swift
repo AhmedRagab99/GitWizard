@@ -3,10 +3,11 @@ import SwiftUI
 struct DeleteBranchesView: View {
     @Binding var isPresented: Bool
     let branches: [Branch]
-    let onDelete: ([Branch], Bool, Bool) async -> Void
+    let onDelete: ([Branch], Bool, Bool, Bool) async -> Void
 
     @State private var selectedBranches: Set<Branch> = []
     @State private var deleteRemote: Bool = false
+    @State private var forceDelete: Bool = false
     @State private var isDeleting: Bool = false
 
     // For UI layout
@@ -126,6 +127,12 @@ struct DeleteBranchesView: View {
                             .padding(.horizontal)
                     }
 
+                    // Force delete option for local branches
+                    if branchTypeFilter == .local {
+                        Toggle("Force delete (even if not fully merged)", isOn: $forceDelete)
+                            .padding(.horizontal)
+                    }
+
                     HStack {
                         Button("Cancel") {
                             isPresented = false
@@ -138,7 +145,8 @@ struct DeleteBranchesView: View {
                                 await onDelete(
                                     Array(selectedBranches),
                                     branchTypeFilter == .local ? deleteRemote : false,
-                                    branchTypeFilter == .remote
+                                    branchTypeFilter == .remote,
+                                    forceDelete
                                 )
                                 isDeleting = false
                                 isPresented = false

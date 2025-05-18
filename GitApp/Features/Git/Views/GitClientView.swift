@@ -261,8 +261,8 @@ struct GitClientView: View {
             DeleteBranchesView(
                 isPresented: $showDeleteAlert,
                 branches: viewModel.branches + viewModel.remotebranches,
-                onDelete: { branches, deleteRemote, isRemote in
-                    await viewModel.deleteBranches(branches, deleteRemote: deleteRemote, isRemote: isRemote)
+                onDelete: { branches, deleteRemote, isRemote, forceDelete in
+                    await viewModel.deleteBranches(branches, deleteRemote: deleteRemote, isRemote: isRemote, forceDelete: forceDelete)
                 }
             )
         }

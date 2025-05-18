@@ -23,7 +23,7 @@ struct GitBranchDelete: Git {
             return [
                 "git",
                 "branch",
-                "--delete",
+                forceDelete ? "-D" : "--delete",
                 branchName
             ]
         }
@@ -31,6 +31,7 @@ struct GitBranchDelete: Git {
     var directory: URL
     var isRemote = false
     var branchName: String
+    var forceDelete = false
 
     func parse(for stdOut: String) throws -> Void {}
 }
