@@ -19,6 +19,7 @@ struct GitClientView: View {
     @State private var showPushSheet = false
     @State private var showPullSheet = false
     @State private var showMergeSheet = false
+    @State private var showFetchSheet = false
     @State private var showSearchFilters = false
 
     var body: some View {
@@ -70,6 +71,20 @@ struct GitClientView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Switch Theme")
+
+                    Button(action: {
+                        showFetchSheet = true
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 20))
+                            Text("Fetch")
+                                .font(.caption)
+                        }
+                        .frame(width: 60)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Fetch from Remote")
 
                     Button(action: {
                             showPullSheet = true
@@ -200,6 +215,23 @@ struct GitClientView: View {
         }
         .loading(viewModel.isLoading)
         .errorAlert(viewModel.errorMessage)
+        .sheet(isPresented: $showFetchSheet) {
+            FetchSheet(
+                isPresented: $showFetchSheet,
+                remotes: viewModel.remoteNames,
+                currentRemote: viewModel.remoteNames.first ?? "origin",
+                onFetch: { remote, fetchAllRemotes, prune, fetchTags in
+                    Task {
+                        await viewModel.performFetch(
+                            remote: remote,
+                            fetchAllRemotes: fetchAllRemotes,
+                            prune: prune,
+                            fetchTags: fetchTags
+                        )
+                    }
+                }
+            )
+        }
         .sheet(isPresented: $showPushSheet) {
             PushSheet(
                 isPresented: $showPushSheet,

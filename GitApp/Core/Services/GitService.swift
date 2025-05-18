@@ -99,8 +99,20 @@ actor GitService {
         return try await Process.output(GitBranch(directory: directory, isRemote: true))
     }
 
-    func fetch(in directory: URL) async throws {
-        try await Process.output(GitFetch(directory: directory))
+    func getRemoteNames(in directory: URL) async throws -> [String] {
+        // Use git remote command to get just the remote names
+        let output = try await Process.output(GitRemoteList(directory: directory))
+        return output.components(separatedBy: .newlines).filter { !$0.isEmpty }
+    }
+
+    func fetch(in directory: URL, remote: String = "origin", fetchAllRemotes: Bool = false, prune: Bool = false, fetchTags: Bool = false) async throws {
+        try await Process.output(GitFetch(
+            directory: directory,
+            remote: remote,
+            fetchAllRemotes: fetchAllRemotes,
+            prune: prune,
+            fetchTags: fetchTags
+        ))
     }
 
     func pull(in directory: URL, remote: String = "origin", remoteBranch: String = "", localBranch: String = "", commitMerged: Bool = false, includeMessages: Bool = false, createNewCommit: Bool = false, rebaseInsteadOfMerge: Bool = false) async throws {

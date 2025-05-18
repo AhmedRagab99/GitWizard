@@ -11,6 +11,7 @@ class GitViewModel {
      var remotebranches: [Branch] = []
      var tags: [Tag] = []
      var stashes: [Stash] = []
+     var remoteNames: [String] = ["origin"]  // Default to origin
      var workspaceCommands: [WorkspaceCommand] = []
      var selectedSidebarItem: AnyHashable?
      var selectedCommit: Commit?
@@ -100,19 +101,22 @@ class GitViewModel {
             async let tagsTask = gitService.getTags(in: url)
             async let stashesTask = gitService.getStashes(in: url)
             async let remotesTask = gitService.getRemotes(in: url)
+            async let remoteNamesTask = gitService.getRemoteNames(in: url)
 
             // Wait for all parallel tasks to complete
-            let (branches, currentBranchName, tags, stashes, remotes) = try await (
+            let (branches, currentBranchName, tags, stashes, remotes, remoteNames) = try await (
                 branchesTask,
                 currentBranchTask,
                 tagsTask,
                 stashesTask,
-                remotesTask
+                remotesTask,
+                remoteNamesTask
             )
 
             // Update branches
             self.branches = branches
             self.remotebranches = remotes
+            self.remoteNames = remoteNames.isEmpty ? ["origin"] : remoteNames
 
             // Set current branch and update related state
             if let currentBranchName = currentBranchName {
@@ -187,7 +191,7 @@ class GitViewModel {
 
 
     // --- Git Actions ---
-    func performFetch() async {
+    func performFetch(remote: String = "origin", fetchAllRemotes: Bool = false, prune: Bool = false, fetchTags: Bool = false) async {
         guard let url = repositoryURL else {
             errorMessage = "No repository selected"
             return
@@ -197,8 +201,15 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.fetch(in: url)
-            // Refresh repository data
+            try await gitService.fetch(
+                in: url,
+                remote: remote,
+                fetchAllRemotes: fetchAllRemotes,
+                prune: prune,
+                fetchTags: fetchTags
+            )
+
+            // Refresh repository data after fetch
             await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Fetch failed: \(error.localizedDescription)"
