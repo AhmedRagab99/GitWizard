@@ -12,7 +12,7 @@ A modern, SwiftUI-based Git client that brings the power of Git to your fingerti
 [Features](#-key-features) • [Architecture](#-architecture) • [Installation](#-getting-started) • 
 
 
-<img width="1714" alt="Image" src="https://github.com/user-attachments/assets/d13104eb-8c0f-476b-90be-114cbe116f89" />
+<img width="1714" alt="Image" src="https://github.com/user-attachments/assets/3858f7fa-73ca-40b5-9fdd-33027febd0b1" />
 
 
 </div>
