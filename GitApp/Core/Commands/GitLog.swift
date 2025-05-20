@@ -8,9 +8,10 @@
 import Foundation
 
 final class GitLog: Git {
-    internal init(directory: URL, merges: Bool = false, ancestryPath: Bool = false, reverse: Bool = false, number: Int = 50, revisionRange: String = "", grep: [String] = [], grepAllMatch: Bool = false, s: String = "", g: String = "", author: String = "", branch: String = "", skip: Int = 0) {
+    internal init(directory: URL, merges: Bool = false, noMerges: Bool = false, ancestryPath: Bool = false, reverse: Bool = false, number: Int = 50, revisionRange: String = "", grep: [String] = [], grepAllMatch: Bool = false, s: String = "", g: String = "", author: String = "", branch: String = "", skip: Int = 0) {
         self.directory = directory
         self.merges = merges
+        self.noMerges = noMerges
         self.ancestryPath = ancestryPath
         self.reverse = reverse
         self.number = number
@@ -27,6 +28,7 @@ final class GitLog: Git {
 
     var directory: URL
     var merges = false
+    var noMerges = false
     var ancestryPath = false
     var reverse = false
     var number = 50 // Default to 50 commits per page
@@ -63,6 +65,9 @@ final class GitLog: Git {
         ]
         if merges {
             args.append("--merges")
+        }
+        if noMerges {
+            args.append("--no-merges")
         }
         if ancestryPath {
             args.append("--ancestry-path")
@@ -105,28 +110,37 @@ final class GitLog: Git {
                  refs = separated[7].components(separatedBy: ", ")
              }
 
-             let hash  = separated[0]
+             let hash = separated[0]
+             let shortHash = String(hash.prefix(7))
              let parentHash = separated[1].components(separatedBy: .whitespacesAndNewlines)
              let author = separated[2]
              let authorEmail = separated[3]
              let authorDate = separated[4]
              let title = separated[5]
              let body = separated[6]
-             let branches =  refs.filter { !$0.hasPrefix("tag: ") }
+             let branches = refs.filter { !$0.hasPrefix("tag: ") }
              let tags = refs.filter { $0.hasPrefix("tag: ") }.map { String($0.dropFirst(5)) }
              // Generate avatar URL based on email (using Gravatar)
              let emailHash = authorEmail.lowercased().md5Hash
              let authorAvatar = "https://www.gravatar.com/avatar/\(emailHash)?d=identicon&s=40"
+
+             // Parse date from ISO format
+             let dateFormatter = ISO8601DateFormatter()
+             let date = dateFormatter.date(from: authorDate) ?? Date()
+
              return Commit(
                 hash: hash,
-                parentHashes: parentHash,
+                shortHash: shortHash,
                 author: author,
+                message: title,
+                date: date,
+                branches: branches,
+                parentHashes: parentHash,
                 authorEmail: authorEmail,
                 authorDate: authorDate,
-                 authorAvatar: authorAvatar,
+                authorAvatar: authorAvatar,
                 title: title,
                 body: body,
-                branches: branches,
                 tags: tags,
                 commitType: determineCommitType(message: body, parentHashes: parentHash)
              )

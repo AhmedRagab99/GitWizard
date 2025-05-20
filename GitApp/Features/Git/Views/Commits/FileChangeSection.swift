@@ -1,3 +1,6 @@
+import SwiftUI
+
+// Component to display file changes in commit details
 //
 //  FileChangeSection.swift
 //  GitApp
@@ -39,17 +42,7 @@ struct FileChangeSection: View {
                 LazyVStack(spacing: 0) {
                     ForEach(fileDiff.chunks) { chunk in
                         ChunkView(
-                            chunk: chunk,
-                            language: language,
-                            onStage: {
-                                viewModel.stageChunk(chunk, in: fileDiff)
-                            },
-                            onUnstage: {
-                                viewModel.unstageChunk(chunk, in: fileDiff)
-                            },
-                            onReset: {
-                                viewModel.resetChunk(chunk, in: fileDiff)
-                            }
+                            chunk: chunk
                         )
                     }
                 }
@@ -124,11 +117,6 @@ struct FileChangeSection: View {
 
 struct ChunkView: View {
     let chunk: Chunk
-    let language: Language
-    let onStage: () -> Void
-    let onUnstage: () -> Void
-    let onReset: () -> Void
-
     private var enumeratedLines: [(offset: Int, element: Chunk.Line)] {
         Array(chunk.lines.enumerated())
     }
@@ -140,23 +128,6 @@ struct ChunkView: View {
                 Text(chunk.raw.components(separatedBy: "\n").first ?? "")
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.secondary)
-                Spacer()
-                HStack(spacing: 8) {
-                    Button(action: onStage) {
-                        Label("Stage", systemImage: "plus.circle")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button(action: onUnstage) {
-                        Label("Unstage", systemImage: "minus.circle")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button(action: onReset) {
-                        Label("Reset", systemImage: "arrow.uturn.backward.circle")
-                    }
-                    .buttonStyle(.bordered)
-                }
             }
             .padding(.horizontal)
             .padding(.top, 8)
@@ -166,7 +137,6 @@ struct ChunkView: View {
                 ForEach(enumeratedLines, id: \.element.id) { index, line in
                     LineView(
                         line: line,
-                        language: language,
                         isAdded: line.kind == .added,
                         isRemoved: line.kind == .removed
                     )
@@ -179,7 +149,6 @@ struct ChunkView: View {
 
 struct LineView: View {
     let line: Chunk.Line
-    let language: Language
     let isAdded: Bool
     let isRemoved: Bool
 
@@ -194,7 +163,6 @@ struct LineView: View {
             // Line content
                 Text(line.raw)
                     .font(.system(.body, design: .monospaced))
-                    .foregroundColor(language.color(for: line.raw))
                     .padding(.leading, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(lineBackground)
@@ -212,4 +180,3 @@ struct LineView: View {
         return .clear
     }
 }
-

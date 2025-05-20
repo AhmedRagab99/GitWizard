@@ -1,10 +1,22 @@
 import Foundation
 import SwiftUI
-struct Commit: Hashable, Identifiable {
-    var id: String { hash }
-    var hash: String
-    var parentHashes: [String]
-    var author: String
+
+struct Commit: Identifiable, Hashable {
+    
+    let id = UUID()
+    let hash: String
+    let shortHash: String
+    let author: String
+    let message: String
+    let date: Date
+    var branches: [String] = []
+    var isSelected: Bool = false
+    var isCurrent: Bool = false
+    var parentHashes: [String] = []
+    var isMergeCommit: Bool {
+        return parentHashes.count > 1
+    }
+
     var authorEmail: String
     var authorDate: String
     var authorAvatar: String
@@ -30,10 +42,8 @@ struct Commit: Hashable, Identifiable {
         }
         return title + "\n\n" + body
     }
-    var branches: [String]
     var tags: [String]
     var commitType: CommitType = .normal
-
 
     enum CommitType: String, Hashable {
         case normal

@@ -11,133 +11,136 @@ struct CommitDetailHeader: View {
     let commit: Commit
     let refs: [String]
     @Bindable var viewModel: GitViewModel
-     var onClose: () -> Void // Add closure for handling close action
+    let onClose: () -> Void
     @StateObject private var toastManager = ToastManager()
-
-    private var commitIcon: String {
-        switch commit.commitType {
-        case .merge: return "arrow.triangle.branch"
-        case .rebase: return "arrow.triangle.2.circlepath"
-        case .cherryPick: return "arrow.up.forward.circle"
-        case .revert: return "arrow.uturn.backward.circle"
-        case .normal: return "checkmark.circle.fill"
-        }
-    }
-
-    private var commitColor: Color {
-        switch commit.commitType {
-        case .merge: return .purple
-        case .rebase: return .orange
-        case .cherryPick: return .blue
-        case .revert: return .red
-        case .normal: return .green
-        }
-    }
+    @State private var isDescriptionExpanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Commit hash and type
-            HStack {
-                Image(systemName: commitIcon)
-                    .foregroundColor(commitColor)
-                    .font(.title2)
-
-                Text(commit.hash.prefix(7))
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            // Top bar with commit type and actions
+            HStack(spacing: 12) {
+                // Commit type badge
+                HStack(spacing: 6) {
+                    Image(systemName: commit.commitType.commitIcon.name)
+                        .foregroundColor(.white)
+                    Text(commit.isMergeCommit ? "Merge" : commit.commitType.rawValue.capitalized)
+                        .font(.caption.bold())
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(commit.commitType.commitIcon.color)
+                .clipShape(Capsule())
 
                 Spacer()
 
                 // Action buttons
-                HStack(spacing: 8) {
+                HStack(spacing: 16) {
                     Button(action: {
                         viewModel.copyCommitHash(commit.hash)
                         toastManager.show(message: "Commit hash copied", type: .success)
                     }) {
-                        Label("Copy Hash", systemImage: "doc.on.doc")
+                        Label("Copy", systemImage: "doc.on.clipboard")
+                            .font(.caption.bold())
+                            .foregroundColor(.primary.opacity(0.7))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
 
-                    Button(action: {
-                        viewModel.checkoutCommit(commit)
-                    }) {
-                        Label("Checkout", systemImage: "arrow.triangle.branch")
-                    }
-                    .buttonStyle(.bordered)
-                    
-                    
-                    
-                    // Close Button
                     Button(action: onClose) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(ModernUI.colors.secondaryText)
-                            .font(.system(size: 20))
+                        Label("Close", systemImage: "xmark.circle.fill")
+                            .font(.caption.bold())
+                            .foregroundColor(.primary.opacity(0.7))
                     }
-                    .buttonStyle(.bordered)
-                    .padding(.horizontal, ModernUI.padding)
+                    .buttonStyle(.plain)
                 }
             }
 
-            // Commit message
-            VStack(alignment: .leading, spacing: 8) {
-                Text(commit.title)
-                    .font(.title2)
-                    .fontWeight(.bold)
+            // Commit title
+            Text(commit.title)
+                .font(.title3)
+                .fontWeight(.semibold)
+                .lineLimit(2)
 
-                if !commit.body.isEmpty {
-                    Text(commit.body)
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            // Author info
-            HStack {
+            // Author info and date
+            HStack(alignment: .center, spacing: 8) {
                 if let avatarURL = URL(string: commit.authorAvatar) {
                     AsyncImage(url: avatarURL) { image in
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                     } placeholder: {
-                        Image(systemName: "person.circle.fill")
-                            .foregroundColor(.secondary)
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.white)
+                            .padding(4)
+                            .background(Color.secondary)
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
                     .clipShape(Circle())
                 }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(commit.author)
-                        .font(.headline)
-                    Text(commit.authorEmail)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                Text(commit.author)
+                    .font(.subheadline.weight(.medium))
+
+                Text("•")
+                    .foregroundColor(.secondary)
+
+                Text(commit.authorDateRelative)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
 
                 Spacer()
 
-                Text(commit.authorDateDisplay)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                // Shortened hash with copy button
+                Button {
+                    viewModel.copyCommitHash(commit.hash)
+                    toastManager.show(message: "Hash copied!", type: .success)
+                } label: {
+                    Text(commit.shortHash)
+                        .font(.system(.caption, design: .monospaced))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.secondary.opacity(0.15))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
             }
 
-            // Refs (branches and tags)
+            // References (branches, tags) - horizontal scrolling
             if !refs.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(refs, id: \.self) { ref in
-                            Text(ref)
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.accentColor.opacity(0.2))
-                                .foregroundColor(.accentColor)
-                                .cornerRadius(4)
+                            HStack(spacing: 4) {
+                                Image(systemName: "tag.fill")
+                                    .font(.caption2)
+                                Text(ref)
+                                    .font(.caption)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.accentColor.opacity(0.15))
+                            .foregroundColor(Color.accentColor)
+                            .clipShape(Capsule())
                         }
                     }
                 }
             }
+
+            // Extended commit message/description if available
+            if !commit.body.isEmpty {
+
+                
+                    VStack(alignment: .leading) {
+                        Divider()
+                        Text(commit.body)
+                            .font(.callout)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                    }                    
+            }
         }
         .toast(toastManager: toastManager)
+        
     }
 }
