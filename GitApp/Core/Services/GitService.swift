@@ -366,4 +366,32 @@ actor GitService {
     func renameBranch(_ oldName: String, to newName: String, in directory: URL) async throws {
         try await Process.output(GitBranchRename(directory: directory, oldBranchName: oldName, newBranchName: newName))
     }
+
+    // MARK: - Merge Commit Operations
+
+    /// Get the commits that were part of a merge
+    /// - Parameters:
+    ///   - mergeCommitHash: Hash of the merge commit
+    ///   - directory: Repository directory
+    /// - Returns: Array of commits that were part of the merge
+    func getMergeCommits(_ mergeCommitHash: String, in directory: URL) async throws -> [Commit] {
+        // Get the parent hashes from the merge commit
+        let details = try await getCommitDetails(mergeCommitHash, in: directory)
+        guard details.commit.isMergeCommit, details.commit.parentHashes.count >= 2 else {
+            throw GitError.unknownError("Not a merge commit")
+        }
+
+        // Get the range of commits between merge parents
+        // The first parent is the target branch, second parent is the source branch
+        let mainParent = details.commit.parentHashes[0]
+        let mergedParent = details.commit.parentHashes[1]
+
+        // Get commits that were part of the merge (commits in second parent that aren't in first parent)
+        // Git command equivalent: git log --no-merges firstParent..secondParent
+        let gitLog = GitLog(directory: directory)
+        gitLog.revisionRange = "\(mainParent)..\(mergedParent)"
+        gitLog.noMerges = true
+
+        return try await Process.output(gitLog)
+    }
 }

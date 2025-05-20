@@ -59,12 +59,12 @@ struct FileDiffView: View {
                     }
                     .padding(.vertical, 6)
                 }
-            
-        
+
+
         .background(Color(.windowBackgroundColor))
         .onChange(of: fileDiff.id) {
             operatedChunks.removeAll()
-            
+
             loadFileContent()
         }
         .onAppear {
@@ -93,7 +93,7 @@ struct FileDiffView: View {
 
     }
 
-  
+
 
     private func chunkHeader(_ chunk: Chunk) -> some View {
         HStack(spacing: 8) {

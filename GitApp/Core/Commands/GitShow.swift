@@ -41,16 +41,27 @@ struct GitShow: Git {
             refs = separated[7].components(separatedBy: ", ")
         }
 
+        let hash = separated[0]
+        let shortHash = String(hash.prefix(7))
+        let title = separated[5]
+
+        // Parse date from ISO format
+        let dateFormatter = ISO8601DateFormatter()
+        let date = dateFormatter.date(from: separated[4]) ?? Date()
+
         let commit = Commit(
-            hash: separated[0],
-            parentHashes: separated[1].components(separatedBy: .whitespacesAndNewlines),
+            hash: hash,
+            shortHash: shortHash,
             author: separated[2],
+            message: title,
+            date: date,
+            branches: refs.filter { !$0.hasPrefix("tag: ") },
+            parentHashes: separated[1].components(separatedBy: .whitespacesAndNewlines),
             authorEmail: separated[3],
             authorDate: separated[4],
             authorAvatar: URL.gravater(email: separated[3])?.absoluteString ?? "",
             title: separated[5],
             body: separated[6],
-            branches: refs.filter { !$0.hasPrefix("tag: ") },
             tags: refs.filter { $0.hasPrefix("tag: ") }.map { String($0.dropFirst(5)) }
         )
         return CommitDetails(

@@ -55,6 +55,15 @@ struct Chunk: Identifiable, Hashable {
     var lineNumbers: [String]
     var raw: String
     var stage: Bool?
+
+    // The header is the first line of the chunk (@@... @@ line)
+    var header: String {
+        if let firstLine = raw.split(separator: "\n").first {
+            return String(firstLine)
+        }
+        return ""
+    }
+
     var stageString: String {
         if let stage, stage {
             return "y"

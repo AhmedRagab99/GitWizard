@@ -19,6 +19,12 @@ class GitViewModel {
      var diffContent: Diff?
      var isLoading: Bool = false
      var errorMessage: String?
+
+     // Merge commit properties
+     var mergeCommits: [Commit] = []
+     var selectedMergeCommit: Commit?
+     var isMergeDetailsVisible: Bool = false
+
      var repositoryURL: URL? {
         didSet {
             if let url = repositoryURL {
@@ -800,6 +806,49 @@ class GitViewModel {
         Task {
             guard let url = repositoryURL else { return }
             await loadCommitDetails(commit, in: url)
+
+            // Check if this is a merge commit and reset merge commits array
+            if commit.isMergeCommit {
+                await loadMergeCommits(commit)
+            } else {
+                mergeCommits = []
+                isMergeDetailsVisible = false
+            }
+        }
+    }
+
+    /// Loads commits that were part of a merge commit
+    func loadMergeCommits(_ mergeCommit: Commit) async {
+        guard let url = repositoryURL else { return }
+
+        do {
+            isLoading = true
+            defer { isLoading = false }
+
+            // Fetch commits that were part of this merge
+            mergeCommits = try await gitService.getMergeCommits(mergeCommit.hash, in: url)
+            isMergeDetailsVisible = true
+        } catch {
+            errorMessage = "Error loading merge commits: \(error.localizedDescription)"
+            mergeCommits = []
+        }
+    }
+
+    /// Select a commit from a merge and load its details
+    func selectMergeCommit(_ commit: Commit) async {
+        guard let url = repositoryURL else { return }
+
+        do {
+            isLoading = true
+            defer { isLoading = false }
+
+            selectedMergeCommit = commit
+
+            // Get full commit details for this specific commit from the merge
+            let details = try await gitService.getCommitDetails(commit.hash, in: url)
+            commitDetails = details
+        } catch {
+            errorMessage = "Error loading commit details: \(error.localizedDescription)"
         }
     }
 
