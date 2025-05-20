@@ -522,67 +522,30 @@ class GitViewModel {
         }
     }
 
-    func resetChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
+    func resetFile(path: String) async {
         guard let url = repositoryURL else { return }
 
-        // Store the original file path for selection tracking
-        let filePath = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
-        let selectedFilePath = selectedFileDiff?.fromFilePath
-        let selectedToFilePath = selectedFileDiff?.toFilePath
-        let isSelectedFile = (fileDiff.id == selectedFileDiff?.id)
+        do {
+            isLoading = true
+            defer { isLoading = false }
 
-        isLoading = true
+            // Check if file is staged
+            let isStaged = stagedDiff?.fileDiffs.contains {
+                $0.fromFilePath == path || $0.toFilePath == path
+            } ?? false
 
-        // Create a local copy of fileDiff to preserve ID
-        var updatedFileDiff = fileDiff
-
-        Task {
-            do {
-                try await gitService.resetChunk(chunk, in: updatedFileDiff, directory: url)
-                isLoading = false
-
-                // Reload all changes
-                await loadChanges()
-
-                // Update selection if needed
-                if isSelectedFile {
-                    // After reloading, try to find the updated file with the same paths
-                    let stagedFiles = stagedDiff?.fileDiffs ?? []
-                    let unstagedFiles = unstagedDiff?.fileDiffs ?? []
-
-                    // Check if the file still exists after reset
-                    if let unstagedFile = unstagedFiles.first(where: {
-                        $0.fromFilePath == filePath || $0.toFilePath == filePath
-                    }) {
-                        selectedFileDiff = unstagedFile
-                    }
-                    else if let stagedFile = stagedFiles.first(where: {
-                        $0.fromFilePath == filePath || $0.toFilePath == filePath
-                    }) {
-                        selectedFileDiff = stagedFile
-                    }
-                    // Finally, try to restore previous selection if nothing else works
-                    else if let selectedPath = selectedFilePath, !selectedPath.isEmpty {
-                        if let unstagedFile = unstagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
-                            selectedFileDiff = unstagedFile
-                        } else if let stagedFile = stagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
-                            selectedFileDiff = stagedFile
-                        } else if let toPath = selectedToFilePath, !toPath.isEmpty {
-                            if let unstagedFile = unstagedFiles.first(where: { $0.toFilePath == toPath }) {
-                                selectedFileDiff = unstagedFile
-                            } else if let stagedFile = stagedFiles.first(where: { $0.toFilePath == toPath }) {
-                                selectedFileDiff = stagedFile
-                            }
-                        }
-                    }
-                }
-
-
-
-            } catch {
-                isLoading = false
-                errorMessage = "Error resetting chunk: \(error.localizedDescription)"
+            // If the file is staged, unstage it first
+            if isStaged {
+                try await gitService.unstageFile(path, in: url)
             }
+
+            // Then reset the file
+            try await gitService.resetFile(path, in: url)
+
+            // Refresh changes after operation
+            await loadChanges()
+        } catch {
+            errorMessage = "Error resetting file: \(error.localizedDescription)"
         }
     }
 
@@ -1059,20 +1022,6 @@ class GitViewModel {
         }
     }
 
-    func resetFile(path: String) async {
-        guard let url = repositoryURL else { return }
-
-        do {
-            isLoading = true
-            defer { isLoading = false }
-
-            try await gitService.resetFile(path, in: url)
-            await loadChanges()
-        } catch {
-            errorMessage = "Error resetting file: \(error.localizedDescription)"
-        }
-    }
-
     func addToGitignore(path: String) async {
         guard let url = repositoryURL else { return }
 
@@ -1138,6 +1087,142 @@ class GitViewModel {
             }
         } catch {
             errorMessage = "Error moving file to trash: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Conflict Resolution
+
+    /// Check if the repository has any merge conflicts
+    func hasConflicts() async -> Bool {
+        guard let url = repositoryURL else { return false }
+
+        do {
+            let status = try await gitService.getStatus(in: url)
+            return status.hasConflicts
+        } catch {
+            errorMessage = "Error checking conflicts: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// Get a list of files with conflicts
+    func getConflictedFiles() async -> [String] {
+        guard let url = repositoryURL else { return [] }
+
+        do {
+            let status = try await gitService.getStatus(in: url)
+            return status.conflicted
+        } catch {
+            errorMessage = "Error getting conflicted files: \(error.localizedDescription)"
+            return []
+        }
+    }
+
+    /// Resolve conflicts in a file using "ours" strategy
+    func resolveConflictUsingOurs(filePath: String) async {
+        guard let url = repositoryURL else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await gitService.resolveConflictUsingOurs(filePath: filePath, in: url)
+            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            await loadChanges()
+        } catch {
+            errorMessage = "Error resolving conflict: \(error.localizedDescription)"
+        }
+    }
+
+    /// Resolve conflicts in a file using "theirs" strategy
+    func resolveConflictUsingTheirs(filePath: String) async {
+        guard let url = repositoryURL else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await gitService.resolveConflictUsingTheirs(filePath: filePath, in: url)
+            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            await loadChanges()
+        } catch {
+            errorMessage = "Error resolving conflict: \(error.localizedDescription)"
+        }
+    }
+
+    /// Mark a conflicted file as resolved (after manual edits)
+    func markConflictResolved(filePath: String) async {
+        guard let url = repositoryURL else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            await loadChanges()
+        } catch {
+            errorMessage = "Error marking conflict resolved: \(error.localizedDescription)"
+        }
+    }
+
+    func resetChunk(_ chunk: Chunk, in fileDiff: FileDiff) {
+        guard let url = repositoryURL else { return }
+
+        // Store the original file path for selection tracking
+        let filePath = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+        let selectedFilePath = selectedFileDiff?.fromFilePath
+        let selectedToFilePath = selectedFileDiff?.toFilePath
+        let isSelectedFile = (fileDiff.id == selectedFileDiff?.id)
+
+        isLoading = true
+
+        // Create a local copy of fileDiff to preserve ID
+        var updatedFileDiff = fileDiff
+
+        Task {
+            do {
+                try await gitService.resetChunk(chunk, in: updatedFileDiff, directory: url)
+                isLoading = false
+
+                // Reload all changes
+                await loadChanges()
+
+                // Update selection if needed
+                if isSelectedFile {
+                    // After reloading, try to find the updated file with the same paths
+                    let stagedFiles = stagedDiff?.fileDiffs ?? []
+                    let unstagedFiles = unstagedDiff?.fileDiffs ?? []
+
+                    // Check if the file still exists after reset
+                    if let unstagedFile = unstagedFiles.first(where: {
+                        $0.fromFilePath == filePath || $0.toFilePath == filePath
+                    }) {
+                        selectedFileDiff = unstagedFile
+                    }
+                    else if let stagedFile = stagedFiles.first(where: {
+                        $0.fromFilePath == filePath || $0.toFilePath == filePath
+                    }) {
+                        selectedFileDiff = stagedFile
+                    }
+                    // Finally, try to restore previous selection if nothing else works
+                    else if let selectedPath = selectedFilePath, !selectedPath.isEmpty {
+                        if let unstagedFile = unstagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
+                            selectedFileDiff = unstagedFile
+                        } else if let stagedFile = stagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
+                            selectedFileDiff = stagedFile
+                        } else if let toPath = selectedToFilePath, !toPath.isEmpty {
+                            if let unstagedFile = unstagedFiles.first(where: { $0.toFilePath == toPath }) {
+                                selectedFileDiff = unstagedFile
+                            } else if let stagedFile = stagedFiles.first(where: { $0.toFilePath == toPath }) {
+                                selectedFileDiff = stagedFile
+                            }
+                        }
+                    }
+                }
+            } catch {
+                isLoading = false
+                errorMessage = "Error resetting chunk: \(error.localizedDescription)"
+            }
         }
     }
 }
