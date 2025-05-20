@@ -5,6 +5,9 @@ struct FileDiffView: View {
     let onStage: (Chunk) -> Void
     let onUnstage: (Chunk) -> Void
     let onReset: (Chunk) -> Void
+    var onResolveOurs: ((Chunk) -> Void)?
+    var onResolveTheirs: ((Chunk) -> Void)?
+    var onMarkResolved: ((Chunk) -> Void)?
 
     @State private var expandedChunks: Set<String> = []
     @State private var fontSize: CGFloat = 13
@@ -31,7 +34,12 @@ struct FileDiffView: View {
                             }
                         if expandedChunks.contains(chunk.id) {
                             ForEach(chunk.lines) { line in
-                                diffLineView(line: line)
+                                if line.kind == .conflictStart || line.kind == .conflictMiddle || line.kind == .conflictEnd ||
+                                   line.kind == .conflictOurs || line.kind == .conflictTheirs {
+                                    ConflictLineView(line: line, isSelected: false, onSelect: {})
+                                } else {
+                                    diffLineView(line: line)
+                                }
                             }
                         }
                     }
@@ -65,49 +73,103 @@ struct FileDiffView: View {
                 .foregroundColor(.blue)
                 .lineLimit(1)
             Spacer()
-            HStack(spacing: 8) {
-                Button(action: {
-                    performOperation {
-                        operatedChunks.insert(chunk.id)
-                        onStage(chunk)
-                    }
-                }) {
-                    Image(systemName: "plus.circle")
-                        .foregroundColor(.green)
-                }
-                .buttonStyle(.plain)
-                .disabled(operationInProgress)
 
-                Button(action: {
-                    performOperation {
-                        operatedChunks.insert(chunk.id)
-                        onUnstage(chunk)
-                    }
-                }) {
-                    Image(systemName: "minus.circle")
-                        .foregroundColor(.orange)
-                }
-                .buttonStyle(.plain)
-                .disabled(operationInProgress)
-
-                Button(action: {
-                    performOperation {
-                        operatedChunks.insert(chunk.id)
-                        onReset(chunk)
-                    }
-                }) {
-                    Image(systemName: "arrow.uturn.backward.circle")
-                        .foregroundColor(.gray)
-                }
-                .buttonStyle(.plain)
-                .disabled(operationInProgress)
+            if chunk.hasConflict {
+                conflictButtons(for: chunk)
+            } else {
+                normalButtons(for: chunk)
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color(.controlBackgroundColor))
+        .background(chunk.hasConflict ? Color.red.opacity(0.1) : Color(.controlBackgroundColor))
         .cornerRadius(6)
         .shadow(color: Color.black.opacity(0.03), radius: 1, x: 0, y: 1)
+    }
+
+    @ViewBuilder
+    private func conflictButtons(for chunk: Chunk) -> some View {
+        HStack(spacing: 8) {
+            Button(action: {
+                performOperation {
+                    operatedChunks.insert(chunk.id)
+                    onResolveOurs?(chunk)
+                }
+            }) {
+                Label("Our Changes", systemImage: "arrow.up.circle")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            }
+            .buttonStyle(.plain)
+            .disabled(operationInProgress)
+
+            Button(action: {
+                performOperation {
+                    operatedChunks.insert(chunk.id)
+                    onResolveTheirs?(chunk)
+                }
+            }) {
+                Label("Their Changes", systemImage: "arrow.down.circle")
+                    .font(.caption)
+                    .foregroundColor(.green)
+            }
+            .buttonStyle(.plain)
+            .disabled(operationInProgress)
+
+            Button(action: {
+                performOperation {
+                    operatedChunks.insert(chunk.id)
+                    onMarkResolved?(chunk)
+                }
+            }) {
+                Label("Resolved", systemImage: "checkmark.circle")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+            .buttonStyle(.plain)
+            .disabled(operationInProgress)
+        }
+    }
+
+    @ViewBuilder
+    private func normalButtons(for chunk: Chunk) -> some View {
+        HStack(spacing: 8) {
+            Button(action: {
+                performOperation {
+                    operatedChunks.insert(chunk.id)
+                    onStage(chunk)
+                }
+            }) {
+                Image(systemName: "plus.circle")
+                    .foregroundColor(.green)
+            }
+            .buttonStyle(.plain)
+            .disabled(operationInProgress)
+
+            Button(action: {
+                performOperation {
+                    operatedChunks.insert(chunk.id)
+                    onUnstage(chunk)
+                }
+            }) {
+                Image(systemName: "minus.circle")
+                    .foregroundColor(.orange)
+            }
+            .buttonStyle(.plain)
+            .disabled(operationInProgress)
+
+            Button(action: {
+                performOperation {
+                    operatedChunks.insert(chunk.id)
+                    onReset(chunk)
+                }
+            }) {
+                Image(systemName: "arrow.uturn.backward.circle")
+                    .foregroundColor(.gray)
+            }
+            .buttonStyle(.plain)
+            .disabled(operationInProgress)
+        }
     }
 
     private func performOperation(operation: @escaping () -> Void) {
@@ -151,6 +213,10 @@ struct FileDiffView: View {
         case .removed: return .red
         case .unchanged: return .primary
         case .header: return .blue
+        case .conflictStart, .conflictEnd: return .red
+        case .conflictMiddle: return .orange
+        case .conflictOurs: return .blue
+        case .conflictTheirs: return .green
         }
     }
 
@@ -160,6 +226,10 @@ struct FileDiffView: View {
         case .removed: return Color.red.opacity(0.10)
         case .header: return Color.blue.opacity(0.07)
         case .unchanged: return Color.clear
+        case .conflictStart, .conflictEnd: return Color.red.opacity(0.1)
+        case .conflictMiddle: return Color.orange.opacity(0.1)
+        case .conflictOurs: return Color.blue.opacity(0.1)
+        case .conflictTheirs: return Color.green.opacity(0.1)
         }
     }
 }

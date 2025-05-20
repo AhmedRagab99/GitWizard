@@ -8,8 +8,65 @@ struct CommitView: View {
     @State private var isCommitting: Bool = false
     @State private var showResetConfirm: Bool = false
     @State private var fileToReset: String?
+    @State private var hasConflicts: Bool = false
+    @State private var conflictedFiles: [String] = []
 
     var body: some View {
+        VStack(spacing: 0) {
+            if hasConflicts {
+                ConflictBanner(conflictedFiles: conflictedFiles)
+            }
+
+            mainContent
+        }
+        .onAppear {
+            Task {
+                await viewModel.loadChanges()
+                await checkForConflicts()
+            }
+        }
+        .loading(viewModel.isLoading)
+        .errorAlert(viewModel.errorMessage)
+        .confirmationDialog(
+            "Are you sure you want to reset this file? This will discard all changes.",
+            isPresented: $showResetConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Reset File", role: .destructive) {
+                if let path = fileToReset {
+                    Task {
+                        await viewModel.resetFile(path: path)
+                        fileToReset = nil
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                fileToReset = nil
+            }
+        } message: {
+            if let path = fileToReset {
+                Text("This will discard all changes to \(path.components(separatedBy: "/").last ?? path)")
+            }
+        }
+        // Keep view model's selectedFileDiff and view's selectedFileItem in sync bidirectionally
+        .onChange(of: selectedFileItem) { oldValue, newValue in
+            viewModel.selectedFileDiff = newValue
+        }
+        .onChange(of: viewModel.selectedFileDiff) { oldValue, newValue in
+            if newValue?.id != selectedFileItem?.id {
+                selectedFileItem = newValue
+            }
+        }
+        // Update when stagedDiff or unstagedDiff changes
+        .onChange(of: viewModel.stagedDiff) { oldValue, newValue in
+            updateSelectedFile()
+        }
+        .onChange(of: viewModel.unstagedDiff) { oldValue, newValue in
+            updateSelectedFile()
+        }
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 0) {
             HSplitView {
                 // Left pane - Staged and Unstaged changes
@@ -79,6 +136,12 @@ struct CommitView: View {
                                         let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
                                         Task { await viewModel.moveToTrash(path: path) }
                                     }
+//                                    ,  onResolveConflict: { file in
+//                                        if file.status == .conflict {
+//                                            let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+//                                            showConflictMenu(for: path)
+//                                        }
+//                                    }
                                 )
 
                                 // Untracked files
@@ -108,27 +171,9 @@ struct CommitView: View {
                 .cornerRadius(18)
                 .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
                 .frame(minWidth: 340, maxWidth: 420)
+
                 // Right pane - Diff view
-                if let selectedFile = selectedFileItem {
-                    FileDiffContainerView(viewModel: viewModel, fileDiff: selectedFile)
-                        .frame(minWidth: 400)
-                        .background(Color(.windowBackgroundColor))
-                        .cornerRadius(16)
-                        .shadow(color: Color.accentColor.opacity(0.08), radius: 6, x: 0, y: 2)
-                        .padding(.vertical, 8)
-                } else {
-                    VStack {
-                        Image(systemName: "doc.text.magnifyingglass")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.secondary)
-                        Text("Select a file to view changes")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.controlBackgroundColor))
-                    .cornerRadius(16)
-                }
+                rightPane
             }
             Divider()
             CommitMessageArea(
@@ -150,48 +195,92 @@ struct CommitView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 4)
         }
-        .onAppear {
-            Task { await viewModel.loadChanges() }
-        }
-        .loading(viewModel.isLoading)
-        .errorAlert(viewModel.errorMessage)
-        .confirmationDialog(
-            "Are you sure you want to reset this file? This will discard all changes.",
-            isPresented: $showResetConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Reset File", role: .destructive) {
-                if let path = fileToReset {
-                    Task {
-                        await viewModel.resetFile(path: path)
-                        fileToReset = nil
+    }
+
+    @ViewBuilder
+    private var rightPane: some View {
+        if let selectedFile = selectedFileItem {
+            FileDiffContainerView(viewModel: viewModel, fileDiff: selectedFile)
+                .frame(minWidth: 400)
+                .background(Color(.windowBackgroundColor))
+                .cornerRadius(16)
+                .shadow(color: Color.accentColor.opacity(0.08), radius: 6, x: 0, y: 2)
+                .padding(.vertical, 8)
+                .toolbar {
+                    if selectedFile.status == .conflict {
+                        ToolbarItemGroup(placement: .primaryAction) {
+                            Menu {
+                                Button("Keep Our Changes") {
+                                    let path = selectedFile.fromFilePath.isEmpty ? selectedFile.toFilePath : selectedFile.fromFilePath
+                                    Task { await viewModel.resolveConflictUsingOurs(filePath: path) }
+                                }
+                                Button("Keep Their Changes") {
+                                    let path = selectedFile.fromFilePath.isEmpty ? selectedFile.toFilePath : selectedFile.fromFilePath
+                                    Task { await viewModel.resolveConflictUsingTheirs(filePath: path) }
+                                }
+                                Divider()
+                                Button("Mark as Resolved") {
+                                    let path = selectedFile.fromFilePath.isEmpty ? selectedFile.toFilePath : selectedFile.fromFilePath
+                                    Task { await viewModel.markConflictResolved(filePath: path) }
+                                }
+                            } label: {
+                                Label("Resolve Conflict", systemImage: "exclamationmark.triangle")
+                            }
+                        }
                     }
                 }
+        } else {
+            VStack {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+                Text("Select a file to view changes")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
             }
-            Button("Cancel", role: .cancel) {
-                fileToReset = nil
-            }
-        } message: {
-            if let path = fileToReset {
-                Text("This will discard all changes to \(path.components(separatedBy: "/").last ?? path)")
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(.controlBackgroundColor))
+            .cornerRadius(16)
         }
-        // Keep view model's selectedFileDiff and view's selectedFileItem in sync bidirectionally
-        .onChange(of: selectedFileItem) { oldValue, newValue in
-            viewModel.selectedFileDiff = newValue
+    }
+
+    private func checkForConflicts() async {
+        hasConflicts = await viewModel.hasConflicts()
+        if hasConflicts {
+            conflictedFiles = await viewModel.getConflictedFiles()
         }
-        .onChange(of: viewModel.selectedFileDiff) { oldValue, newValue in
-            if newValue?.id != selectedFileItem?.id {
-                selectedFileItem = newValue
-            }
+    }
+
+    private func showConflictMenu(for path: String) {
+        let menu = NSMenu(title: "Resolve Conflicts")
+
+        let ourChangesItem = NSMenuItem(title: "Keep Our Changes", action: #selector(NSApp.sendAction(_:to:from:)), keyEquivalent: "")
+        ourChangesItem.target = nil
+        ourChangesItem.action = #selector(NSApplication.shared.sendAction(_:to:from:))
+        ourChangesItem.representedObject = {
+            Task { await viewModel.resolveConflictUsingOurs(filePath: path) }
         }
-        // Update when stagedDiff or unstagedDiff changes
-        .onChange(of: viewModel.stagedDiff) { oldValue, newValue in
-            updateSelectedFile()
+
+        let theirChangesItem = NSMenuItem(title: "Keep Their Changes", action: #selector(NSApp.sendAction(_:to:from:)), keyEquivalent: "")
+        theirChangesItem.target = nil
+        theirChangesItem.action = #selector(NSApplication.shared.sendAction(_:to:from:))
+        theirChangesItem.representedObject = {
+            Task { await viewModel.resolveConflictUsingTheirs(filePath: path) }
         }
-        .onChange(of: viewModel.unstagedDiff) { oldValue, newValue in
-            updateSelectedFile()
+
+        let markResolvedItem = NSMenuItem(title: "Mark as Resolved", action: #selector(NSApp.sendAction(_:to:from:)), keyEquivalent: "")
+        markResolvedItem.target = nil
+        markResolvedItem.action = #selector(NSApplication.shared.sendAction(_:to:from:))
+        markResolvedItem.representedObject = {
+            Task { await viewModel.markConflictResolved(filePath: path) }
         }
+
+        menu.addItem(ourChangesItem)
+        menu.addItem(theirChangesItem)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(markResolvedItem)
+
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
     // Summary row similar to SourceTree
@@ -204,6 +293,10 @@ struct CommitView: View {
             if !viewModel.untrackedFiles.isEmpty {
                 Label("\(viewModel.untrackedFiles.count) untracked", systemImage: "plus")
                     .foregroundStyle(.orange)
+            }
+            if hasConflicts {
+                Label("\(conflictedFiles.count) conflicts", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
             }
             Spacer()
             if let staged = viewModel.stagedDiff?.fileDiffs.count, staged > 0 {
@@ -257,7 +350,6 @@ struct EmptyStateView: View {
             .padding(12)
     }
 }
-
 
 // Utility for line stats
 extension FileDiff {

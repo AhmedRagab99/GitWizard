@@ -1140,6 +1140,83 @@ class GitViewModel {
             errorMessage = "Error moving file to trash: \(error.localizedDescription)"
         }
     }
+
+    // MARK: - Conflict Resolution
+
+    /// Check if the repository has any merge conflicts
+    func hasConflicts() async -> Bool {
+        guard let url = repositoryURL else { return false }
+
+        do {
+            let status = try await gitService.getStatus(in: url)
+            return status.hasConflicts
+        } catch {
+            errorMessage = "Error checking conflicts: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// Get a list of files with conflicts
+    func getConflictedFiles() async -> [String] {
+        guard let url = repositoryURL else { return [] }
+
+        do {
+            let status = try await gitService.getStatus(in: url)
+            return status.conflicted
+        } catch {
+            errorMessage = "Error getting conflicted files: \(error.localizedDescription)"
+            return []
+        }
+    }
+
+    /// Resolve conflicts in a file using "ours" strategy
+    func resolveConflictUsingOurs(filePath: String) async {
+        guard let url = repositoryURL else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await gitService.resolveConflictUsingOurs(filePath: filePath, in: url)
+            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            await loadChanges()
+        } catch {
+            errorMessage = "Error resolving conflict: \(error.localizedDescription)"
+        }
+    }
+
+    /// Resolve conflicts in a file using "theirs" strategy
+    func resolveConflictUsingTheirs(filePath: String) async {
+        guard let url = repositoryURL else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await gitService.resolveConflictUsingTheirs(filePath: filePath, in: url)
+            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            await loadChanges()
+        } catch {
+            errorMessage = "Error resolving conflict: \(error.localizedDescription)"
+        }
+    }
+
+    /// Mark a conflicted file as resolved (after manual edits)
+    func markConflictResolved(filePath: String) async {
+        guard let url = repositoryURL else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            await loadChanges()
+        } catch {
+            errorMessage = "Error marking conflict resolved: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - File Operations
 }
 
 extension GitViewModel {

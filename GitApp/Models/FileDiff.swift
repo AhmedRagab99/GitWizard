@@ -17,6 +17,7 @@ enum FileStatus: String {
     case untracked = "Untracked"
     case ignored = "Ignored"
     case deleted = "Deleted"
+    case conflict = "Conflict"
 
     // File status codes from git
     static func fromGitStatus(_ status: String) -> FileStatus {
@@ -28,6 +29,7 @@ enum FileStatus: String {
         case "C": return .copied
         case "?": return .untracked
         case "!": return .ignored
+        case "U": return .conflict
         default: return .unknown
         }
     }
@@ -43,6 +45,7 @@ enum FileStatus: String {
         case .copied: return "doc.on.doc.fill"
         case .removed: return "minus.circle.fill"
         case .unknown: return "questionmark.circle.fill"
+        case .conflict: return "exclamationmark.triangle.fill"
         }
     }
 
@@ -57,6 +60,7 @@ enum FileStatus: String {
         case .removed: return .red
         case .copied: return .yellow
         case .unknown: return .purple
+        case .conflict: return .red
         }
     }
 
@@ -71,6 +75,7 @@ enum FileStatus: String {
         case .untracked: return "U"
         case .ignored: return "I"
         case .deleted: return "D"
+        case .conflict: return "!"
         }
     }
 }
@@ -79,6 +84,11 @@ struct FileDiff: Identifiable, Hashable {
     var id: String { raw }
     var header: String
     var status: FileStatus {
+        // Check for conflicts in chunks
+        if chunks.contains(where: { $0.hasConflict }) {
+            return .conflict
+        }
+
         // Check if header contains file mode information that indicates file status
         if header.contains("new file mode") {
             return .added

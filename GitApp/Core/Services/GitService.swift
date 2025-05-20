@@ -169,6 +169,26 @@ actor GitService {
         try await Process.output(GitStashList(directory: directory))
     }
 
+    // MARK: - Conflict Resolution
+
+    func resolveConflictUsingOurs(filePath: String, in directory: URL) async throws {
+        try await Process.output(GitCheckoutOurs(directory: directory, filePath: filePath))
+    }
+
+    func resolveConflictUsingTheirs(filePath: String, in directory: URL) async throws {
+        try await Process.output(GitCheckoutTheirs(directory: directory, filePath: filePath))
+    }
+
+    func markConflictResolved(filePath: String, in directory: URL) async throws {
+        try await Process.output(GitAddPathspec(directory: directory, pathspec: filePath))
+    }
+
+    func hasConflicts(in directory: URL) async throws -> Bool {
+        // Get status and check for conflict markers
+        let status = try await getStatus(in: directory)
+        return !status.conflicted.isEmpty
+    }
+
     // MARK: - Repository Operations
     func findGitRepositories(in directory: URL) async -> [URL] {
         let fileManager = FileManager.default
