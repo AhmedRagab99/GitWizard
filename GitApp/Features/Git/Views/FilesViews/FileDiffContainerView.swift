@@ -4,6 +4,12 @@ struct FileDiffContainerView: View {
     @Bindable var viewModel: GitViewModel
     let fileDiff: FileDiff
 
+    // Determine if this file is staged based on where it appears in the view model
+    private var isFileStaged: Bool {
+        guard let stagedDiff = viewModel.stagedDiff else { return false }
+        return stagedDiff.fileDiffs.contains { $0.id == fileDiff.id }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -74,7 +80,8 @@ struct FileDiffContainerView: View {
                     // Mark as resolved after manual edits
                     let path = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
                     Task { await viewModel.markConflictResolved(filePath: path) }
-                } : nil
+                } : nil,
+                isStaged: isFileStaged
             )
             .background(Color(.windowBackgroundColor))
         }

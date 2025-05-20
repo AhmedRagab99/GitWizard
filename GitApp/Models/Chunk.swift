@@ -26,17 +26,17 @@ struct Chunk: Identifiable, Hashable {
             } else if isInTheirConflict {
                 return .conflictTheirs
             } else {
-                switch raw.first {
-                case "-":
-                    return .removed
-                case "+":
-                    return .added
-                case " ":
-                    return .unchanged
-                case "@":
-                    return .header
-                default:
-                    return .unchanged
+            switch raw.first {
+            case "-":
+                return .removed
+            case "+":
+                return .added
+            case " ":
+                return .unchanged
+            case "@":
+                return .header
+            default:
+                return .unchanged
                 }
             }
         }

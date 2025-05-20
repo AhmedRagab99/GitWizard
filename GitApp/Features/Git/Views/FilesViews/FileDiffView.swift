@@ -8,6 +8,7 @@ struct FileDiffView: View {
     var onResolveOurs: ((Chunk) -> Void)?
     var onResolveTheirs: ((Chunk) -> Void)?
     var onMarkResolved: ((Chunk) -> Void)?
+    var isStaged: Bool = false
 
     @State private var expandedChunks: Set<String> = []
     @State private var fontSize: CGFloat = 13
@@ -15,53 +16,84 @@ struct FileDiffView: View {
     @State private var operationInProgress: Bool = false
     @State private var operatedChunks: Set<String> = []
 
+
     var body: some View {
-        ScrollView(.vertical) {
-            VStack(spacing: 0) {
-                ForEach(fileDiff.chunks) { chunk in
+                ScrollView(.vertical) {
                     VStack(spacing: 0) {
-                        chunkHeader(chunk)
-                            .background(Color(.controlBackgroundColor))
-                            .opacity(operationInProgress && operatedChunks.contains(chunk.id) ? 0.6 : 1.0)
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.18)) {
-                                    if expandedChunks.contains(chunk.id) {
-                                        expandedChunks.remove(chunk.id)
-                                    } else {
-                                        expandedChunks.insert(chunk.id)
+                        ForEach(fileDiff.chunks) { chunk in
+                            VStack(spacing: 0) {
+                                chunkHeader(chunk)
+                                    .background(Color(.controlBackgroundColor))
+                                    .opacity(operationInProgress && operatedChunks.contains(chunk.id) ? 0.6 : 1.0)
+                                    .onTapGesture {
+                                        withAnimation(.easeInOut(duration: 0.18)) {
+                                            if expandedChunks.contains(chunk.id) {
+                                                expandedChunks.remove(chunk.id)
+                                            } else {
+                                                expandedChunks.insert(chunk.id)
+                                            }
+                                        }
+                                    }
+                                if expandedChunks.contains(chunk.id) {
+                                    ForEach(chunk.lines) { line in
+                                        if line.kind == .conflictStart || line.kind == .conflictMiddle || line.kind == .conflictEnd ||
+                                           line.kind == .conflictOurs || line.kind == .conflictTheirs {
+                                            ConflictLineView(line: line, isSelected: false, onSelect: {})
+                                        } else {
+                                            diffLineView(line: line)
+                                        }
                                     }
                                 }
                             }
-                        if expandedChunks.contains(chunk.id) {
-                            ForEach(chunk.lines) { line in
-                                if line.kind == .conflictStart || line.kind == .conflictMiddle || line.kind == .conflictEnd ||
-                                   line.kind == .conflictOurs || line.kind == .conflictTheirs {
-                                    ConflictLineView(line: line, isSelected: false, onSelect: {})
-                                } else {
-                                    diffLineView(line: line)
-                                }
-                            }
+                            .background(Color(.windowBackgroundColor))
+                            .cornerRadius(8)
+                            .padding(.vertical, 2)
+                            .padding(.horizontal, 4)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(operatedChunks.contains(chunk.id) ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                                    .opacity(operatedChunks.contains(chunk.id) ? 1.0 : 0.0)
+                            )
+                            .animation(.easeInOut(duration: 0.2), value: operatedChunks.contains(chunk.id))
                         }
                     }
-                    .background(Color(.windowBackgroundColor))
-                    .cornerRadius(8)
-                    .padding(.vertical, 2)
-                    .padding(.horizontal, 4)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(operatedChunks.contains(chunk.id) ? Color.accentColor : Color.clear, lineWidth: 1.5)
-                            .opacity(operatedChunks.contains(chunk.id) ? 1.0 : 0.0)
-                    )
-                    .animation(.easeInOut(duration: 0.2), value: operatedChunks.contains(chunk.id))
+                    .padding(.vertical, 6)
                 }
-            }
-            .padding(.vertical, 6)
-        }
+            
+        
         .background(Color(.windowBackgroundColor))
         .onChange(of: fileDiff.id) {
             operatedChunks.removeAll()
+            
+            loadFileContent()
+        }
+        .onAppear {
+            loadFileContent()
         }
     }
+
+    private func loadFileContent() {
+        let fileContent = fileDiff.chunks.flatMap { chunk in
+            chunk.lines.compactMap { line in
+                if line.kind == .header {
+                    return nil
+                }
+
+                if line.kind == .added || line.kind == .removed || line.kind == .unchanged {
+                    if line.raw.count > 1 {
+                        return String(line.raw.dropFirst())
+                    } else {
+                        return ""
+                    }
+                }
+
+                return line.raw
+            }
+        }.joined(separator: "\n")
+
+    }
+
+  
 
     private func chunkHeader(_ chunk: Chunk) -> some View {
         HStack(spacing: 8) {
@@ -134,29 +166,33 @@ struct FileDiffView: View {
     @ViewBuilder
     private func normalButtons(for chunk: Chunk) -> some View {
         HStack(spacing: 8) {
-            Button(action: {
-                performOperation {
-                    operatedChunks.insert(chunk.id)
-                    onStage(chunk)
+            if !isStaged {
+                Button(action: {
+                    performOperation {
+                        operatedChunks.insert(chunk.id)
+                        onStage(chunk)
+                    }
+                }) {
+                    Image(systemName: "plus.circle")
+                        .foregroundColor(.green)
                 }
-            }) {
-                Image(systemName: "plus.circle")
-                    .foregroundColor(.green)
+                .buttonStyle(.plain)
+                .disabled(operationInProgress)
             }
-            .buttonStyle(.plain)
-            .disabled(operationInProgress)
 
-            Button(action: {
-                performOperation {
-                    operatedChunks.insert(chunk.id)
-                    onUnstage(chunk)
+            if isStaged {
+                Button(action: {
+                    performOperation {
+                        operatedChunks.insert(chunk.id)
+                        onUnstage(chunk)
+                    }
+                }) {
+                    Image(systemName: "minus.circle")
+                        .foregroundColor(.orange)
                 }
-            }) {
-                Image(systemName: "minus.circle")
-                    .foregroundColor(.orange)
+                .buttonStyle(.plain)
+                .disabled(operationInProgress)
             }
-            .buttonStyle(.plain)
-            .disabled(operationInProgress)
 
             Button(action: {
                 performOperation {
@@ -233,25 +269,3 @@ struct FileDiffView: View {
         }
     }
 }
-
-//#Preview {
-//    FileDiffView(
-//        fileDiff: FileDiff(
-//            header: "diff --git a/File.swift b/File.swift",
-//            extendedHeaderLines: [],
-//            fromFileToFileLines: [],
-//            chunks: [
-//                Chunk(
-//                    header: "@@ -1,5 +1,5 @@",
-//                    oldLines: ["-old line 1", " old line 2", "-old line 3"],
-//                    newLines: ["+new line 1", " old line 2", "+new line 3"]
-//                )
-//            ],
-//            raw: ""
-//        ),
-//        onStage: { _ in },
-//        onUnstage: { _ in },
-//        onReset: { _ in }
-//    )
-//    .frame(width: 800, height: 600)
-//}
