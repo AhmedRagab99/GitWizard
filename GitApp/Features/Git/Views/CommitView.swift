@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import os.log
 
 struct CommitView: View {
     @Bindable var viewModel: GitViewModel
@@ -10,6 +11,13 @@ struct CommitView: View {
     @State private var fileToReset: String?
     @State private var hasConflicts: Bool = false
     @State private var conflictedFiles: [String] = []
+
+    // Track visible files to optimize memory management
+    @State private var visibleStagedFiles = Set<String>()
+    @State private var visibleUnstagedFiles = Set<String>()
+
+    // Lazily load diff content
+    @State private var shouldLoadDiff = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,7 +31,17 @@ struct CommitView: View {
             Task {
                 await viewModel.loadChanges()
                 await checkForConflicts()
+                // Delay loading diff content until after initial UI rendering
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    shouldLoadDiff = true
+                }
             }
+        }
+        .onDisappear {
+            // Clear references to free memory when view disappears
+            selectedFileItem = nil
+            viewModel.selectedFileDiff = nil
+            shouldLoadDiff = false
         }
         .loading(viewModel.isLoading)
         .errorAlert(viewModel.errorMessage)
@@ -71,6 +89,7 @@ struct CommitView: View {
             HSplitView {
                 // Left pane - Staged and Unstaged changes
                 VStack(spacing: 20) {
+                    // Staged changes section
                     SectionCard(
                         title: "Staged Changes",
                         count: viewModel.stagedDiff?.fileDiffs.count ?? 0,
@@ -81,9 +100,11 @@ struct CommitView: View {
                         iconColor: .green
                     ) {
                         if let stagedDiff = viewModel.stagedDiff, !stagedDiff.fileDiffs.isEmpty {
-                            ModernFileListView(
+                            // Use optimized file list view with memory tracking
+                            OptimizedFileListView(
                                 files: stagedDiff.fileDiffs,
                                 selectedFile: $selectedFileItem,
+                                visibleFiles: $visibleStagedFiles,
                                 actionIcon: "minus.circle.fill",
                                 actionColor: .orange,
                                 action: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
@@ -106,6 +127,8 @@ struct CommitView: View {
                             EmptyStateView(message: "No staged changes")
                         }
                     }
+
+                    // Unstaged changes section
                     SectionCard(
                         title: "Unstaged Changes",
                         count: (viewModel.unstagedDiff?.fileDiffs.count ?? 0) + viewModel.untrackedFiles.count,
@@ -117,9 +140,11 @@ struct CommitView: View {
                     ) {
                         if let unstagedDiff = viewModel.unstagedDiff, !unstagedDiff.fileDiffs.isEmpty || !viewModel.untrackedFiles.isEmpty {
                             VStack(spacing: 8) {
-                                ModernFileListView(
+                                // Optimized file list view for unstaged files
+                                OptimizedFileListView(
                                     files: unstagedDiff.fileDiffs,
                                     selectedFile: $selectedFileItem,
+                                    visibleFiles: $visibleUnstagedFiles,
                                     actionIcon: "plus.circle.fill",
                                     actionColor: .green,
                                     action: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
@@ -136,27 +161,32 @@ struct CommitView: View {
                                         let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
                                         Task { await viewModel.moveToTrash(path: path) }
                                     }
-//                                    ,  onResolveConflict: { file in
-//                                        if file.status == .conflict {
-//                                            let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-//                                            showConflictMenu(for: path)
-//                                        }
-//                                    }
                                 )
 
-                                // Untracked files
+                                // Untracked files - use LazyVStack for better memory management
                                 if !viewModel.untrackedFiles.isEmpty {
-                                    SectionCard(title: FileStatus.untracked.rawValue, count: viewModel.untrackedFiles.count, actionTitle: "", action: {
-
-                                    }, showAction: false, icon: FileStatus.untracked.icon, iconColor: FileStatus.untracked.color) {
-                                        ForEach(viewModel.untrackedFiles, id: \.self) { path in
-                                            UntrackedFileRow(
-                                                path: path,
-                                                action: { Task { await viewModel.stageFile(path: path) } },
-                                                onIgnore: { Task { await viewModel.addToGitignore(path: path) } },
-                                                onTrash: { Task { await viewModel.moveToTrash(path: path) } }
-                                            )
+                                    SectionCard(
+                                        title: FileStatus.untracked.rawValue,
+                                        count: viewModel.untrackedFiles.count,
+                                        actionTitle: "",
+                                        action: {},
+                                        showAction: false,
+                                        icon: FileStatus.untracked.icon,
+                                        iconColor: FileStatus.untracked.color
+                                    ) {
+                                        ScrollView {
+                                            LazyVStack(spacing: 0) {
+                                                ForEach(viewModel.untrackedFiles, id: \.self) { path in
+                                                    UntrackedFileRow(
+                                                        path: path,
+                                                        action: { Task { await viewModel.stageFile(path: path) } },
+                                                        onIgnore: { Task { await viewModel.addToGitignore(path: path) } },
+                                                        onTrash: { Task { await viewModel.moveToTrash(path: path) } }
+                                                    )
+                                                }
+                                            }
                                         }
+                                        .frame(maxHeight: 200) // Limit height to improve performance
                                     }
                                 }
                             }
@@ -172,8 +202,12 @@ struct CommitView: View {
                 .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
                 .frame(minWidth: 340, maxWidth: 420)
 
-                // Right pane - Diff view
-                rightPane
+                // Right pane - Diff view (lazy loaded)
+                if shouldLoadDiff {
+                    rightPane
+                } else {
+                    loadingPlaceholder
+                }
             }
             Divider()
             CommitMessageArea(
@@ -195,6 +229,21 @@ struct CommitView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 4)
         }
+    }
+
+    @ViewBuilder
+    private var loadingPlaceholder: some View {
+        VStack {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text("Loading diff view...")
+                .font(.headline)
+                .foregroundColor(.secondary)
+                .padding(.top, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(16)
     }
 
     @ViewBuilder
@@ -336,6 +385,79 @@ struct CommitView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Memory-optimized File List View
+struct OptimizedFileListView: View {
+    let files: [FileDiff]
+    @Binding var selectedFile: FileDiff?
+    @Binding var visibleFiles: Set<String>
+    let actionIcon: String
+    let actionColor: Color
+    let action: (FileDiff) -> Void
+    var onStage: ((FileDiff) -> Void)? = nil
+    var onUnstage: ((FileDiff) -> Void)? = nil
+    var onReset: ((FileDiff) -> Void)? = nil
+    var onIgnore: ((FileDiff) -> Void)? = nil
+    var onTrash: ((FileDiff) -> Void)? = nil
+    var isStaged: Bool = false
+
+    private var groupedFiles: [(status: FileStatus, files: [FileDiff])] {
+        Dictionary(grouping: files, by: { $0.status })
+            .sorted { $0.key.rawValue < $1.key.rawValue }
+            .map { ($0.key, $0.value) }
+    }
+
+    var body: some View {
+        if files.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "tray")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.secondary)
+                Text("No files to show")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 120)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.windowBackgroundColor).opacity(0.7))
+            )
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(groupedFiles, id: \.status) { group in
+                        ForEach(group.files, id: \.fromFilePath) { file in
+                            ModernFileRow(
+                                fileDiff: file,
+                                isSelected: selectedFile?.fromFilePath == file.fromFilePath,
+                                actionIcon: actionIcon,
+                                actionColor: actionColor,
+                                action: { action(file) },
+                                onStage: onStage != nil ? { onStage?(file) } : nil,
+                                onUnstage: onUnstage != nil ? { onUnstage?(file) } : nil,
+                                onReset: onReset != nil ? { onReset?(file) } : nil,
+                                onIgnore: onIgnore != nil ? { onIgnore?(file) } : nil,
+                                onTrash: onTrash != nil ? { onTrash?(file) } : nil,
+                                isStaged: isStaged
+                            )
+                            .onTapGesture { selectedFile = file }
+                            .onAppear {
+                                // Track visible files
+                                visibleFiles.insert(file.fromFilePath)
+                            }
+                            .onDisappear {
+                                // Remove from tracking when not visible
+                                visibleFiles.remove(file.fromFilePath)
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .frame(maxHeight: 300) // Limit height for better performance
         }
     }
 }

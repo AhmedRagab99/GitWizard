@@ -11,39 +11,65 @@ struct HistoryView: View {
     @Bindable var viewModel: GitViewModel
     @State private var selectedCommit: Commit?
     @State private var isLoadingMore = false
-    @State private var detailViewHeight: CGFloat = 400 // Default height
+
+    // Track visible commits to optimize memory usage
+    @State private var visibleCommitIDs = Set<UUID>()
 
     var body: some View {
         VStack(spacing: 0) {
-            // Commit list
-            List {
-                ForEach(viewModel.logStore.commits) { commit in
-                    CommitRowView(
-                        commit: commit,
-                        isSelected: selectedCommit?.id == commit.id,
-                        onSelect: {
-                            selectedCommit = commit
-                            viewModel.loadCommitDetails(commit)
-                        }
-                    )
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .task(priority: .background) {
-                        // Load more when we reach the last item
-                        if commit == viewModel.logStore.commits.last && !viewModel.logStore.isLoadingMore {
-                            Task {
-                                await viewModel.logStore.loadMore()
+            // Use LazyVStack within ScrollView for better memory management
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(viewModel.logStore.commits) { commit in
+                        CommitRowView(
+                            commit: commit,
+                            isSelected: selectedCommit?.id == commit.id,
+                            onSelect: {
+                                // Only load details if this is a new selection
+                                if selectedCommit?.id != commit.id {
+                                    selectedCommit = commit
+                                    viewModel.loadCommitDetails(commit)
+                                }
+                            }
+                        )
+                        .id(commit.id)
+                        .padding(.vertical, 1)
+                        .background(Color.clear)
+                        // Track visibility for memory optimization
+                        .onAppear {
+                            visibleCommitIDs.insert(commit.id)
+
+                            // Trigger pagination when reaching end
+                            if commit == viewModel.logStore.commits.last && !viewModel.logStore.isLoadingMore && !isLoadingMore {
+                                isLoadingMore = true
+                                Task {
+                                    await viewModel.logStore.loadMore()
+                                    isLoadingMore = false
+                                }
                             }
                         }
+                        .onDisappear {
+                            visibleCommitIDs.remove(commit.id)
+                        }
+                        Divider()
+                    }
+
+                    // Loading indicator
+                    if isLoadingMore {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
                 }
             }
-            .listStyle(.plain)
             .refreshable {
+                // Clear selections on refresh to avoid stale references
+                selectedCommit = nil
+                viewModel.commitDetails = nil
                 await viewModel.logStore.refresh()
             }
 
-            // Commit details with close button
+            // Commit details - only show when actually needed
             if let selectedCommit = selectedCommit {
                 CommitDetailView(
                     commit: selectedCommit,
@@ -52,6 +78,7 @@ struct HistoryView: View {
                     onClose: {
                         withAnimation(.easeInOut) {
                             self.selectedCommit = nil
+                            // Clear commit details to free memory
                             viewModel.commitDetails = nil
                         }
                     }
@@ -61,5 +88,10 @@ struct HistoryView: View {
         }
         .loading(viewModel.isLoading)
         .errorAlert(viewModel.errorMessage)
+        // Cleanup resources when view disappears
+        .onDisappear {
+            selectedCommit = nil
+            viewModel.commitDetails = nil
+        }
     }
 }
