@@ -19,7 +19,7 @@ class PullRequestViewModel {
     var searchText: String = ""
 
     // API Service
-    let githubService = GitHubAPIService(authToken: "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")
+    let githubService = GitHubAPIService()
 
     // Repository information
     private var repositoryOwner: String?
