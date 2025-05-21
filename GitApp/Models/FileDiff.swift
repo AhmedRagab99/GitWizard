@@ -83,7 +83,7 @@ enum FileStatus: String {
 struct FileDiff: Identifiable, Hashable {
     var id: String { raw }
     var header: String
-    var status: FileStatus {
+    var status: FileStatus  {
         // Check for conflicts in chunks
         if chunks.contains(where: { $0.hasConflict }) {
             return .conflict
@@ -222,6 +222,51 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = ["new file mode 100644"]
         self.fromFileToFileLines = []
         self.chunks = []
+    }
+
+    // Init for added files
+    init(added path: String) {
+        self.raw = "diff --git a/\(path) b/\(path)\nnew file mode 100644\n--- /dev/null\n+++ b/\(path)"
+        self.header = "diff --git a/\(path) b/\(path)"
+        self.extendedHeaderLines = ["new file mode 100644"]
+        self.fromFileToFileLines = ["--- /dev/null", "+++ b/\(path)"]
+        self.chunks = []
+    }
+
+    // Init for removed files
+    init(removed path: String) {
+        self.raw = "diff --git a/\(path) b/\(path)\ndeleted file mode 100644\n--- a/\(path)\n+++ /dev/null"
+        self.header = "diff --git a/\(path) b/\(path)"
+        self.extendedHeaderLines = ["deleted file mode 100644"]
+        self.fromFileToFileLines = ["--- a/\(path)", "+++ /dev/null"]
+        self.chunks = []
+    }
+
+    // Init for binary files
+    init(binary path: String) {
+        self.raw = "diff --git a/\(path) b/\(path)\nBinary files differ"
+        self.header = "diff --git a/\(path) b/\(path)"
+        self.extendedHeaderLines = ["Binary files differ"]
+        self.fromFileToFileLines = []
+        self.chunks = []
+    }
+
+    // Init from fileDiffs and mappingLines - useful for constructing diffs programmatically
+    init(fileDiffs: [Chunk], mappingLines: [Int: Int], diffText: String) {
+        self.raw = diffText
+        self.header = diffText.components(separatedBy: "\n").first ?? ""
+        self.extendedHeaderLines = []
+        self.fromFileToFileLines = []
+        self.chunks = fileDiffs
+    }
+
+    // Full initializer for creating diffs with complete flexibility
+    init(raw: String, header: String, extendedHeaderLines: [String], fromFileToFileLines: [String], chunks: [Chunk]) {
+        self.raw = raw
+        self.header = header
+        self.extendedHeaderLines = extendedHeaderLines
+        self.fromFileToFileLines = fromFileToFileLines
+        self.chunks = chunks
     }
 
     func updateAll(stage: Bool) -> Self {

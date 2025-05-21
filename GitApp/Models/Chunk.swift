@@ -6,50 +6,50 @@
 //
 
 import Foundation
-
-struct Chunk: Identifiable, Hashable {
-    struct Line: Identifiable, Hashable, Equatable {
-        enum Kind {
-            case removed, added, unchanged, header
-            case conflictStart, conflictMiddle, conflictEnd, conflictOurs, conflictTheirs
-        }
-        var id: Int
-        var kind: Kind {
-            if raw.starts(with: "<<<<<<<") {
-                return .conflictStart
-            } else if raw.starts(with: "=======") {
-                return .conflictMiddle
-            } else if raw.starts(with: ">>>>>>>") {
-                return .conflictEnd
-            } else if isInOurConflict {
-                return .conflictOurs
-            } else if isInTheirConflict {
-                return .conflictTheirs
-            } else {
-            switch raw.first {
-            case "-":
-                return .removed
-            case "+":
-                return .added
-            case " ":
-                return .unchanged
-            case "@":
-                return .header
-            default:
-                return .unchanged
-                }
+struct Line: Identifiable, Hashable, Equatable {
+    enum Kind {
+        case removed, added, unchanged, header
+        case conflictStart, conflictMiddle, conflictEnd, conflictOurs, conflictTheirs
+    }
+    var id: Int
+    var kind: Kind {
+        if raw.starts(with: "<<<<<<<") {
+            return .conflictStart
+        } else if raw.starts(with: "=======") {
+            return .conflictMiddle
+        } else if raw.starts(with: ">>>>>>>") {
+            return .conflictEnd
+        } else if isInOurConflict {
+            return .conflictOurs
+        } else if isInTheirConflict {
+            return .conflictTheirs
+        } else {
+        switch raw.first {
+        case "-":
+            return .removed
+        case "+":
+            return .added
+        case " ":
+            return .unchanged
+        case "@":
+            return .header
+        default:
+            return .unchanged
             }
         }
-        var toFileLineNumber: Int?
-        var raw: String
-        var isInOurConflict: Bool = false
-        var isInTheirConflict: Bool = false
-
-        init(id: Int, raw: String) {
-            self.id = id
-            self.raw = raw
-        }
     }
+    var toFileLineNumber: Int?
+    var raw: String
+    var isInOurConflict: Bool = false
+    var isInTheirConflict: Bool = false
+
+    init(id: Int, raw: String) {
+        self.id = id
+        self.raw = raw
+    }
+}
+struct Chunk: Identifiable, Hashable {
+    
     var id: String { raw }
     var lines: [Line]
     var lineNumbers: [String]

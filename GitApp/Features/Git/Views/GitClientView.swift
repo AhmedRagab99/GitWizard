@@ -32,6 +32,8 @@ struct GitClientView: View {
                     CommitView(viewModel: viewModel)
                 } else if selectedWorkspaceItem == .history {
                     HistoryView(viewModel: viewModel)
+                } else if selectedWorkspaceItem == .pullRequests {
+                    PullRequestsContainerView(gitViewModel: viewModel)
                 } else {
                     // Optionally, add a search view or placeholder
                     Text(" coming soon...")
