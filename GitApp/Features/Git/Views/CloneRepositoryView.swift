@@ -9,6 +9,7 @@ import SwiftUI
 
 struct CloneRepositoryView: View {
     @Bindable var viewModel: RepositoryViewModel
+    let accountManager: AccountManager
     @Environment(\.dismiss) private var dismiss
     @State private var cloneURL: String = ""
     @State private var selectedDirectory: URL?
@@ -136,3 +137,16 @@ struct CloneRepositoryView: View {
         }
     }
 }
+
+// Extend your preview provider if necessary to pass a mock AccountManager
+#if DEBUG
+struct CloneRepositoryView_Previews: PreviewProvider {
+    static var previews: some View {
+        // Create a mock RepositoryViewModel and AccountManager for the preview
+        let mockRepoVM = RepositoryViewModel()
+        let mockAccountManager = AccountManager()
+
+        CloneRepositoryView(viewModel: mockRepoVM, accountManager: mockAccountManager)
+    }
+}
+#endif

@@ -2,92 +2,105 @@ import Foundation
 import SwiftUI
 
 class GitHubAPIService {
-    // API URLs
-    private let baseURL = "https://api.github.com"
+    // No direct baseURL or authToken storage here anymore
 
-    // Authentication
-    private var authToken: String?
-
-    init(authToken: String? = nil) {
-        self.authToken = authToken
-    }
-
-    // Set auth token
-    func setAuthToken(_ token: String) {
-        self.authToken = token
+    init() {
+        // Initialization logic if needed, but token will be passed per request
     }
 
     // MARK: - Pull Requests
 
     /// Fetch pull requests for a GitHub repository
     /// - Parameters:
+    ///   - apiEndpoint: Base URL of the GitHub API
     ///   - owner: Repository owner (username or organization)
     ///   - repo: Repository name
+    ///   - token: Authentication token
     ///   - state: PR state filter (open, closed, all)
     ///   - sort: Sort field (created, updated, popularity, long-running)
     ///   - direction: Sort direction (asc, desc)
-    func fetchPullRequests(owner: String, repo: String, state: String = "all", sort: String = "updated", direction: String = "desc") async throws -> [PullRequest] {
-        let endpoint = "/repos/\(owner)/\(repo)/pulls"
-        let queryItems = [
+    func fetchPullRequests(apiEndpoint: URL, owner: String, repo: String, token: String, state: String = "all", sort: String = "updated", direction: String = "desc") async throws -> [PullRequest] {
+        var components = URLComponents(url: apiEndpoint, resolvingAgainstBaseURL: true)!
+        components.path += "/repos/\(owner)/\(repo)/pulls" // Append to existing path from apiEndpoint
+        components.path = components.path.replacingOccurrences(of: "//", with: "/")
+
+        components.queryItems = [
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "sort", value: sort),
             URLQueryItem(name: "direction", value: direction),
             URLQueryItem(name: "per_page", value: "100")
         ]
 
-        let data = try await performRequest(endpoint: endpoint, queryItems: queryItems)
+        guard let url = components.url else {
+            throw GitHubAPIError.invalidURL
+        }
+
+        let data = try await performRequest(url: url, token: token)
         return try parsePullRequests(from: data)
     }
 
     /// Fetch a specific pull request by number
     /// - Parameters:
+    ///   - apiEndpoint: Base URL of the GitHub API
     ///   - owner: Repository owner (username or organization)
     ///   - repo: Repository name
     ///   - number: Pull request number
-    func fetchPullRequest(owner: String, repo: String, number: Int) async throws -> PullRequest {
-        let endpoint = "/repos/\(owner)/\(repo)/pulls/\(number)"
-        let data = try await performRequest(endpoint: endpoint)
+    ///   - token: Authentication token
+    func fetchPullRequest(apiEndpoint: URL, owner: String, repo: String, number: Int, token: String) async throws -> PullRequest {
+        var components = URLComponents(url: apiEndpoint, resolvingAgainstBaseURL: true)!
+        components.path += "/repos/\(owner)/\(repo)/pulls/\(number)"
+        components.path = components.path.replacingOccurrences(of: "//", with: "/")
 
-        // Configure decoder with proper date handling
+        guard let url = components.url else {
+            throw GitHubAPIError.invalidURL
+        }
+
+        let prDataResponse = try await performRequest(url: url, token: token)
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        // Get PR details
-        let prData: PullRequestResponse
+        let prDecodedData: PullRequestResponse
         do {
-            prData = try decoder.decode(PullRequestResponse.self, from: data)
+            prDecodedData = try decoder.decode(PullRequestResponse.self, from: prDataResponse)
         } catch {
             print("Error decoding PR data: \(error.localizedDescription)")
             throw GitHubAPIError.invalidResponse
         }
 
         // Get PR files in parallel
-        let filesEndpoint = "/repos/\(owner)/\(repo)/pulls/\(number)/files"
+        var filesComponents = URLComponents(url: apiEndpoint, resolvingAgainstBaseURL: true)!
+        filesComponents.path += "/repos/\(owner)/\(repo)/pulls/\(number)/files"
+        filesComponents.path = filesComponents.path.replacingOccurrences(of: "//", with: "/")
+
         var files: [PullRequestFileResponse] = []
         var comments: [PullRequestCommentResponse] = []
 
-        do {
-            let filesData = try await performRequest(endpoint: filesEndpoint)
-            files = try decoder.decode([PullRequestFileResponse].self, from: filesData)
-        } catch {
-            print("Failed to load PR files: \(error.localizedDescription)")
-            // Continue with empty files array
+        if let filesUrl = filesComponents.url {
+            do {
+                let filesData = try await performRequest(url: filesUrl, token: token)
+                files = try decoder.decode([PullRequestFileResponse].self, from: filesData)
+            } catch {
+                print("Failed to load PR files: \(error.localizedDescription)")
+            }
         }
 
         // Get PR comments in parallel
-        let commentsEndpoint = "/repos/\(owner)/\(repo)/pulls/\(number)/comments"
-        do {
-            let commentsData = try await performRequest(endpoint: commentsEndpoint)
-            comments = try decoder.decode([PullRequestCommentResponse].self, from: commentsData)
-        } catch {
-            print("Failed to load PR comments: \(error.localizedDescription)")
-            // Continue with empty comments array
+        var commentsComponents = URLComponents(url: apiEndpoint, resolvingAgainstBaseURL: true)!
+        commentsComponents.path += "/repos/\(owner)/\(repo)/pulls/\(number)/comments"
+        commentsComponents.path = commentsComponents.path.replacingOccurrences(of: "//", with: "/")
+
+        if let commentsUrl = commentsComponents.url {
+            do {
+                let commentsData = try await performRequest(url: commentsUrl, token: token)
+                comments = try decoder.decode([PullRequestCommentResponse].self, from: commentsData)
+            } catch {
+                print("Failed to load PR comments: \(error.localizedDescription)")
+            }
         }
 
-        return convertToPullRequest(prData, files: files, comments: comments)
+        return convertToPullRequest(prDecodedData, files: files, comments: comments)
     }
-
-
 
     /// Extract repository owner and name from remote URL
     /// - Parameter url: Git remote URL (e.g. https://github.com/owner/repo.git)
@@ -95,44 +108,69 @@ class GitHubAPIService {
     func extractOwnerAndRepo(from url: String) -> (owner: String, repo: String)? {
         // Handle different URL formats
 
-        // Format: https://github.com/owner/repo.git
-        if let regex = try? NSRegularExpression(pattern: "github\\.com[/:]([^/]+)/([^/\\.]+)(\\.git)?$") {
-            let nsString = url as NSString
-            if let match = regex.firstMatch(in: url, range: NSRange(location: 0, length: nsString.length)) {
-                let owner = nsString.substring(with: match.range(at: 1))
-                var repo = nsString.substring(with: match.range(at: 2))
+        // Format: https://github.com/owner/repo.git or git@github.com:owner/repo.git
+        // More robust regex to handle both https and ssh, and various GitHub Enterprise URLs
+        // This regex assumes a structure like `domain/owner/repo` or `domain:owner/repo`
+        let patterns = [
+            "github\\.com[/:]([^/]+)/([^/\\\\.]+)(\\\\.git)?$", // Standard GitHub HTTPS/SSH
+            "([^/]+)/([^/]+)/([^/\\\\.]+)(\\\\.git)?$", // Potential GHE: host/owner/repo.git (less specific)
+            "git@([^:]+):([^/]+)/([^/\\\\.]+)(\\\\.git)?$" // Standard SSH format
+        ]
 
-                // Remove .git suffix if present
-                if repo.hasSuffix(".git") {
-                    repo = String(repo.dropLast(4))
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let nsString = url as NSString
+                if let match = regex.firstMatch(in: url, range: NSRange(location: 0, length: nsString.length)) {
+                    var ownerIndex = 1
+                    var repoIndex = 2
+
+                    if pattern.contains("git@") { // SSH format
+                        ownerIndex = 2
+                        repoIndex = 3
+                    } else if pattern.contains("([^/]+)/([^/]+)/([^/\\\\.]+)") && !url.contains("github.com"){ // GHE-like host/owner/repo
+                         // This is a bit tricky. If the first part is a host, we need to ensure it's not confused.
+                         // For now, let's assume the second group is owner and third is repo.
+                         // This part might need more robust handling based on actual GHE URL structures.
+                         // A simpler way might be to parse the URL and take the last two path components.
+
+                        // Let's try parsing as URL first for GHE
+                        if let parsedURL = URL(string: url) {
+                            let pathComponents = parsedURL.pathComponents.filter { $0 != "/" }
+                            if pathComponents.count >= 2 {
+                                let potentialRepo = pathComponents.last!
+                                let potentialOwner = pathComponents[pathComponents.count - 2]
+                                return (potentialOwner, potentialRepo.replacingOccurrences(of: ".git", with: ""))
+                            }
+                        }
+                        // If URL parsing didn't work well for GHE, fall back to regex indices,
+                        // but this regex pattern is very general.
+                        ownerIndex = 2 // Assuming second group is owner for the host/owner/repo pattern
+                        repoIndex = 3 // Assuming third group is repo
+                    }
+
+                    let owner = nsString.substring(with: match.range(at: ownerIndex))
+                    var repo = nsString.substring(with: match.range(at: repoIndex))
+
+                    if repo.hasSuffix(".git") {
+                        repo = String(repo.dropLast(4))
+                    }
+                    return (owner, repo)
                 }
-
-                return (owner, repo)
             }
         }
-
+        print("Could not extract owner/repo from URL: \(url)")
         return nil
     }
 
     // MARK: - Helper Methods
 
-    private func performRequest(endpoint: String, queryItems: [URLQueryItem]? = nil) async throws -> Data {
-        var components = URLComponents(string: baseURL + endpoint)
-        components?.queryItems = queryItems
-
-        guard let url = components?.url else {
-            throw URLError(.badURL)
-        }
-
+    private func performRequest(url: URL, token: String) async throws -> Data {
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = "GET" // Or be flexible if other methods are needed
 
-        // Add authentication if available
-        if let token = authToken {
-            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.addValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        // Potentially add other headers like "X-GitHub-Api-Version" if needed
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -141,7 +179,9 @@ class GitHubAPIService {
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
-            throw GitHubAPIError.requestFailed(statusCode: httpResponse.statusCode, message: String(data: data, encoding: .utf8) ?? "Unknown error")
+            let responseBody = String(data: data, encoding: .utf8) ?? "No response body"
+            print("GitHub API Error (Status \(httpResponse.statusCode)) for URL \(url.absoluteString): \(responseBody)")
+            throw GitHubAPIError.requestFailed(statusCode: httpResponse.statusCode, message: responseBody)
         }
 
         return data
@@ -405,7 +445,6 @@ struct PullRequestResponse: Codable {
         case user, head, base
     }
 }
-
 
 struct GitHubRef: Codable {
     let label: String

@@ -19,6 +19,11 @@ struct CommitView: View {
     // Lazily load diff content
     @State private var shouldLoadDiff = false
 
+    // State for DisclosureGroup
+    @State private var isStagedExpanded: Bool = true
+    @State private var isModifiedExpanded: Bool = true
+    @State private var isUntrackedExpanded: Bool = true
+
     var body: some View {
         VStack(spacing: 0) {
             if hasConflicts {
@@ -87,119 +92,157 @@ struct CommitView: View {
     private var mainContent: some View {
         VStack(spacing: 0) {
             HSplitView {
-                // Left pane - Staged and Unstaged changes
-                VStack(spacing: 20) {
-                    // Staged changes section
-                    SectionCard(
-                        title: "Staged Changes",
-                        count: viewModel.stagedDiff?.fileDiffs.count ?? 0,
-                        actionTitle: "Unstage All",
-                        action: { Task { await viewModel.unstageAllChanges() } },
-                        showAction: (viewModel.stagedDiff?.fileDiffs.isEmpty == false),
-                        icon: "tray.full.fill",
-                        iconColor: .green
-                    ) {
-                        if let stagedDiff = viewModel.stagedDiff, !stagedDiff.fileDiffs.isEmpty {
-                            // Use optimized file list view with memory tracking
-                            OptimizedFileListView(
-                                files: stagedDiff.fileDiffs,
-                                selectedFile: $selectedFileItem,
-                                visibleFiles: $visibleStagedFiles,
-                                actionIcon: "minus.circle.fill",
-                                actionColor: .orange,
-                                action: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
-                                onUnstage: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
-                                onReset: { file in
-                                    fileToReset = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                    showResetConfirm = true
-                                },
-                                onIgnore: { file in
-                                    let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                    Task { await viewModel.addToGitignore(path: path) }
-                                },
-                                onTrash: { file in
-                                    let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                    Task { await viewModel.moveToTrash(path: path) }
-                                },
-                                isStaged: true
-                            )
-                        } else {
-                            EmptyStateView(message: "No staged changes")
-                        }
-                    }
-
-                    // Unstaged changes section
-                    SectionCard(
-                        title: "Unstaged Changes",
-                        count: (viewModel.unstagedDiff?.fileDiffs.count ?? 0) + viewModel.untrackedFiles.count,
-                        actionTitle: "Stage All",
-                        action: { Task { await viewModel.stageAllChanges() } },
-                        showAction: ((viewModel.unstagedDiff?.fileDiffs.isEmpty == false) || !viewModel.untrackedFiles.isEmpty),
-                        icon: "tray.fill",
-                        iconColor: .orange
-                    ) {
-                        if let unstagedDiff = viewModel.unstagedDiff, !unstagedDiff.fileDiffs.isEmpty || !viewModel.untrackedFiles.isEmpty {
-                            VStack(spacing: 8) {
-                                // Optimized file list view for unstaged files
-                                OptimizedFileListView(
-                                    files: unstagedDiff.fileDiffs,
-                                    selectedFile: $selectedFileItem,
-                                    visibleFiles: $visibleUnstagedFiles,
-                                    actionIcon: "plus.circle.fill",
-                                    actionColor: .green,
-                                    action: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
-                                    onStage: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
-                                    onReset: { file in
-                                        fileToReset = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                        showResetConfirm = true
-                                    },
-                                    onIgnore: { file in
-                                        let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                        Task { await viewModel.addToGitignore(path: path) }
-                                    },
-                                    onTrash: { file in
-                                        let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                        Task { await viewModel.moveToTrash(path: path) }
-                                    }
-                                )
-
-                                // Untracked files - use LazyVStack for better memory management
-                                if !viewModel.untrackedFiles.isEmpty {
-                                    SectionCard(
-                                        title: FileStatus.untracked.rawValue,
-                                        count: viewModel.untrackedFiles.count,
-                                        actionTitle: "",
-                                        action: {},
-                                        showAction: false,
-                                        icon: FileStatus.untracked.icon,
-                                        iconColor: FileStatus.untracked.color
-                                    ) {
-                                        ScrollView {
-                                            LazyVStack(spacing: 0) {
-                                                ForEach(viewModel.untrackedFiles, id: \.self) { path in
-                                                    UntrackedFileRow(
-                                                        path: path,
-                                                        action: { Task { await viewModel.stageFile(path: path) } },
-                                                        onIgnore: { Task { await viewModel.addToGitignore(path: path) } },
-                                                        onTrash: { Task { await viewModel.moveToTrash(path: path) } }
-                                                    )
-                                                }
-                                            }
+                // Left pane - Staged, Modified, and Untracked changes
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Staged changes section
+                        DisclosureGroup(
+                            isExpanded: $isStagedExpanded,
+                            content: {
+                                if let stagedDiff = viewModel.stagedDiff, !stagedDiff.fileDiffs.isEmpty {
+                                    OptimizedFileListView(
+                                        files: stagedDiff.fileDiffs,
+                                        selectedFile: $selectedFileItem,
+                                        visibleFiles: $visibleStagedFiles,
+                                        actionIcon: "minus.circle.fill",
+                                        actionColor: .orange,
+                                        action: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
+                                        onUnstage: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
+                                        onReset: { file in
+                                            fileToReset = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                            showResetConfirm = true
+                                        },
+                                        onIgnore: { file in
+                                            let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                            Task { await viewModel.addToGitignore(path: path) }
+                                        },
+                                        onTrash: { file in
+                                            let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                            Task { await viewModel.moveToTrash(path: path) }
+                                        },
+                                        isStaged: true
+                                    )
+                                } else {
+                                    EmptyStateView(message: "No staged changes")
+                                        .padding()
+                                }
+                            },
+                            label: {
+                                HStack {
+                                    Image(systemName: "tray.full.fill")
+                                        .foregroundColor(.green)
+                                    Text("Staged Changes")
+                                        .fontWeight(.semibold)
+                                    Text("(\(viewModel.stagedDiff?.fileDiffs.count ?? 0))")
+                                        .font(.footnote)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    if viewModel.stagedDiff?.fileDiffs.isEmpty == false {
+                                        Button("Unstage All") {
+                                            Task { await viewModel.unstageAllChanges() }
                                         }
-                                        .frame(maxHeight: 200) // Limit height to improve performance
+                                        .buttonStyle(.borderless)
+                                        .controlSize(.small)
                                     }
                                 }
+                                .padding(.vertical, 4)
                             }
-                        } else {
-                            EmptyStateView(message: "No unstaged changes")
+                        )
+
+                        // Modified (Unstaged) changes section
+                        DisclosureGroup(
+                            isExpanded: $isModifiedExpanded,
+                            content: {
+                                if let unstagedDiff = viewModel.unstagedDiff, !unstagedDiff.fileDiffs.isEmpty {
+                                    OptimizedFileListView(
+                                        files: unstagedDiff.fileDiffs,
+                                        selectedFile: $selectedFileItem,
+                                        visibleFiles: $visibleUnstagedFiles,
+                                        actionIcon: "plus.circle.fill",
+                                        actionColor: .green,
+                                        action: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
+                                        onStage: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
+                                        onReset: { file in
+                                            fileToReset = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                            showResetConfirm = true
+                                        },
+                                        onIgnore: { file in
+                                            let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                            Task { await viewModel.addToGitignore(path: path) }
+                                        },
+                                        onTrash: { file in
+                                            let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                            Task { await viewModel.moveToTrash(path: path) }
+                                        }
+                                    )
+                                } else {
+                                    EmptyStateView(message: "No modified files")
+                                        .padding()
+                                }
+                            },
+                            label: {
+                                HStack {
+                                    Image(systemName: "pencil.circle.fill")
+                                        .foregroundColor(.orange)
+                                    Text("Modified Files")
+                                        .fontWeight(.semibold)
+                                    Text("(\(viewModel.unstagedDiff?.fileDiffs.count ?? 0))")
+                                        .font(.footnote)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    if ((viewModel.unstagedDiff?.fileDiffs.isEmpty == false) || !viewModel.untrackedFiles.isEmpty) {
+                                        Button("Stage All") {
+                                            Task { await viewModel.stageAllChanges() }
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .controlSize(.small)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        )
+
+                        // Untracked files section
+                        if !viewModel.untrackedFiles.isEmpty {
+                            DisclosureGroup(
+                                isExpanded: $isUntrackedExpanded,
+                                content: {
+                                    ScrollView {
+                                        LazyVStack(spacing: 0) {
+                                            ForEach(viewModel.untrackedFiles, id: \.self) { path in
+                                                UntrackedFileRow(
+                                                    path: path,
+                                                    action: { Task { await viewModel.stageFile(path: path) } },
+                                                    onIgnore: { Task { await viewModel.addToGitignore(path: path) } },
+                                                    onTrash: { Task { await viewModel.moveToTrash(path: path) } }
+                                                )
+                                            }
+                                        }
+                                    }
+                                    .frame(maxHeight: 200)
+                                },
+                                label: {
+                                    HStack {
+                                        Image(systemName: FileStatus.untracked.icon)
+                                            .foregroundColor(FileStatus.untracked.color)
+                                        Text("Untracked Files")
+                                            .fontWeight(.semibold)
+                                        Text("(\(viewModel.untrackedFiles.count))")
+                                            .font(.footnote)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            )
                         }
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 0)
+                    .padding()
                 }
-                .padding(16)
                 .background(.ultraThinMaterial)
-                .cornerRadius(18)
-                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+                .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
                 .frame(minWidth: 340, maxWidth: 420)
 
                 // Right pane - Diff view (lazy loaded)
@@ -485,3 +528,4 @@ extension FileDiff {
 #Preview {
     CommitView(viewModel: GitViewModel())
 }
+

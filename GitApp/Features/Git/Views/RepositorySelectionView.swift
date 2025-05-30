@@ -8,7 +8,8 @@ import SwiftUI
 import AppKit
 
 struct RepositorySelectionView: View {
-    var viewModel: RepositoryViewModel
+     var viewModel: RepositoryViewModel
+    @State var accountManager = AccountManager()
     @State private var selectedRepository: URL?
     @State private var isShowingFilePicker = false
     @State private var isShowingCloneSheet = false
@@ -31,7 +32,7 @@ struct RepositorySelectionView: View {
         .background(Color(.windowBackgroundColor))
         .errorAlert(viewModel.errorMessage)
         .sheet(isPresented: $isShowingCloneSheet) {
-            CloneRepositoryView(viewModel: viewModel)
+            CloneRepositoryView(viewModel: viewModel, accountManager: accountManager)
         }
         .fileImporter(
             isPresented: $isShowingFilePicker,
@@ -144,7 +145,8 @@ struct RepositorySelectionView: View {
             openNewWindow(
                 with: GitClientView(
                     viewModel: GitViewModelFactory.createViewModel(),
-                    url: url
+                    url: url,
+                    accountManager: accountManager
                 ),
                 id: windowId,
                 title: windowId,
