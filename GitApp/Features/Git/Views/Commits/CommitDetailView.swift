@@ -10,29 +10,27 @@ import Foundation
 struct CommitDetailView: View {
     let commit: Commit
     let details: CommitDetails?
-    @State private var expandedFile: FileDiff?
-    @State private var isLoading = true
+    @State private var expandedFileID: FileDiff.ID?
+    @State private var isLoadingContent: Bool = true
     @Bindable var viewModel: GitViewModel
-    @State private var detailHeight: CGFloat = 480 // Increased default height
     var onClose: () -> Void
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        VStack(spacing: 0) {
-            if isLoading {
+        Group {
+            if isLoadingContent {
                 loadingView
             } else {
-                contentView
+                mainContentView
             }
         }
-        .frame(height: detailHeight)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(Color(.windowBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 2)
-        .animation(.easeOut(duration: 0.25), value: detailHeight)
+        .shadow(radius: 5)
+        .animation(.default, value: isLoadingContent)
         .onAppear {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                isLoading = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isLoadingContent = false
             }
         }
         .onDisappear {
@@ -42,264 +40,193 @@ struct CommitDetailView: View {
 
     private var loadingView: some View {
         VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.5)
-                .padding()
-            Text("Loading commit details...")
-                .foregroundColor(.secondary)
+            ProgressView().scaleEffect(1.5)
+            Text("Loading commit details...").foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(Color(.windowBackgroundColor))
     }
 
-    private var contentView: some View {
+    private var mainContentView: some View {
         VStack(spacing: 0) {
-            // Header Section
             CommitDetailHeader(
                 commit: commit,
                 refs: commit.branches,
                 viewModel: viewModel,
                 onClose: onClose
             )
-            .padding(.horizontal)
-            .padding(.top)
+            .padding([.horizontal, .top])
             .padding(.bottom, 8)
-            .background(
-                Color(NSColor.windowBackgroundColor)
-                    .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 2)
-            )
-            .zIndex(10)
+            .background(Material.bar)
+            .zIndex(1)
 
-            // Content
-            ZStack {
-                // Background
-                Color(NSColor.textBackgroundColor)
-                    .ignoresSafeArea()
-
-                // Content based on commit type
-                if commit.isMergeCommit && viewModel.isMergeDetailsVisible {
-                    mergeCommitsView
-                        .transition(.opacity)
-                } else if let details = details {
-                    fileChangesView(details: details)
-                        .transition(.opacity)
-                } else {
-                    Text("No changes to display")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(NSColor.textBackgroundColor))
-                }
-            }
+            contentBodyView.layoutPriority(1)
         }
     }
 
-    private var mergeCommitsView: some View {
-        VStack(spacing: 0) {
-            if let selectedMergeCommit = viewModel.selectedMergeCommit, let details = details {
-                // Show selected merge commit changes with a header for navigation
-                VStack(spacing: 0) {
-                    // Back to merge commits header
-                    HStack {
-                        Button(action: {
-                            withAnimation(.spring()) {
-                                viewModel.selectedMergeCommit = nil
-                            }
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                    .font(.caption.bold())
-                                Text("Back to Merged Commits")
-                                    .font(.headline)
-                            }
-                        }
-                        .buttonStyle(.plain)
+    @ViewBuilder
+    private var contentBodyView: some View {
+        ZStack {
+            Color(.textBackgroundColor).ignoresSafeArea()
 
-                        Spacer()
-
-                        Text(selectedMergeCommit.shortHash)
-                            .font(.caption.monospaced())
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(4)
-                    }
-                    .padding()
-                    .background(Color(NSColor.windowBackgroundColor))
-
-                    Divider()
-
-                    // File changes
-                    fileChangesView(details: details)
-                }
+            if commit.isMergeCommit && viewModel.isMergeDetailsVisible {
+                mergeDetailsFlowView.transition(.opacity.animation(.easeInOut))
+            } else if let validDetails = details {
+                fileChangesListView(details: validDetails).transition(.opacity.animation(.easeInOut))
             } else {
-                // Show list of commits in the merge
-                VStack(alignment: .leading, spacing: 0) {
-                    // Header
-                    HStack {
-                        Image(systemName: "arrow.triangle.merge")
-                            .foregroundColor(.blue)
-                        Text("Commits included in this merge")
-                            .font(.headline)
-
-                        Spacer()
-
-                        Text("\(viewModel.mergeCommits.count) commits")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(4)
-                    }
-                    .padding()
-                    .background(Color(NSColor.windowBackgroundColor))
-
-                    Divider()
-
-                    // List of commits
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(viewModel.mergeCommits) { mergeCommit in
-                                MergeCommitRow(
-                                    commit: mergeCommit,
-                                    onSelect: {
-                                        Task {
-                                            await viewModel.selectMergeCommit(mergeCommit)
-                                        }
-                                    }
-                                )
-                                .padding(.horizontal)
-                                .padding(.vertical, 8)
-                                .contentShape(Rectangle())
-                                .background(Color(NSColor.textBackgroundColor))
-
-                                if mergeCommit.id != viewModel.mergeCommits.last?.id {
-                                    Divider()
-                                }
-                            }
-                        }
-                    }
-                }
-                .background(Color(NSColor.textBackgroundColor))
-                .cornerRadius(8)
-                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
-                .padding()
+                noChangesView.transition(.opacity.animation(.easeInOut))
             }
         }
     }
 
-    private func fileChangesView(details: CommitDetails) -> some View {
+    private var noChangesView: some View {
+        Text("No changes to display")
+            .font(.headline)
+            .foregroundColor(.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var mergeDetailsFlowView: some View {
+        if let selectedMergeCommit = viewModel.selectedMergeCommit, let mergeCommitDetails = details {
+            selectedMergeCommitDetailView(commit: selectedMergeCommit, details: mergeCommitDetails)
+        } else {
+            mergedCommitsListView
+        }
+    }
+
+    private func selectedMergeCommitDetailView(commit: Commit, details: CommitDetails) -> some View {
+        VStack(spacing: 0) {
+            mergeNavigationHeader(title: commit.shortHash) {
+                withAnimation(.spring()) { viewModel.selectedMergeCommit = nil }
+            }
+            Divider()
+            fileChangesListView(details: details)
+        }
+    }
+
+    private var mergedCommitsListView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(title: "Commits in this merge", count: viewModel.mergeCommits.count, icon: "arrow.triangle.merge")
+            Divider()
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(viewModel.mergeCommits) { mergeCommit in
+                        RefactoredMergeCommitRow(commit: mergeCommit) {
+                            Task { await viewModel.selectMergeCommit(mergeCommit) }
+                        }
+                        if mergeCommit.id != viewModel.mergeCommits.last?.id {
+                            Divider().padding(.leading, 20)
+                        }
+                    }
+                }
+            }
+        }
+        .background(Color(.textBackgroundColor))
+        .cornerRadius(8)
+        .padding()
+    }
+
+    private func fileChangesListView(details: CommitDetails) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
-                // Files header
-                HStack {
-                    Text("Changed files")
-                        .font(.headline)
-                    Spacer()
-                    Text("\(details.diff.fileDiffs.count) files")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(4)
-                }
-                .padding(.horizontal)
-                .padding(.top, 12)
+                sectionHeader(title: "Changed files", count: details.diff.fileDiffs.count, icon: "doc.on.doc")
+                    .padding(.top, 12)
 
-                // Files
-                ForEach(details.diff.fileDiffs) { file in
+                ForEach(details.diff.fileDiffs) { fileDiff in
                     FileChangeSection(
-                        fileDiff: file,
+                        fileDiff: fileDiff,
                         viewModel: viewModel,
-                        isExpanded: file.id == expandedFile?.id
+                        isExpanded: fileDiff.id == expandedFileID
                     )
+                    .padding(.horizontal)
                     .onTapGesture {
                         withAnimation(.spring()) {
-                            if expandedFile?.id == file.id {
-                                expandedFile = nil
-                            } else {
-                                expandedFile = file
-                            }
+                            expandedFileID = (expandedFileID == fileDiff.id) ? nil : fileDiff.id
                         }
                     }
                 }
-
-                // Bottom padding
                 Spacer().frame(height: 20)
             }
-            .padding(.horizontal)
         }
+    }
+
+    private func mergeNavigationHeader(title: String, backAction: @escaping () -> Void) -> some View {
+        HStack {
+            Button(action: backAction) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left").font(.caption.bold())
+                    Text("Back to Merged Commits").font(.headline)
+                }
+            }.buttonStyle(.plain)
+            Spacer()
+            Text(title)
+                .font(.caption.monospaced())
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(Color.secondary.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .padding()
+        .background(Material.bar)
+    }
+
+    private func sectionHeader(title: String, count: Int, icon: String) -> some View {
+        HStack {
+            Image(systemName: icon).foregroundColor(.accentColor)
+            Text(title).font(.headline)
+            Spacer()
+            if count > 0 {
+                Text("\(count) \(count == 1 ? "item" : "items")")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Color.secondary.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+        }
+        .padding(.horizontal)
     }
 }
 
-// New component for displaying merged commits
-struct MergeCommitRow: View {
+private struct RefactoredMergeCommitRow: View {
     let commit: Commit
     let onSelect: () -> Void
+    @State private var isHovered: Bool = false
 
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
-                // Commit icon
                 Image(systemName: commit.commitType.commitIcon.name)
-                    .foregroundColor(commit.commitType.commitIcon.color)
-                    .font(.system(size: 24))
-                    .frame(width: 24)
+                    .foregroundStyle(commit.commitType.commitIcon.color)
+                    .font(.system(size: 22))
+                    .frame(width: 24, alignment: .center)
 
-                // Commit info
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(commit.message)
-                        .font(.headline)
-                        .lineLimit(1)
-
-                    HStack(spacing: 8) {
-                        // Author with avatar
-                        if let avatarURL = URL(string: commit.authorAvatar) {
-                            AsyncImage(url: avatarURL) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Image(systemName: "person.crop.circle.fill")
-                                    .foregroundColor(.secondary)
-                            }
-                            .frame(width: 16, height: 16)
-                            .clipShape(Circle())
-                        }
-
-                        Text(commit.author)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        // Date
-                        Text(commit.authorDateRelative)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(commit.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                    HStack(spacing: 4) {
+                        AuthorAvatarView(avatarURLString: commit.authorAvatar)
+                        Text(commit.author).font(.caption2).foregroundColor(.secondary).lineLimit(1)
+                        Text("•").font(.caption2).foregroundColor(.secondary)
+                        Text(commit.authorDateDisplay).font(.caption2).foregroundColor(.secondary).lineLimit(1)
                     }
                 }
-
                 Spacer()
-
-                // Hash and navigate icon
-                HStack {
-                    Text(commit.shortHash)
-                        .font(.caption.monospaced())
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(4)
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                Text(commit.shortHash)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.secondary.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
             }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
         }
         .buttonStyle(.plain)
+        .background(isHovered ? Color.accentColor.opacity(0.05) : Color.clear)
+        .contentShape(Rectangle())
+        .onHover { hovering in isHovered = hovering }
+        .animation(.easeInOut(duration: 0.1), value: isHovered)
     }
 }
 

@@ -23,52 +23,69 @@ struct ModernFileListView: View {
 
     private var groupedFiles: [(status: FileStatus, files: [FileDiff])] {
         Dictionary(grouping: files, by: { $0.status })
-            .sorted { $0.key.rawValue < $1.key.rawValue }
-            .map { ($0.key, $0.value) }
+            .map { (status: $0.key, files: $0.value) }
+            .sorted { $0.status.rawValue < $1.status.rawValue }
     }
 
     var body: some View {
         if files.isEmpty {
-            VStack(spacing: 12) {
-                Image(systemName: "tray")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.secondary)
-                Text("No files to show")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, minHeight: 120)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.windowBackgroundColor).opacity(0.7))
-            )
+            emptyStateView
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    ForEach(groupedFiles, id: \ .status) { group in
-//                        Section(header: FileStatusHeader(status: group.status, count: group.files.count)) {
-                            ForEach(group.files, id: \ .fromFilePath) { file in
-                                ModernFileRow(
-                                    fileDiff: file,
-                                    isSelected: selectedFile?.fromFilePath == file.fromFilePath,
-                                    actionIcon: actionIcon,
-                                    actionColor: actionColor,
-                                    action: { action(file) },
-                                    onStage: onStage != nil ? { onStage?(file) } : nil,
-                                    onUnstage: onUnstage != nil ? { onUnstage?(file) } : nil,
-                                    onReset: onReset != nil ? { onReset?(file) } : nil,
-                                    onIgnore: onIgnore != nil ? { onIgnore?(file) } : nil,
-                                    onTrash: onTrash != nil ? { onTrash?(file) } : nil,
-                                    isStaged: isStaged
-                                )
-                                .onTapGesture { selectedFile = file }
-                            }
-//                        }
+            fileListContentView
+        }
+    }
+
+    // MARK: - Subviews
+
+    private var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "tray")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            Text("No files to show")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 120)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.windowBackgroundColor).opacity(0.7))
+        )
+    }
+
+    private var fileListContentView: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                ForEach(groupedFiles, id: \.status) { group in
+                    ForEach(group.files, id: \.fromFilePath) { file in
+                        ModernFileRow(
+                            fileDiff: file,
+                            isSelected: selectedFile?.fromFilePath == file.fromFilePath,
+                            actionIcon: actionIcon,
+                            actionColor: actionColor,
+                            action: { action(file) },
+                            onStage: onStage != nil ? { onStage?(file) } : nil,
+                            onUnstage: onUnstage != nil ? { onUnstage?(file) } : nil,
+                            onReset: onReset != nil ? { onReset?(file) } : nil,
+                            onIgnore: onIgnore != nil ? { onIgnore?(file) } : nil,
+                            onTrash: onTrash != nil ? { onTrash?(file) } : nil,
+                            isStaged: isStaged
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedFile = file }
+                        Divider().padding(.leading, 20)
                     }
                 }
-                .padding(.vertical, 2)
             }
+            .padding(.vertical, 2)
         }
     }
 }
+
+// Placeholder for FileStatusHeader if you decide to use sections
+// struct FileStatusHeader: View { ... }
+
+// Ensure FileDiff is Identifiable, e.g.:
+// struct FileDiff: Identifiable { let id = UUID(); /* other properties */ }
+// Ensure FileStatus is Hashable and has a comparable rawValue if used as in `groupedFiles` sorting.
 

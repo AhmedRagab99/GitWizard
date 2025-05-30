@@ -15,84 +15,107 @@ struct UntrackedFileRow: View {
     var onTrash: (() -> Void)? = nil
     @State private var isHovered = false
 
+    // Computed properties for display
+    private var fileName: String {
+        path.components(separatedBy: "/").last ?? path
+    }
+
+    private var fileStatus: FileStatus { .untracked } // Explicitly define status for clarity
+
     var body: some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(FileStatus.untracked.color.opacity(0.18))
-                    .frame(width: 28, height: 28)
-                Image(systemName: FileStatus.untracked.icon)
-                    .foregroundStyle(FileStatus.untracked.color)
-                    .font(.system(size: 15, weight: .medium))
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(path.components(separatedBy: "/").last ?? "")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text(path)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
+            statusIconView
+            fileInfoView
             Spacer()
-
-            StatusBadge(status: .untracked)
-
-            Button(action: action) {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.system(size: 18))
-            }
-            .buttonStyle(.plain)
-            .opacity(isHovered ? 1 : 0.7)
+            StatusBadge(status: fileStatus)
+            actionButtonView
         }
         .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(isHovered ? Color.accentColor.opacity(0.08) : Color(.windowBackgroundColor).opacity(0.7))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(.systemGray).opacity(0.18), lineWidth: 1)
-        )
+        .background(rowBackground)
+        .overlay(rowOverlay)
         .animation(.easeInOut(duration: 0.15), value: isHovered)
         .onHover { hovering in isHovered = hovering }
-        .contextMenu {
-            Button {
-                action()
-            } label: {
-                Label("Stage File", systemImage: "plus.circle")
-            }
+        .contextMenu(menuItems: menuItems)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(fileName), Untracked")
+        .help("Path: \(path)")
+    }
 
-            Divider()
+    // MARK: - Subviews & Computed Properties
 
-            if let onIgnore = onIgnore {
-                Button {
-                    onIgnore()
-                } label: {
-                    Label("Add to .gitignore", systemImage: "eye.slash")
-                }
-            }
+    private var statusIconView: some View {
+        ZStack {
+            Circle()
+                .fill(fileStatus.color.opacity(0.18))
+                .frame(width: 28, height: 28)
+            Image(systemName: fileStatus.icon)
+                .foregroundStyle(fileStatus.color)
+                .font(.system(size: 15, weight: .medium))
+        }
+    }
 
-            if let onTrash = onTrash {
-                Button(role: .destructive) {
-                    onTrash()
-                } label: {
-                    Label("Move to Trash", systemImage: "trash")
-                }
-            }
+    private var fileInfoView: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(fileName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text(path)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
 
-            Divider()
+    private var actionButtonView: some View {
+        Button(action: action) {
+            Image(systemName: "plus.circle.fill")
+                .foregroundStyle(.green)
+                .font(.system(size: 18))
+        }
+        .buttonStyle(.plain)
+        .opacity(isHovered ? 1 : 0.7)
+        .help("Stage File")
+    }
 
-            Button {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(path, forType: .string)
-            } label: {
-                Label("Copy Path", systemImage: "doc.on.clipboard")
-            }
+    private var rowBackground: some View {
+        RoundedRectangle(cornerRadius: 10)
+            .fill(isHovered ? Color.accentColor.opacity(0.08) : Color(.windowBackgroundColor).opacity(0.7))
+    }
+
+    private var rowOverlay: some View {
+        RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(Color(.systemGray).opacity(0.18), lineWidth: 1)
+    }
+
+    // MARK: - Context Menu Items
+    @ViewBuilder
+    private func menuItems() -> some View {
+        ContextMenuButton(label: "Stage File", systemImage: "plus.circle", action: action)
+
+        Divider()
+
+        if let onIgnore = onIgnore {
+            ContextMenuButton(label: "Add to .gitignore", systemImage: "eye.slash", action: onIgnore)
+        }
+
+        if let onTrash = onTrash {
+            ContextMenuButton(label: "Move to Trash", systemImage: "trash", role: .destructive, action: onTrash)
+        }
+
+        Divider()
+
+        ContextMenuButton(label: "Copy Path", systemImage: "doc.on.clipboard") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(path, forType: .string)
         }
     }
 }
+
+// Assuming ContextMenuButton is defined (e.g., from ModernFileRow refactoring or a shared utility file)
+// private struct ContextMenuButton: View { ... }
+
+// Ensure FileStatus and StatusBadge are defined and provide necessary properties (color, icon).
+// For FileStatus.untracked specifically.
