@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AccountsListView: View {
-    @State var accountManager = AccountManager()
+     var accountManager: AccountManager
     @State private var showingAddAccountSheet = false
     @State private var selectedAccountID: Account.ID? // For selection in the list
     @State private var accountToEdit: Account? // For showing update token sheet
