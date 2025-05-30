@@ -406,16 +406,6 @@ struct PullRequestResponse: Codable {
     }
 }
 
-struct GitHubUser: Codable {
-    let id: Int
-    let login: String
-    let avatarUrl: String
-
-    enum CodingKeys: String, CodingKey {
-        case id, login
-        case avatarUrl = "avatar_url"
-    }
-}
 
 struct GitHubRef: Codable {
     let label: String

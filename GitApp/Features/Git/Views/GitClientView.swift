@@ -22,6 +22,9 @@ struct GitClientView: View {
     @State private var showFetchSheet = false
     @State private var showSearchFilters = false
 
+    // Add a State variable for the AccountManager
+    @State private var accountManager = AccountManager()
+
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(viewModel: viewModel, selectedWorkspaceItem: $selectedWorkspaceItem)
@@ -34,6 +37,8 @@ struct GitClientView: View {
                     HistoryView(viewModel: viewModel)
                 } else if selectedWorkspaceItem == .pullRequests {
                     PullRequestsContainerView(gitViewModel: viewModel)
+                } else if selectedWorkspaceItem == .accounts { // Added Accounts view
+                    AccountsListView(accountManager: accountManager)
                 } else {
                     // Optionally, add a search view or placeholder
                     Text(" coming soon...")

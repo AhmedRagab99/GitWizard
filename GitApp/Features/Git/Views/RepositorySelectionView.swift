@@ -26,6 +26,9 @@ struct RepositorySelectionView: View {
             // Repository List - optimized to use lazy loading
             repositoryListView
         }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.windowBackgroundColor))
         .errorAlert(viewModel.errorMessage)
         .sheet(isPresented: $isShowingCloneSheet) {
             CloneRepositoryView(viewModel: viewModel)
@@ -160,19 +163,25 @@ struct RepositoryRowView: View {
     let onRemove: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(url.lastPathComponent)
-                .font(.headline)
-            Text(url.path)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        HStack(spacing: 12) {
+            Image(systemName: "folder.fill")
+                .foregroundColor(.accentColor)
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(url.lastPathComponent)
+                    .font(.headline)
+                Text(url.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+                .fill(isSelected ? Color.blue.opacity(0.2) : Color.clear)
         )
         .contextMenu {
             Button {
