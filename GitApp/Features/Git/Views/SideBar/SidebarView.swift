@@ -8,7 +8,6 @@
 import SwiftUI
 import Foundation
 
-
 enum SidebarItem: Identifiable, Equatable,Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)

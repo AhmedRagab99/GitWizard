@@ -9,7 +9,7 @@ import AppKit
 
 struct RepositorySelectionView: View {
      var viewModel: RepositoryViewModel
-    @State var accountManager = AccountManager()
+    var accountManager :AccountManager
     @State private var selectedRepository: URL?
     @State private var isShowingFilePicker = false
     @State private var isShowingCloneSheet = false
@@ -144,9 +144,10 @@ struct RepositorySelectionView: View {
             // Instead of creating view models directly, use a factory pattern
             openNewWindow(
                 with: GitClientView(
-                    viewModel: GitViewModelFactory.createViewModel(),
+                    viewModel: GitViewModel(),
                     url: url,
-                    accountManager: accountManager
+                    accountManager: accountManager,
+                    repoViewModel: viewModel
                 ),
                 id: windowId,
                 title: windowId,
@@ -208,13 +209,3 @@ struct RepositoryRowView: View {
     }
 }
 
-// MARK: - Factory to manage view model lifecycle
-enum GitViewModelFactory {
-    static func createViewModel() -> GitViewModel {
-        return GitViewModel()
-    }
-}
-
-#Preview {
-    RepositorySelectionView(viewModel: RepositoryViewModel())
-}

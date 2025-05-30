@@ -9,6 +9,7 @@ struct GitClientView: View {
     var themeManager = ThemeManager()
     var url: URL
     let accountManager: AccountManager
+    let repoViewModel : RepositoryViewModel // Add view model
     @State private var selectedWorkspaceItem: WorkspaceSidebarItem = .history
     @State private var showStashSheet = false
     @State private var showDeleteAlert = false
@@ -32,11 +33,12 @@ struct GitClientView: View {
 
     // MARK: - Initialization (Example)
     // If you need a custom initializer, it would look something like this:
-    init(viewModel: GitViewModel, themeManager: ThemeManager = ThemeManager(), url: URL, accountManager: AccountManager) {
+    init(viewModel: GitViewModel, themeManager: ThemeManager = ThemeManager(), url: URL, accountManager: AccountManager,repoViewModel : RepositoryViewModel) {
         self.viewModel = viewModel
         self.themeManager = themeManager
         self.url = url
         self.accountManager = accountManager
+        self.repoViewModel = repoViewModel
     }
 
     var body: some View {
@@ -50,7 +52,7 @@ struct GitClientView: View {
                 } else if selectedWorkspaceItem == .history {
                     HistoryView(viewModel: viewModel)
                 } else if selectedWorkspaceItem == .accounts { // Added Accounts view
-                    AccountsListView(accountManager: accountManager)
+                    AccountsListView(accountManager: accountManager,repoViewModel:repoViewModel)
                 } else {
                     // Optionally, add a search view or placeholder
                     Text(" coming soon...")

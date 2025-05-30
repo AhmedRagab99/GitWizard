@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AccountsListView: View {
      var accountManager: AccountManager
+    var repoViewModel : RepositoryViewModel // Add view model
     @State private var showingAddAccountSheet = false
     @State private var selectedAccountID: Account.ID? // For selection in the list
     @State private var accountToEdit: Account? // For showing update token sheet
@@ -15,78 +16,9 @@ struct AccountsListView: View {
 
     var body: some View {
         NavigationSplitView {
-            VStack(alignment: .leading, spacing: 0) {
-                List(selection: $selectedAccountID) {
-                    if accountManager.accounts.isEmpty {
-                        Text("No accounts added yet.")
-                            .foregroundColor(.secondary)
-                            .padding()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity) // Center it
-                            .background(Color(.controlBackgroundColor)) // Match Fork-like bg
-                    } else {
-                        ForEach(accountManager.accounts) {
-                            account in AccountRow(account: account, selectedAccountID: $selectedAccountID)
-                                .tag(account.id)
-                        }
-                    }
-                }
-                .listStyle(.inset) // Changed from .sidebar for a more Fork-like feel in content areas
-                .frame(minWidth: 220, idealWidth: 250, maxWidth: 300) // Adjusted width
-                .background(Color(.controlBackgroundColor)) // Consistent background
-
-                Divider()
-
-                HStack {
-                    Button {
-                        showingAddAccountSheet = true
-                    } label: {
-                        Label("Add Account", systemImage: "plus.circle.fill")
-                    }
-                    .buttonStyle(.plain)
-                    .padding([.leading, .bottom, .top], 8)
-
-                    Spacer()
-
-                    Button {
-                        if let selectedID = selectedAccountID,
-                           let account = accountManager.accounts.first(where: { $0.id == selectedID }) {
-                            accountToDelete = account
-                            showDeleteConfirmation = true
-                        }
-                    } label: {
-                        Label("Remove Account", systemImage: "minus.circle.fill")
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(selectedAccountID == nil)
-                    .padding([.trailing, .bottom, .top], 8)
-                    .help("Remove selected account")
-                }
-                .background(Material.bar)
-            }
-            .background(Color(.controlBackgroundColor)) // Background for the whole sidebar area
+            sidebar
         } detail: {
-            if let selectedID = selectedAccountID,
-               let account = accountManager.accounts.first(where: { $0.id == selectedID }) {
-                AccountDetailView(
-                    account: account,
-                    accountManager: accountManager,
-                    repositories: $repositories,
-                    isLoadingRepos: $isLoadingRepos,
-                    repoFetchError: $repoFetchError,
-                    onUpdateToken: { acc in self.accountToEdit = acc }
-                )
-            } else {
-                VStack {
-                    Image(systemName: "person.2.slash")
-                        .font(.system(size: 50))
-                        .padding()
-                    Text("Select an account to see details or add a new account.")
-                        .font(.title3)
-                        .multilineTextAlignment(.center)
-                }
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            detailView
         }
         .navigationTitle("Accounts")
         .toolbar {
@@ -140,6 +72,86 @@ struct AccountsListView: View {
                 // Or select the first account if none are selected
                 selectedAccountID = firstAccount.id
             }
+        }
+    }
+
+    @ViewBuilder
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            List(selection: $selectedAccountID) {
+                if accountManager.accounts.isEmpty {
+                    Text("No accounts added yet.")
+                        .foregroundColor(.secondary)
+                        .padding()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(.controlBackgroundColor))
+                } else {
+                    ForEach(accountManager.accounts) { account in
+                        AccountRow(account: account, selectedAccountID: $selectedAccountID)
+                            .tag(account.id)
+                    }
+                }
+            }
+            .listStyle(.inset)
+            .frame(minWidth: 220, idealWidth: 250, maxWidth: 300)
+            .background(Color(.controlBackgroundColor))
+
+            Divider()
+
+            HStack {
+                Button {
+                    showingAddAccountSheet = true
+                } label: {
+                    Label("Add Account", systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .padding([.leading, .bottom, .top], 8)
+
+                Spacer()
+
+                Button {
+                    if let selectedID = selectedAccountID,
+                       let account = accountManager.accounts.first(where: { $0.id == selectedID }) {
+                        accountToDelete = account
+                        showDeleteConfirmation = true
+                    }
+                } label: {
+                    Label("Remove Account", systemImage: "minus.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .disabled(selectedAccountID == nil)
+                .padding([.trailing, .bottom, .top], 8)
+                .help("Remove selected account")
+            }
+            .background(Material.bar)
+        }
+        .background(Color(.controlBackgroundColor))
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        if let selectedID = selectedAccountID,
+           let account = accountManager.accounts.first(where: { $0.id == selectedID }) {
+            AccountDetailView(
+                account: account,
+                accountManager: accountManager,
+                repoViewModel:repoViewModel,
+                repositories: $repositories,
+                isLoadingRepos: $isLoadingRepos,
+                repoFetchError: $repoFetchError,
+                onUpdateToken: { acc in self.accountToEdit = acc }
+            )
+        } else {
+            VStack {
+                Image(systemName: "person.2.slash")
+                    .font(.system(size: 50))
+                    .padding()
+                Text("Select an account to see details or add a new account.")
+                    .font(.title3)
+                    .multilineTextAlignment(.center)
+            }
+            .foregroundColor(.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -206,6 +218,7 @@ struct AccountRow: View {
 struct AccountDetailView: View {
     let account: Account
     var accountManager: AccountManager
+    var repoViewModel : RepositoryViewModel // Add view model
     @Binding var repositories: [GitHubRepository] // User's direct repositories
     @Binding var isLoadingRepos: Bool // For user's direct repositories
     @Binding var repoFetchError: String? // For user's direct repositories
@@ -403,7 +416,8 @@ struct AccountDetailView: View {
                         ForEach(repositories) { repo in
                             RepositoryListRow(repository: repo,
                                               isSelected: selectedRepository?.id == repo.id,
-                                              showOwner: false)
+                                              showOwner: false,
+                                              repoViewModel: repoViewModel)
                             .contentShape(Rectangle()) // Make the whole row tappable
                             .onTapGesture {
                                 selectedRepository = repo
@@ -431,37 +445,14 @@ struct AccountDetailView: View {
                                         if isExpanding {
                                             fetchRepos(for: org, accountToFetch: account)
                                         } else {
-                                            selectedOrganization = nil
-                                            organizationRepositories = []
-                                        }
-                                    }
-                                ),
-                                content: {
-                                    if selectedOrganization?.id == org.id {
-                                        if isLoadingOrgRepos {
-                                            ProgressView().padding([.leading, .top])
-                                        } else if let error = orgRepoFetchError {
-                                            Text("Error: \(error)").foregroundColor(.red).padding([.leading, .top])
-                                        } else if organizationRepositories.isEmpty {
-                                            Text("No repositories found for \(org.login).")
-                                                .foregroundColor(.secondary)
-                                                .padding([.leading, .top])
-                                        } else {
-                                            ForEach(organizationRepositories) { repo in
-                                                RepositoryListRow(repository: repo,
-                                                                  isSelected: selectedRepository?.id == repo.id,
-                                                                  showOwner: true,
-                                                                  ownerLogin: org.login)
-                                                .contentShape(Rectangle())
-                                                .onTapGesture {
-                                                    selectedRepository = repo
-                                                }
-                                                .padding(.leading) // Indent org repos
-                                                Divider().padding(.leading)
+                                            if selectedOrganization?.id == org.id {
+                                                selectedOrganization = nil
+                                                organizationRepositories = []
                                             }
                                         }
                                     }
-                                },
+                                ),
+                                content: { organizationRepositoriesList(for: org) }, // Extracted content
                                 label: {
                                     OrganizationRow(organization: org)
                                 }
@@ -474,6 +465,35 @@ struct AccountDetailView: View {
             }
         }
         .frame(minHeight: 300)
+    }
+
+    @ViewBuilder
+    private func organizationRepositoriesList(for org: GitHubOrganization) -> some View {
+        if selectedOrganization?.id == org.id {
+            if isLoadingOrgRepos {
+                ProgressView().padding([.leading, .top])
+            } else if let error = orgRepoFetchError {
+                Text("Error: \(error)").foregroundColor(.red).padding([.leading, .top])
+            } else if organizationRepositories.isEmpty {
+                Text("No repositories found for \(org.login).")
+                    .foregroundColor(.secondary)
+                    .padding([.leading, .top])
+            } else {
+                ForEach(organizationRepositories) { repo in
+                    RepositoryListRow(repository: repo,
+                                      isSelected: selectedRepository?.id == repo.id,
+                                      showOwner: true,
+                                      ownerLogin: org.login,
+                                      repoViewModel: repoViewModel) // Ensure repoViewModel is passed here
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selectedRepository = repo
+                    }
+                    .padding(.leading) // Indent org repos
+                    Divider().padding(.leading)
+                }
+            }
+        }
     }
 }
 
@@ -514,6 +534,9 @@ struct RepositoryListRow: View {
     var isSelected: Bool
     var showOwner: Bool = true
     var ownerLogin: String? = nil
+    var repoViewModel : RepositoryViewModel
+    @State private var showingCloneErrorAlert = false
+    @State private var cloneErrorMessage = ""
 
     var body: some View {
         HStack(spacing: 12) {
@@ -561,11 +584,67 @@ struct RepositoryListRow: View {
                 .padding(.top, 2)
             }
             Spacer()
+
+            // Buttons
+            HStack(spacing: 8) {
+                Button {
+                    // Action to open in browser
+                    if let url = URL(string: repository.htmlUrl) {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Image(systemName: "safari")
+                }
+                .buttonStyle(.borderless)
+                .help("Open in browser")
+
+                Button {
+                    // Action to clone
+                    guard let cloneUrl = repository.cloneUrl else {
+                        cloneErrorMessage = "Clone URL is not available for this repository."
+                        showingCloneErrorAlert = true
+                        return
+                    }
+                    // Present a panel to choose the directory
+                    let panel = NSOpenPanel()
+                    panel.canChooseDirectories = true
+                    panel.canChooseFiles = false
+                    panel.allowsMultipleSelection = false
+                    panel.prompt = "Choose Clone Destination"
+                    panel.message = "Select a folder to clone '\(repository.name)' into."
+
+                    if panel.runModal() == .OK {
+                        if let destinationDirectory = panel.url {
+                            Task {
+                                do {
+                                    let success = try await repoViewModel.cloneRepository(from: cloneUrl, to: destinationDirectory)
+                                    if !success {
+                                        cloneErrorMessage = repoViewModel.errorMessage ?? "Failed to clone repository."
+                                        showingCloneErrorAlert = true
+                                    }
+                                } catch {
+                                    cloneErrorMessage = "Error during cloning: \(error.localizedDescription)"
+                                    showingCloneErrorAlert = true
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderless)
+                .help("Clone repository")
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
         .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
         .cornerRadius(6)
+        .alert("Clone Error", isPresented: $showingCloneErrorAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(cloneErrorMessage)
+        }
     }
 
     // Basic language to color mapping (can be expanded or moved to a global helper)
@@ -590,7 +669,6 @@ struct RepositoryListRow: View {
         }
     }
 }
-
 
 struct UpdateTokenView: View {
     @Environment(\.dismiss) var dismiss
