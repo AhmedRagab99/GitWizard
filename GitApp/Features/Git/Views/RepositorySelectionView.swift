@@ -8,7 +8,8 @@ import SwiftUI
 import AppKit
 
 struct RepositorySelectionView: View {
-    var viewModel: RepositoryViewModel
+     var viewModel: RepositoryViewModel
+    var accountManager :AccountManager
     @State private var selectedRepository: URL?
     @State private var isShowingFilePicker = false
     @State private var isShowingCloneSheet = false
@@ -26,9 +27,12 @@ struct RepositorySelectionView: View {
             // Repository List - optimized to use lazy loading
             repositoryListView
         }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.windowBackgroundColor))
         .errorAlert(viewModel.errorMessage)
         .sheet(isPresented: $isShowingCloneSheet) {
-            CloneRepositoryView(viewModel: viewModel)
+            CloneRepositoryView(viewModel: viewModel, accountManager: accountManager)
         }
         .fileImporter(
             isPresented: $isShowingFilePicker,
@@ -140,8 +144,10 @@ struct RepositorySelectionView: View {
             // Instead of creating view models directly, use a factory pattern
             openNewWindow(
                 with: GitClientView(
-                    viewModel: GitViewModelFactory.createViewModel(),
-                    url: url
+                    viewModel: GitViewModel(),
+                    url: url,
+                    accountManager: accountManager,
+                    repoViewModel: viewModel
                 ),
                 id: windowId,
                 title: windowId,
@@ -160,19 +166,25 @@ struct RepositoryRowView: View {
     let onRemove: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(url.lastPathComponent)
-                .font(.headline)
-            Text(url.path)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        HStack(spacing: 12) {
+            Image(systemName: "folder.fill")
+                .foregroundColor(.accentColor)
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(url.lastPathComponent)
+                    .font(.headline)
+                Text(url.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+                .fill(isSelected ? Color.blue.opacity(0.2) : Color.clear)
         )
         .contextMenu {
             Button {
@@ -197,13 +209,3 @@ struct RepositoryRowView: View {
     }
 }
 
-// MARK: - Factory to manage view model lifecycle
-enum GitViewModelFactory {
-    static func createViewModel() -> GitViewModel {
-        return GitViewModel()
-    }
-}
-
-#Preview {
-    RepositorySelectionView(viewModel: RepositoryViewModel())
-}

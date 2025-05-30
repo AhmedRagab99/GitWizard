@@ -223,7 +223,7 @@ struct FileDiffView: View {
         }
     }
 
-    private func diffLineView(line: Chunk.Line) -> some View {
+    private func diffLineView(line: Line) -> some View {
         HStack(alignment: .top, spacing: 0) {
             if showLineNumbers {
                 Text(line.toFileLineNumber != nil ? String(line.toFileLineNumber!) : "")
@@ -243,7 +243,7 @@ struct FileDiffView: View {
         .contentShape(Rectangle())
     }
 
-    private func lineTextColor(_ line: Chunk.Line) -> Color {
+    private func lineTextColor(_ line: Line) -> Color {
         switch line.kind {
         case .added: return .green
         case .removed: return .red
@@ -256,7 +256,7 @@ struct FileDiffView: View {
         }
     }
 
-    private func lineBackground(_ line: Chunk.Line) -> Color {
+    private func lineBackground(_ line: Line) -> Color {
         switch line.kind {
         case .added: return Color.green.opacity(0.10)
         case .removed: return Color.red.opacity(0.10)

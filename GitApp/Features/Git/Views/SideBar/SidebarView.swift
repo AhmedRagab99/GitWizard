@@ -8,7 +8,6 @@
 import SwiftUI
 import Foundation
 
-
 enum SidebarItem: Identifiable, Equatable,Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
@@ -75,8 +74,9 @@ struct BranchNode: Identifiable {
 enum WorkspaceSidebarItem: String, CaseIterable, Identifiable {
     case workingCopy = "Working Copy"
     case history = "History"
+    case pullRequests = "Pull Requests"
+    case accounts = "Accounts"
 //    case stashes = "Stashes"
-//    case pullRequests = "Pull Requests"
 //    case branchesReview = "Branches Review"
 //    case settings = "Settings"
     var id: String { rawValue }
@@ -84,8 +84,9 @@ enum WorkspaceSidebarItem: String, CaseIterable, Identifiable {
         switch self {
         case .workingCopy: return "folder"
         case .history: return "clock"
+        case .pullRequests: return "arrow.triangle.pull"
+        case .accounts: return "person.2.fill"
 //        case .stashes: return "archivebox"
-//        case .pullRequests: return "arrow.triangle.branch"
 //        case .branchesReview: return "point.topleft.down.curvedto.point.bottomright.up"
 //        case .settings: return "gearshape"
         }

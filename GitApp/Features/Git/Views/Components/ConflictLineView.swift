@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ConflictLineView: View {
-    let line: Chunk.Line
+    let line: Line
     let isSelected: Bool
     let onSelect: () -> Void
 
@@ -77,27 +77,27 @@ struct ConflictLineView: View {
 #Preview {
     VStack {
         ConflictLineView(
-            line: Chunk.Line(id: 1, raw: "<<<<<<< HEAD"),
+            line: Line(id: 1, raw: "<<<<<<< HEAD"),
             isSelected: false,
             onSelect: {}
         )
         ConflictLineView(
-            line: Chunk.Line(id: 2, raw: "Our changes"),
+            line: Line(id: 2, raw: "Our changes"),
             isSelected: false,
             onSelect: {}
         )
         ConflictLineView(
-            line: Chunk.Line(id: 3, raw: "======="),
+            line: Line(id: 3, raw: "======="),
             isSelected: true,
             onSelect: {}
         )
         ConflictLineView(
-            line: Chunk.Line(id: 4, raw: "Their changes"),
+            line: Line(id: 4, raw: "Their changes"),
             isSelected: false,
             onSelect: {}
         )
         ConflictLineView(
-            line: Chunk.Line(id: 5, raw: ">>>>>>> branch-name"),
+            line: Line(id: 5, raw: ">>>>>>> branch-name"),
             isSelected: false,
             onSelect: {}
         )

@@ -109,14 +109,20 @@ class GitViewModel {
             async let remotesTask = gitService.getRemotes(in: url)
             async let remoteNamesTask = gitService.getRemoteNames(in: url)
 
+            // Get the remote URL - using the first remote (usually origin)
+            var remoteURL = ""
+            let remoteNames = try await remoteNamesTask
+            if !remoteNames.isEmpty {
+                remoteURL = try await gitService.getRemoteURL(in: url, remoteName: remoteNames.first ?? "origin")
+            }
+
             // Wait for all parallel tasks to complete
-            let (branches, currentBranchName, tags, stashes, remotes, remoteNames) = try await (
+            let (branches, currentBranchName, tags, stashes, remotes) = try await (
                 branchesTask,
                 currentBranchTask,
                 tagsTask,
                 stashesTask,
-                remotesTask,
-                remoteNamesTask
+                remotesTask
             )
 
             // Update branches
@@ -143,11 +149,12 @@ class GitViewModel {
             self.tags = tags
             self.stashes = stashes
 
-            // Update repository info
+            // Update repository info with proper remote URL
             repoInfo = RepoInfo(
                 name: url.lastPathComponent,
                 currentBranch: currentBranchName ?? "main",
-                remotes: remotes
+                remotes: remotes,
+                remoteURL: remoteURL
             )
 
             // Check sync state
@@ -169,10 +176,18 @@ class GitViewModel {
             // Get remote information
             let remotes = try await gitService.getRemotes(in: url)
 
+            // Get actual remote URL
+            let remoteNames = try await gitService.getRemoteNames(in: url)
+            var remoteURL = ""
+            if !remoteNames.isEmpty {
+                remoteURL = try await gitService.getRemoteURL(in: url, remoteName: remoteNames.first ?? "origin")
+            }
+
             return RepoInfo(
                 name: name,
                 currentBranch: currentBranch,
-                remotes: remotes
+                remotes: remotes,
+                remoteURL: remoteURL
             )
         } catch {
             errorMessage = "Error gathering repository info: \(error.localizedDescription)"

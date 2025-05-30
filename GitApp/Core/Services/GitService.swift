@@ -105,6 +105,11 @@ actor GitService {
         return output.components(separatedBy: .newlines).filter { !$0.isEmpty }
     }
 
+    func getRemoteURL(in directory: URL, remoteName: String = "origin") async throws -> String {
+        // Get the actual URL of a remote repository
+        return try await Process.output(GitRemoteGetUrl(directory: directory, remoteName: remoteName))
+    }
+
     func fetch(in directory: URL, remote: String = "origin", fetchAllRemotes: Bool = false, prune: Bool = false, fetchTags: Bool = false) async throws {
         try await Process.output(GitFetch(
             directory: directory,

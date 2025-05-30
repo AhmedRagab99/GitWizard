@@ -117,7 +117,7 @@ struct FileChangeSection: View {
 
 struct ChunkView: View {
     let chunk: Chunk
-    private var enumeratedLines: [(offset: Int, element: Chunk.Line)] {
+    private var enumeratedLines: [(offset: Int, element: Line)] {
         Array(chunk.lines.enumerated())
     }
 
@@ -148,7 +148,7 @@ struct ChunkView: View {
 }
 
 struct LineView: View {
-    let line: Chunk.Line
+    let line: Line
     let isAdded: Bool
     let isRemoved: Bool
 

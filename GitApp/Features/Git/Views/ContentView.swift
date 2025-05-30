@@ -9,9 +9,10 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var viewModel = RepositoryViewModel()
+    @State private var accountManger: AccountManager = AccountManager()
 
     var body: some View {
-        RepositorySelectionView(viewModel: viewModel)
+        RepositorySelectionView(viewModel: viewModel,accountManager: accountManger)
     }
 }
 
