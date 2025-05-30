@@ -72,16 +72,6 @@ struct AddAccountView: View {
         }
         .padding()
         .frame(minWidth: 400, idealWidth: 450, maxWidth: 500)
-        // Listen for errorMessage from accountManager after an add attempt
-        .onChange(of: accountManager.errorMessage) { oldValue, newValue in
-            if isAdding { // Only update error if it pertains to the current add operation
-                addError = newValue
-                if newValue == nil { // If error becomes nil, it means success
-                    dismiss()
-                }
-                isAdding = false // Reset adding state once an error (or success) is processed
-            }
-        }
         .onDisappear {
             // Clear any lingering error messages from this view specifically when it disappears
             // to prevent it from affecting other parts of the app or a new presentation of this view.
@@ -97,13 +87,20 @@ struct AddAccountView: View {
         accountManager.errorMessage = nil // Clear global error message before new attempt
 
         Task {
-            await accountManager.addAccount(
+            let success = await accountManager.addAccount(
                 type: accountType,
                 username: username, // Username will be fetched via token validation
                 token: token,
                 serverURL: accountType == .githubEnterprise ? serverURL : nil
             )
             // The onChange for accountManager.errorMessage will handle UI updates (dismissal or error display)
+            if success {
+                dismiss()
+            } else {
+                // If addAccount returned false, it means errorMessage should be set in accountManager
+                addError = accountManager.errorMessage
+            }
+            isAdding = false
         }
     }
 }

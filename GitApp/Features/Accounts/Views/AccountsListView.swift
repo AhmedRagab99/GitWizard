@@ -21,15 +21,18 @@ struct AccountsListView: View {
                         Text("No accounts added yet.")
                             .foregroundColor(.secondary)
                             .padding()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity) // Center it
+                            .background(Color(.controlBackgroundColor)) // Match Fork-like bg
                     } else {
                         ForEach(accountManager.accounts) {
-                            account in AccountRow(account: account)
+                            account in AccountRow(account: account, selectedAccountID: $selectedAccountID)
                                 .tag(account.id)
                         }
                     }
                 }
-                .listStyle(.sidebar)
-                .frame(minWidth: 200)
+                .listStyle(.inset) // Changed from .sidebar for a more Fork-like feel in content areas
+                .frame(minWidth: 220, idealWidth: 250, maxWidth: 300) // Adjusted width
+                .background(Color(.controlBackgroundColor)) // Consistent background
 
                 Divider()
 
@@ -60,6 +63,7 @@ struct AccountsListView: View {
                 }
                 .background(Material.bar)
             }
+            .background(Color(.controlBackgroundColor)) // Background for the whole sidebar area
         } detail: {
             if let selectedID = selectedAccountID,
                let account = accountManager.accounts.first(where: { $0.id == selectedID }) {
@@ -85,6 +89,14 @@ struct AccountsListView: View {
             }
         }
         .navigationTitle("Accounts")
+        .toolbar {
+            ToolbarItem(placement: .navigation) { // Example: For a potential sidebar toggle
+                Button(action: { NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil) }) {
+                    Image(systemName: "sidebar.leading")
+                }
+                .help("Toggle Sidebar")
+            }
+        }
         .sheet(isPresented: $showingAddAccountSheet) {
             AddAccountView(accountManager: accountManager)
         }
@@ -149,9 +161,14 @@ struct AccountsListView: View {
 
 struct AccountRow: View {
     let account: Account
+    @Binding var selectedAccountID: Account.ID? // Added binding
+
+    var isSelected: Bool { // Computed property for selection state
+        account.id == selectedAccountID
+    }
 
     var body: some View {
-        HStack {
+        HStack(spacing: 10) { // Adjusted spacing
             if let avatarURLString = account.avatarURL, let avatarURL = URL(string: avatarURLString) {
                 AsyncImage(url: avatarURL) {
                     image in image.resizable()
@@ -166,30 +183,54 @@ struct AccountRow: View {
                     .resizable()
                     .frame(width: 32, height: 32)
             }
-            VStack(alignment: .leading) {
-                Text(account.username).font(.headline)
-                Text(account.type.rawValue).font(.subheadline).foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 3) { // Adjusted spacing
+                Text(account.username).font(.headline).lineLimit(1)
+                Text(account.type.rawValue).font(.subheadline).foregroundColor(.secondary).lineLimit(1)
                 if account.type == .githubEnterprise, let server = account.serverURL {
                     Text(URL(string: server)?.host ?? "Enterprise")
-                        .font(.caption)
+                        .font(.caption2) // Made smaller
                         .foregroundColor(.gray)
+                        .lineLimit(1)
                 }
             }
+            Spacer() // Ensure content pushes to leading edge
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6) // Adjusted padding
+        .padding(.horizontal, 8)
+        // Use the computed isSelected property
+        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+        .cornerRadius(6)
     }
 }
 
 struct AccountDetailView: View {
     let account: Account
-     var accountManager: AccountManager
-    @Binding var repositories: [GitHubRepository]
-    @Binding var isLoadingRepos: Bool
-    @Binding var repoFetchError: String?
+    var accountManager: AccountManager
+    @Binding var repositories: [GitHubRepository] // User's direct repositories
+    @Binding var isLoadingRepos: Bool // For user's direct repositories
+    @Binding var repoFetchError: String? // For user's direct repositories
     var onUpdateToken: (Account) -> Void
 
     @State private var userDetails: GitHubUser? = nil
     @State private var isLoadingUserDetails: Bool = false
+
+    // New state for organizations
+    @State private var organizations: [GitHubOrganization] = []
+    @State private var isLoadingOrganizations: Bool = false
+    @State private var organizationFetchError: String? = nil
+
+    // New state for repositories of a selected organization
+    @State private var selectedOrganization: GitHubOrganization? = nil
+    @State private var organizationRepositories: [GitHubRepository] = []
+    @State private var isLoadingOrgRepos: Bool = false
+    @State private var orgRepoFetchError: String? = nil
+
+    @State private var currentDetailTab: DetailTab = .accountDetails
+    @State private var selectedRepository: GitHubRepository? = nil // To hold the selected repo
+
+    enum DetailTab {
+        case accountDetails, repositories
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -224,28 +265,90 @@ struct AccountDetailView: View {
             }
             .padding(.bottom)
 
-            TabView {
-                accountInfoTab
-                    .tabItem { Label("Account", systemImage: "person.text.rectangle.fill") }
-
-                repositoriesTab
-                    .tabItem { Label("Repositories", systemImage: "folder.fill") }
+            Picker("Detail View", selection: $currentDetailTab) {
+                Text("Account").tag(DetailTab.accountDetails)
+                Text("Repositories").tag(DetailTab.repositories)
             }
+            .pickerStyle(.segmented)
+            .padding(.bottom)
 
-            Spacer() // Pushes content to the top
+            if currentDetailTab == .accountDetails {
+                accountDetailsTab
+            } else {
+                repositoriesAndOrgsTab // Renamed from repositoriesTab
+            }
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.textBackgroundColor)) // Use a suitable background
         .onAppear {
-            fetchUserDetails()
+            fetchInitialData()
         }
-        .onChange(of: account) { _, newAccount in // React to account changes (e.g., after token update)
-            fetchUserDetails(forAcc: newAccount)
-            // Repositories are already re-fetched by the parent view's onChange(of: selectedAccountID)
+        .onChange(of: account) { _, newAccount in
+             fetchInitialData(for: newAccount)
         }
     }
 
-    private var accountInfoTab: some View {
+    private func fetchInitialData(for acc: Account? = nil) {
+        let targetAccount = acc ?? account
+        fetchUserDetails(for: targetAccount)
+        // Repositories for the user are typically fetched by the parent view (AccountsListView)
+        // and passed via binding. If not, uncomment and adapt:
+        // fetchUserRepositories(for: targetAccount)
+        fetchOrganizations(for: targetAccount)
+    }
+
+    private func fetchUserDetails(for accountToFetch: Account) {
+        isLoadingUserDetails = true
+        Task {
+            do {
+                self.userDetails = try await accountManager.fetchUserDetails(for: accountToFetch)
+            } catch {
+                // Handle error appropriately
+                print("Error fetching user details: \(error)")
+            }
+            isLoadingUserDetails = false
+        }
+    }
+
+    private func fetchOrganizations(for accountToFetch: Account) {
+        isLoadingOrganizations = true
+        organizationFetchError = nil
+        Task {
+            do {
+                self.organizations = try await accountManager.fetchOrganizations(for: accountToFetch)
+            } catch {
+                self.organizationFetchError = error.localizedDescription
+            }
+            isLoadingOrganizations = false
+        }
+    }
+
+    private func fetchUserRepositories(for accountToFetch: Account) {
+        // This is already handled by the parent view, passed via @Binding repositories
+        // If you want this view to also trigger it, you can call the parent's fetch function
+        // or duplicate the logic here, ensuring isLoadingRepos and repoFetchError are updated.
+        // For now, we rely on the parent binding.
+    }
+
+    private func fetchRepos(for org: GitHubOrganization, accountToFetch: Account) {
+        selectedOrganization = org
+        isLoadingOrgRepos = true
+        orgRepoFetchError = nil
+        organizationRepositories = [] // Clear previous org's repos
+        Task {
+            do {
+                let fetchedRepos = try await accountManager.fetchRepositories(for: accountToFetch, organizationLogin: org.login)
+                self.organizationRepositories = fetchedRepos
+            } catch {
+                self.orgRepoFetchError = error.localizedDescription
+            }
+            isLoadingOrgRepos = false
+        }
+    }
+
+    @ViewBuilder
+    var accountDetailsTab: some View {
         Form {
             Section(header: Text("Account Information")) {
                 LabeledContent("Username", value: account.username)
@@ -285,52 +388,209 @@ struct AccountDetailView: View {
         }
     }
 
-    private var repositoriesTab: some View {
-        VStack(alignment: .leading) {
-            if isLoadingRepos {
-                ProgressView("Loading repositories...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let error = repoFetchError {
-                VStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                        .font(.largeTitle)
-                        .padding(.bottom, 4)
-                    Text("Error fetching repositories")
-                        .font(.headline)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
+    @ViewBuilder
+    var repositoriesAndOrgsTab: some View {
+        ScrollView {
+            VStack(alignment: .leading) {
+                Section("Your Repositories") {
+                    if isLoadingRepos {
+                        ProgressView().padding()
+                    } else if let error = repoFetchError {
+                        Text("Error: \(error)").foregroundColor(.red).padding()
+                    } else if repositories.isEmpty {
+                        Text("No repositories found.").padding()
+                    } else {
+                        ForEach(repositories) { repo in
+                            RepositoryListRow(repository: repo,
+                                              isSelected: selectedRepository?.id == repo.id,
+                                              showOwner: false)
+                            .contentShape(Rectangle()) // Make the whole row tappable
+                            .onTapGesture {
+                                selectedRepository = repo
+                                // Potentially scroll to a detail view or update a detail section
+                            }
+                            Divider()
+                        }
+                    }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if repositories.isEmpty {
-                Text("No repositories found for this account or you may not have access to any.")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List(repositories) { repo in
-                    RepositoryRow(repo: repo)
+                .padding(.horizontal)
+
+                Section("Organizations") {
+                    if isLoadingOrganizations {
+                        ProgressView().padding()
+                    } else if let error = organizationFetchError {
+                        Text("Error: \(error)").foregroundColor(.red).padding()
+                    } else if organizations.isEmpty {
+                        Text("No organizations found or you are not a member of any.").padding()
+                    } else {
+                        ForEach(organizations) { org in
+                            DisclosureGroup(
+                                isExpanded: .init( // Two-way binding for expansion state
+                                    get: { selectedOrganization?.id == org.id },
+                                    set: { isExpanding in
+                                        if isExpanding {
+                                            fetchRepos(for: org, accountToFetch: account)
+                                        } else {
+                                            selectedOrganization = nil
+                                            organizationRepositories = []
+                                        }
+                                    }
+                                ),
+                                content: {
+                                    if selectedOrganization?.id == org.id {
+                                        if isLoadingOrgRepos {
+                                            ProgressView().padding([.leading, .top])
+                                        } else if let error = orgRepoFetchError {
+                                            Text("Error: \(error)").foregroundColor(.red).padding([.leading, .top])
+                                        } else if organizationRepositories.isEmpty {
+                                            Text("No repositories found for \(org.login).")
+                                                .foregroundColor(.secondary)
+                                                .padding([.leading, .top])
+                                        } else {
+                                            ForEach(organizationRepositories) { repo in
+                                                RepositoryListRow(repository: repo,
+                                                                  isSelected: selectedRepository?.id == repo.id,
+                                                                  showOwner: true,
+                                                                  ownerLogin: org.login)
+                                                .contentShape(Rectangle())
+                                                .onTapGesture {
+                                                    selectedRepository = repo
+                                                }
+                                                .padding(.leading) // Indent org repos
+                                                Divider().padding(.leading)
+                                            }
+                                        }
+                                    }
+                                },
+                                label: {
+                                    OrganizationRow(organization: org)
+                                }
+                            )
+                            Divider()
+                        }
+                    }
                 }
-                .listStyle(.inset)
+                .padding(.horizontal)
             }
         }
+        .frame(minHeight: 300)
     }
+}
 
-    private func fetchUserDetails(forAcc: Account? = nil) {
-        let targetAccount = forAcc ?? account
-        isLoadingUserDetails = true
-        Task {
-            do {
-                self.userDetails = try await accountManager.fetchUserDetails(for: targetAccount)
-            } catch {
-                print("Error fetching user details: \(error.localizedDescription)")
-                // Optionally set an error message for user details fetching
+struct OrganizationRow: View {
+    let organization: GitHubOrganization
+
+    var body: some View {
+        HStack {
+            if let avatarURLString = organization.avatarUrl, let avatarURL = URL(string: avatarURLString) {
+                AsyncImage(url: avatarURL) { image in image.resizable() }
+                placeholder: { Image(systemName: "person.2.crop.square.stack.fill").resizable() }
+                    .frame(width: 24, height: 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            } else {
+                Image(systemName: "person.2.crop.square.stack.fill")
+                    .resizable()
+                    .frame(width: 24, height: 24)
             }
-            isLoadingUserDetails = false
+            VStack(alignment: .leading) {
+                Text(organization.login).font(.headline)
+                if let description = organization.description, !description.isEmpty {
+                    Text(description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
         }
     }
 }
+
+// Ensure RepositoryListRow (previously RepositoryRow within AccountDetailView) is defined or adapted
+// For simplicity, I'm renaming/defining a basic version here.
+// You might need to adjust based on your existing RepositoryRow.
+
+struct RepositoryListRow: View {
+    let repository: GitHubRepository
+    var isSelected: Bool
+    var showOwner: Bool = true
+    var ownerLogin: String? = nil
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: repository.isPrivate ? "lock.fill" : "folder.fill")
+                .font(.title3)
+                .foregroundColor(repository.isPrivate ? .orange : .accentColor)
+                .frame(width: 24, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(repository.name)
+                    .font(.headline)
+                    .fontWeight(isSelected ? .bold : .medium)
+                    .foregroundColor(isSelected ? .accentColor : .primary)
+
+                if showOwner {
+                    Text(ownerLogin ?? repository.owner?.login ?? "Unknown Owner") // Safe unwrap
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
+                if let description = repository.description, !description.isEmpty {
+                    Text(description)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .lineLimit(2)
+                }
+
+                HStack(spacing: 16) {
+                    if let stars = repository.stargazersCount, stars > 0 {
+                        Label("\(stars)", systemImage: "star.fill")
+                            .font(.caption2)
+                            .foregroundColor(.yellow.opacity(0.8))
+                    }
+                    if let forks = repository.forksCount, forks > 0 {
+                        Label("\(forks)", systemImage: "arrow.triangle.branch")
+                            .font(.caption2)
+                            .foregroundColor(.green.opacity(0.8))
+                    }
+                    if let lang = repository.language, !lang.isEmpty {
+                        Label(lang, systemImage: "circle.fill")
+                            .font(.caption2)
+                            .foregroundColor(languageColor(lang).opacity(0.8)) // Using the helper
+                    }
+                }
+                .padding(.top, 2)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        .cornerRadius(6)
+    }
+
+    // Basic language to color mapping (can be expanded or moved to a global helper)
+    private func languageColor(_ language: String) -> Color {
+        switch language.lowercased() {
+        case "swift": return .orange
+        case "javascript": return .yellow
+        case "python": return .blue
+        case "java": return .red
+        case "html": return .pink
+        case "css": return .purple
+        case "c#", "csharp": return .green
+        case "c++", "cpp": return .pink
+        case "ruby": return .red
+        case "go": return .cyan
+        case "typescript": return .blue
+        case "php": return .purple
+        case "scala": return .red
+        case "kotlin": return Color(red: 0.6, green: 0.3, blue: 0.8) // A violet-ish color
+        case "rust": return Color(red: 0.7, green: 0.3, blue: 0.1)
+        default: return .gray
+        }
+    }
+}
+
 
 struct UpdateTokenView: View {
     @Environment(\.dismiss) var dismiss
@@ -411,80 +671,3 @@ struct UpdateTokenView: View {
         }
     }
 }
-
-struct RepositoryRow: View {
-    let repo: GitHubRepository
-
-    var body: some View {
-        HStack {
-            Image(systemName: repo.isPrivate ? "lock.fill" : "folder.fill")
-                .foregroundColor(repo.isPrivate ? .orange : .blue)
-            VStack(alignment: .leading) {
-                Text(repo.name)
-                    .font(.headline)
-                if let description = repo.description, !description.isEmpty {
-                    Text(description)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                }
-                HStack(spacing: 16) {
-                    if let lang = repo.language {
-                        Label(lang, systemImage: "circle.fill")
-                            .font(.caption2)
-                            .foregroundColor(languageColor(lang))
-                    }
-                    Label("\(repo.stargazersCount ?? 0)", systemImage: "star.fill")
-                        .font(.caption2)
-                    Label("\(repo.forksCount ?? 0)", systemImage: "arrow.triangle.branch")
-                        .font(.caption2)
-                }
-            }
-            Spacer()
-            if let cloneURL = repo.cloneUrl {
-                Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(cloneURL, forType: .string)
-                    // Optionally show a toast/confirmation
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                }
-                .buttonStyle(.borderless)
-                .help("Copy HTTPS Clone URL")
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    // Basic language to color mapping (expand as needed)
-    private func languageColor(_ language: String) -> Color {
-        switch language.lowercased() {
-        case "swift": return .orange
-        case "javascript": return .yellow
-        case "python": return .blue
-        case "java": return .red
-        case "html": return .pink
-        case "css": return .purple
-        default: return .gray
-        }
-    }
-}
-
-#if DEBUG
-struct AccountsListView_Previews: PreviewProvider {
-    static var previews: some View {
-        let mockManager = AccountManager() // Create a new instance for preview
-        if mockManager.accounts.isEmpty {
-//            Task {
-//                // Note: Previews don't have keychain access, so this won't fully work
-//                // and addAccount also makes network calls.
-//                // For true previews, you might need to inject mock data directly or mock services.
-//                await mockManager.addAccount(type: .githubCom, username: "TestUser1", token: "dummytoken1")
-//                await mockManager.addAccount(type: .githubEnterprise, username: "EntUser1", token: "dummytoken2", serverURL: "https://github.example.com")
-//            }
-        }
-
-        return AccountsListView(accountManager: mockManager)
-    }
-}
-#endif

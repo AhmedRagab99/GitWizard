@@ -60,7 +60,7 @@ class AccountManager {
 
     // MARK: - CRUD Operations for Accounts
 
-    func addAccount(type: AccountType, username: String, token: String, serverURL: String? = nil) async {
+    func addAccount(type: AccountType, username: String, token: String, serverURL: String? = nil) async -> Bool {
         isLoading = true
         errorMessage = nil
         var accountUsername = username
@@ -72,15 +72,25 @@ class AccountManager {
 
             switch type {
             case .githubCom:
-                apiEndpoint = URL(string: "https://api.github.com/user")!
+                apiEndpoint = URL(string: "https://api.github.com/user")! // This is a full URL, not just path
                 actualServerURL = nil
             case .githubEnterprise:
                 guard let enterpriseURLString = serverURL, !enterpriseURLString.isEmpty,
-                      let enterpriseBaseURL = URL(string: enterpriseURLString),
-                      let host = enterpriseBaseURL.host else {
+                      let enterpriseBaseURL = URL(string: enterpriseURLString)
+                       else {
                     throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Invalid GitHub Enterprise server URL."])
                 }
-                apiEndpoint = URL(string: "https://\(host)/api/v3/user")!
+                // For enterprise, apiEndpoint should be base + /api/v3/user
+                // Account model already computes apiEndpoint, let's use that for consistency if possible
+                // However, the Account object isn't created yet. So, construct it carefully.
+                guard var components = URLComponents(url: enterpriseBaseURL, resolvingAgainstBaseURL: false) else {
+                    throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Could not parse GitHub Enterprise server URL components."])
+                }
+                components.path = "/api/v3/user" // Standard enterprise API path
+                guard let constructedApiEndpoint = components.url else {
+                     throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Could not construct API endpoint for GitHub Enterprise user."])
+                }
+                apiEndpoint = constructedApiEndpoint
                 actualServerURL = enterpriseURLString
             }
 
@@ -116,12 +126,15 @@ class AccountManager {
             // 5. Add to accounts array and save metadata
             accounts.append(newAccount)
             saveAccountsMetadata()
+            isLoading = false
+            return true // Indicate success
 
         } catch {
             self.errorMessage = "Error adding account: \(error.localizedDescription)"
             print("Error adding account: \(error)")
+            isLoading = false
+            return false // Indicate failure
         }
-        isLoading = false
     }
 
     func updateAccountToken(accountID: UUID, newToken: String) async {
@@ -140,10 +153,15 @@ class AccountManager {
             case .githubCom:
                 apiEndpoint = URL(string: "https://api.github.com/user")!
             case .githubEnterprise:
-                guard let serverURL = accountToUpdate.serverURL, let host = URL(string: serverURL)?.host else {
-                    throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Invalid GitHub Enterprise server URL for token update."])
+                guard let baseEnterpriseAPI = accountToUpdate.apiEndpoint,
+                      var components = URLComponents(url: baseEnterpriseAPI, resolvingAgainstBaseURL: true) else {
+                    throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Invalid GitHub Enterprise server URL components for token update."])
                 }
-                apiEndpoint = URL(string: "https://\(host)/api/v3/user")!
+                components.path = (components.path + "/user").replacingOccurrences(of: "//", with: "/")
+                guard let constructedEndpoint = components.url else {
+                    throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Could not construct API endpoint for GitHub Enterprise user update."])
+                }
+                apiEndpoint = constructedEndpoint
             }
 
             var request = URLRequest(url: apiEndpoint)
@@ -217,22 +235,40 @@ class AccountManager {
             throw URLError(.userAuthenticationRequired, userInfo: [NSLocalizedDescriptionKey: "Missing token for account \(account.username)."])
         }
 
-        guard let baseApiUrl = account.apiEndpoint else {
+        guard let baseApiUrl = account.apiEndpoint else { // This should be like https://api.github.com OR https://your.ghe.com/api/v3
             throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Invalid API endpoint for account \(account.username)."])
         }
 
-        // GitHub API endpoint for listing authenticated user's repositories
-        // Supports pagination, but for simplicity, fetching first page (up to 100 repos by default).
-        // Add `?per_page=100&page=X` for pagination.
-        let reposUrl = baseApiUrl.appendingPathComponent("user/repos?type=owner&sort=updated&per_page=100")
+        // Correctly construct URL with query parameters
+        guard var components = URLComponents(url: baseApiUrl, resolvingAgainstBaseURL: true) else {
+            throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Could not parse base API URL components for account \(account.username)."])
+        }
 
-        var request = URLRequest(url: reposUrl)
-        request.setValue("token \(token)", forHTTPHeaderField: "Authorization")
+        // Append path for user repositories: /user/repos
+        // Ensure path is appended correctly, avoiding double slashes if baseApiUrl already has a path.
+        components.path = (components.path + "/user/repos").replacingOccurrences(of: "//", with: "/")
+
+        components.queryItems = [
+            URLQueryItem(name: "type", value: "owner"),
+            URLQueryItem(name: "sort", value: "updated"),
+            URLQueryItem(name: "per_page", value: "100")
+        ]
+
+        guard let finalUrl = components.url else {
+            throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Could not construct final URL for fetching repositories."])
+        }
+
+        // FOR DEBUGGING - REMOVE LATER
+        // print("Fetching repos from URL: \(finalUrl.absoluteString) with token: \(String(token.prefix(4)))...)")
+
+        var request = URLRequest(url: finalUrl)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await URLSession.shared.data(for: request)
-
+        print(response)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
             // You might want to parse the error message from GitHub API if available in `data`
             throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch repositories. Status: \(statusCode)"])
@@ -247,22 +283,110 @@ class AccountManager {
             throw URLError(.userAuthenticationRequired, userInfo: [NSLocalizedDescriptionKey: "Missing token for account \(account.username)."])
         }
 
-        guard let userApiUrl = account.apiEndpoint?.appendingPathComponent("user") else {
+        // account.apiEndpoint is the base (e.g. https://api.github.com or https://your.ghe.com/api/v3)
+        // We need to append /user to it.
+        guard let baseApiUrl = account.apiEndpoint else {
+             throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Invalid base API endpoint for account \(account.username)."])
+        }
+
+        guard var components = URLComponents(url: baseApiUrl, resolvingAgainstBaseURL: true) else {
+            throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Could not parse base API URL components for user details for account \(account.username)."])
+        }
+        components.path = (components.path + "/user").replacingOccurrences(of: "//", with: "/")
+
+        guard let finalUserApiUrl = components.url else {
             throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Invalid user API endpoint for account \(account.username)."])
         }
 
-        var request = URLRequest(url: userApiUrl)
-        request.setValue("token \(token)", forHTTPHeaderField: "Authorization")
+        // FOR DEBUGGING - REMOVE LATER
+        // print("Fetching user details from URL: \(finalUserApiUrl.absoluteString) with token: \(String(token.prefix(4))...)")
+
+        var request = URLRequest(url: finalUserApiUrl)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-            throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch user details. Status: \(statusCode)"])
-        }
+//        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+//            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+//            throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch user details. Status: \(statusCode)"])
+//        }
 
         let user = try JSONDecoder().decode(GitHubUser.self, from: data)
         return user
+    }
+
+    // MARK: - Fetching Organizations and their Repositories
+
+    func fetchOrganizations(for account: Account) async throws -> [GitHubOrganization] {
+        guard let token = getToken(for: account), !token.isEmpty else {
+            throw URLError(.userAuthenticationRequired, userInfo: [NSLocalizedDescriptionKey: "Missing token for account \(account.username)."])
+        }
+
+        guard let baseApiUrl = account.apiEndpoint else {
+            throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Invalid API endpoint for account \(account.username)."])
+        }
+
+        guard var components = URLComponents(url: baseApiUrl, resolvingAgainstBaseURL: true) else {
+            throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Could not parse base API URL components for account \(account.username)."])
+        }
+
+        components.path = (components.path + "/user/orgs").replacingOccurrences(of: "//", with: "/")
+        components.queryItems = [URLQueryItem(name: "per_page", value: "100")]
+
+        guard let finalUrl = components.url else {
+            throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Could not construct final URL for fetching organizations."])
+        }
+
+        var request = URLRequest(url: finalUrl)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch organizations. Status: \(statusCode)"])
+        }
+
+        let organizations = try JSONDecoder().decode([GitHubOrganization].self, from: data)
+        return organizations
+    }
+
+    func fetchRepositories(for account: Account, organizationLogin: String) async throws -> [GitHubRepository] {
+        guard let token = getToken(for: account), !token.isEmpty else {
+            throw URLError(.userAuthenticationRequired, userInfo: [NSLocalizedDescriptionKey: "Missing token for account \(account.username)."])
+        }
+
+        guard let baseApiUrl = account.apiEndpoint else {
+            throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Invalid API endpoint for account \(account.username)."])
+        }
+
+        guard var components = URLComponents(url: baseApiUrl, resolvingAgainstBaseURL: true) else {
+            throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Could not parse base API URL components for account \(account.username)."])
+        }
+
+        components.path = (components.path + "/orgs/\(organizationLogin)/repos").replacingOccurrences(of: "//", with: "/")
+        components.queryItems = [
+            URLQueryItem(name: "type", value: "all"), // Fetch all types of repos for an org
+            URLQueryItem(name: "sort", value: "updated"),
+            URLQueryItem(name: "per_page", value: "100")
+        ]
+
+        guard let finalUrl = components.url else {
+            throw URLError(.badURL, userInfo: [NSLocalizedDescriptionKey: "Could not construct final URL for fetching organization repositories."])
+        }
+
+        var request = URLRequest(url: finalUrl)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch organization repositories for \(organizationLogin). Status: \(statusCode)"])
+        }
+
+        let repositories = try JSONDecoder().decode([GitHubRepository].self, from: data)
+        return repositories
     }
 }
