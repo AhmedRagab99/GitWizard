@@ -33,6 +33,29 @@ struct PullRequestsListView: View {
                 listContentView
             }
         }
+        .onChange(of: viewModel.selectedPullRequest) { oldValue, newValue in
+            guard let selectedPR = newValue else { return }
+
+            Task {
+                await viewModel.selectPullRequest(selectedPR)
+
+
+                // Generate a unique ID for the window to allow for multiple PR detail windows
+                // and to potentially reopen/focus existing ones if desired (though openNewWindow creates a new one or brings existing to front based on ID).
+                let windowId = "pull-request-detail-\(selectedPR.id)-\(selectedPR.number)"
+                let windowTitle = "PR #\(selectedPR.number): \(selectedPR.title)"
+
+                openNewWindow(
+                    with: PullRequestDetailView(pullRequest: selectedPR, viewModel: viewModel),
+                    id: windowId,
+                    title: windowTitle,
+                    width: 800, // Adjust width as needed
+                    height: 600 // Adjust height as needed
+                )
+            }            
+             viewModel.selectedPullRequest = nil
+            
+        }
         .toolbar {
             ToolbarItem(placement: .automatic) { // Or .navigationBarTrailing for macOS
                 Button {

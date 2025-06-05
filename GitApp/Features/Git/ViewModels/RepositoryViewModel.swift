@@ -6,7 +6,16 @@
 //
 
 import SwiftUI
-import Combine // Assuming GitService might use Combine or is in a module that exports it. Or create if not exists.
+import Combine
+
+// Note: The linter error "Cannot find 'GitService' in scope" on line 36 (private let gitService = GitService())
+// typically indicates that either:
+// 1. GitService.swift is not included in the target membership of this module/app.
+// 2. The GitService class or its initializer has an access level (e.g., private, fileprivate)
+//    that prevents it from being accessed from this file.
+// 3. If GitService is in a separate module, an `import <ModuleName>` statement is missing.
+// Assuming GitService is intended to be available within the app, please ensure its target membership
+// and access control levels are correctly set.
 
 @Observable
 class RepositoryViewModel {
@@ -49,9 +58,6 @@ class RepositoryViewModel {
     func isGitRepository(at: URL) async -> Bool {
         return  await gitService.isGitRepository(at: at)
     }
-
-
-
 
     func cloneRepository(from url: String, to directory: URL) async throws -> Bool {
         guard !url.isEmpty else {
