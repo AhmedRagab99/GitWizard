@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine // Assuming GitService might use Combine or is in a module that exports it. Or create if not exists.
 
 @Observable
 class RepositoryViewModel {
