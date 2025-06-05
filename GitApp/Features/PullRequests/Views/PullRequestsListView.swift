@@ -18,7 +18,7 @@ struct PullRequestsListView: View {
             if viewModel.isLoadingPullRequests && viewModel.pullRequests.isEmpty {
                 ProgressView("Loading Pull Requests...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage = viewModel.errorMessage, viewModel.pullRequests.isEmpty {
+            } else if let errorMessage = viewModel.pullRequestListError, viewModel.pullRequests.isEmpty {
                 VStack(spacing: 15) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.largeTitle)
@@ -63,7 +63,6 @@ struct PullRequestsListView: View {
         .onChange(of: viewModel.selectedPullRequest) { oldValue, newValue in
             guard let selectedPR = newValue else { return }
             Task {
-                await viewModel.selectPullRequest(selectedPR)
                 let windowId = "pull-request-detail-\(selectedPR.id)-\(selectedPR.number)"
                 let windowTitle = "PR #\(selectedPR.number): \(selectedPR.title)"
                 openNewWindow(
@@ -74,14 +73,14 @@ struct PullRequestsListView: View {
                     height: 600
                 )
             }
-//            viewModel.selectedPullRequest = nil
+            // viewModel.selectedPullRequest = nil // Decide if PR should be deselected after opening new window
         }
         .sheet(isPresented: $isShowingCreatePRView) {
             CreatePullRequestView(viewModel: viewModel)
         }
         .task {
-            if viewModel.pullRequests.isEmpty {
-                await viewModel.loadPullRequests()
+            if viewModel.pullRequests.isEmpty && viewModel.pullRequestListError == nil {
+                await viewModel.loadPullRequests(refresh: true) // Initial load
             }
         }
         .background(Color(nsColor: .controlBackgroundColor))
@@ -109,7 +108,7 @@ struct PullRequestsListView: View {
                 Image(systemName: "arrow.clockwise")
             }
             .help("Refresh Pull Requests")
-            .disabled(viewModel.isLoadingPullRequests)
+            .disabled(viewModel.isLoadingPullRequests && viewModel.pullRequests.isEmpty) // Disable only if initial load is happening
             .buttonStyle(.borderless) // More subtle button style for header icons
             .padding(.leading)
 
@@ -121,7 +120,6 @@ struct PullRequestsListView: View {
             }
             .help("Create New Pull Request")
             // .buttonStyle(.bordered) // or .borderless, choose based on desired emphasis
-            .disabled(viewModel.isLoadingPullRequests) // Could have other disabling logic
         }
     }
 
@@ -130,28 +128,34 @@ struct PullRequestsListView: View {
             ForEach(viewModel.pullRequests) { pr in
                 PullRequestRow(pullRequest: pr)
                     .tag(pr)
-                    .task {
+                    .onAppear {
                         if pr.id == viewModel.pullRequests.last?.id && viewModel.canLoadMorePullRequests && !viewModel.isLoadingPullRequests {
-                            await viewModel.loadPullRequests()
+                            Task {
+                                await viewModel.loadPullRequests(refresh: false) // Correctly call for pagination
+                            }
                         }
                     }
             }
 
+            // Loading indicator for pagination
             if viewModel.isLoadingPullRequests && !viewModel.pullRequests.isEmpty {
                 HStack {
                     Spacer()
-                    ProgressView()
+                    ProgressView() // Simpler progress view for loading more
                     Spacer()
                 }
                 .listRowSeparator(.hidden)
+                .frame(height: 50) // Give it some space
             }
 
-            if !viewModel.canLoadMorePullRequests && !viewModel.pullRequests.isEmpty {
-                 Text("No more pull requests.")
+            // Optional: Message when all items are loaded
+            if !viewModel.canLoadMorePullRequests && !viewModel.pullRequests.isEmpty && viewModel.pullRequestListError == nil {
+                 Text("You've reached the end of the list.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding()
+                    .listRowSeparator(.hidden)
             }
         }
         .listStyle(.inset) // Or .plain for macOS

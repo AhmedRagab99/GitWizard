@@ -225,6 +225,59 @@ class GitProviderService {
         }
     }
 
+    /// Fetches review comments (comments on code lines) for a given pull request from GitHub.
+    func fetchPullRequestReviewComments(
+        owner: String,
+        repoName: String,
+        prNumber: Int,
+        account: Account,
+        page: Int = 1,
+        perPage: Int = 100 // Review comments can be numerous; 100 is often max per page
+    ) async throws -> [PullRequestComment] {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
+        guard account.provider.lowercased().contains("github") else {
+            throw GitProviderServiceError.unsupportedProvider(account.provider)
+        }
+
+        // Endpoint: /repos/{owner}/{repo}/pulls/{pull_number}/comments
+        var urlComponents = URLComponents(string: "\(baseURLString)/repos/\(owner)/\(repoName)/pulls/\(prNumber)/comments")
+        urlComponents?.queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "per_page", value: String(perPage))
+        ]
+
+        guard let url = urlComponents?.url else {
+            throw GitProviderServiceError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(account.token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw GitProviderServiceError.malformedResponse
+            }
+            guard (200..<300).contains(httpResponse.statusCode) else {
+                let errorMessage = String(data: data, encoding: .utf8)
+                throw GitProviderServiceError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
+            }
+            // Assuming PullRequestComment model is suitable for review comments too.
+            // GitHub API for PR review comments returns an array of comment objects.
+            let reviewComments = try decoder.decode([PullRequestComment].self, from: data)
+            return reviewComments
+        } catch let error as GitProviderServiceError {
+            throw error
+        } catch let decodingError as DecodingError {
+            throw GitProviderServiceError.decodingError(decodingError)
+        } catch {
+            throw GitProviderServiceError.networkError(error)
+        }
+    }
+
     /// Fetches files changed in a given pull request from GitHub.
     func fetchPullRequestFiles(
         owner: String,

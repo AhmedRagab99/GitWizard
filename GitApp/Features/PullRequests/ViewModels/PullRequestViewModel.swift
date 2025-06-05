@@ -2,28 +2,59 @@ import Foundation
 
 @Observable
 class PullRequestViewModel  {
+    // MARK: - Constants
+    private let pullRequestsPerPage = 20
+    private let commentsPerPage = 30
+    private let reviewCommentsPerPage = 30
+    private let filesPerPage = 30 // GitHub API default for files is 30, max 100.
+
     // MARK: - Properties for Listing/Viewing PRs
     var pullRequests: [PullRequest] = []
     var comments: [PullRequestComment] = []
+    var reviewComments: [PullRequestComment] = []
     var files: [PullRequestFile] = []
     var selectedPullRequest: PullRequest? {
         didSet {
-            if selectedPullRequest != nil {
-                // Task to load details is now in selectPullRequest method
-            }
+            // Data loading is now primarily handled in selectPullRequest method
         }
     }
+
+    // MARK: - Loading States
     var isLoadingPullRequests = false
-    var isLoadingDetails = false // For comments/files of a selected PR
-    var errorMessage: String?
+    var isLoadingInitialDetails = false // For the first load of all details for a selected PR
+    var isLoadingMoreComments = false
+    var isLoadingMoreReviewComments = false
+    var isLoadingMoreFiles = false
+
+    // MARK: - Error Messages
+    var pullRequestListError: String?
+    var commentsError: String?
+    var reviewCommentsError: String?
+    var filesError: String?
+
     var currentFilterState: PullRequestState = .open {
         didSet {
-            // Re-fetch PRs when filter changes
             Task {
-                await loadPullRequests(refresh: true) // Refresh when filter changes
+                await loadPullRequests(refresh: true)
             }
         }
     }
+
+    // MARK: - Pagination State for PR List
+    private var currentPRListPage = 1
+    var canLoadMorePullRequests = true
+
+    // MARK: - Pagination State for Comments
+    private var currentCommentsPage = 1
+    var canLoadMoreComments = true
+
+    // MARK: - Pagination State for Review Comments
+    private var currentReviewCommentsPage = 1
+    var canLoadMoreReviewComments = true
+
+    // MARK: - Pagination State for Files
+    private var currentFilesPage = 1
+    var canLoadMoreFiles = true
 
     // MARK: - Properties for Creating PRs
     var newPRTitle: String = ""
@@ -34,40 +65,34 @@ class PullRequestViewModel  {
     var isLoadingBranches: Bool = false
     var isCreatingPR: Bool = false
     var prCreationError: String? = nil
-    // Placeholder for current branch, ideally obtained from a local GitService
     var currentBranchNameFromGitService: String? = nil
 
     // MARK: - Dependencies
     private let gitProviderService: GitProviderService
     private let account: Account
-    let repository: GitHubRepository // Made public for CreatePullRequestView to access defaultBranch
-
-    // MARK: - Pagination State (Example for PR list)
-    private var currentPage = 1
-    private let itemsPerPage = 20
-    var canLoadMorePullRequests = true
+    let repository: GitHubRepository
 
     init(gitProviderService: GitProviderService, account: Account, repository: GitHubRepository) {
         self.gitProviderService = gitProviderService
         self.account = account
         self.repository = repository
-        // Attempt to set default base branch. Head branch might need more specific logic (e.g., current local branch).
         self.newPRBaseBranch = repository.defaultBranch
     }
 
-    // MARK: - Data Loading Methods
+    // MARK: - Data Loading Methods for PR List
     @MainActor
     func loadPullRequests(refresh: Bool = false) async {
         if refresh {
-            currentPage = 1
+            currentPRListPage = 1
             pullRequests = []
             canLoadMorePullRequests = true
+            pullRequestListError = nil
         }
 
         guard canLoadMorePullRequests, !isLoadingPullRequests else { return }
 
         isLoadingPullRequests = true
-        errorMessage = nil
+        // if currentPRListPage == 1 { pullRequestListError = nil } // Clear error only on first page load/refresh
 
         do {
             let fetchedPRs = try await gitProviderService.fetchPullRequests(
@@ -75,33 +100,43 @@ class PullRequestViewModel  {
                 repoName: repository.name,
                 account: account,
                 state: currentFilterState,
-                page: currentPage,
-                perPage: itemsPerPage
+                page: currentPRListPage,
+                perPage: pullRequestsPerPage
             )
 
             if fetchedPRs.isEmpty {
                 canLoadMorePullRequests = false
             } else {
                 pullRequests.append(contentsOf: fetchedPRs)
-                currentPage += 1
+                currentPRListPage += 1
             }
         } catch let error as GitProviderServiceError {
-            errorMessage = error.localizedDescription
-            canLoadMorePullRequests = false // Stop pagination on error
+            pullRequestListError = error.localizedDescription
+            canLoadMorePullRequests = false
         } catch {
-            errorMessage = "An unexpected error occurred: \(error.localizedDescription)"
-            canLoadMorePullRequests = false // Stop pagination on error
+            pullRequestListError = "An unexpected error occurred: \(error.localizedDescription)"
+            canLoadMorePullRequests = false
         }
         isLoadingPullRequests = false
     }
 
+    // MARK: - Data Loading Methods for PR Details (Comments, Review Comments, Files)
+
     @MainActor
-    func loadCommentsForSelectedPullRequest() async {
+    func loadComments(refresh: Bool = false) async {
         guard let selectedPR = selectedPullRequest else { return }
 
-        isLoadingDetails = true
-        // errorMessage = nil // Don't clear general error message here, could be from PR list load
-        comments = [] // Clear previous comments
+        if refresh {
+            currentCommentsPage = 1
+            comments = []
+            canLoadMoreComments = true
+            commentsError = nil
+        }
+
+        guard canLoadMoreComments, !isLoadingMoreComments else { return }
+        // isLoadingInitialDetails is managed by selectPullRequest
+        isLoadingMoreComments = true
+        // if currentCommentsPage == 1 { commentsError = nil } // Error is reset on refresh
 
         do {
             let fetchedComments = try await gitProviderService.fetchPullRequestComments(
@@ -109,25 +144,79 @@ class PullRequestViewModel  {
                 repoName: repository.name,
                 prNumber: selectedPR.number,
                 account: account,
-                page: 1, // Add pagination for comments if needed
-                perPage: 100 // Fetch up to 100 comments for now
+                page: currentCommentsPage,
+                perPage: commentsPerPage
             )
-            comments = fetchedComments
+
+            if fetchedComments.isEmpty {
+                canLoadMoreComments = false
+            } else {
+                comments.append(contentsOf: fetchedComments)
+                currentCommentsPage += 1
+            }
         } catch let error as GitProviderServiceError {
-            errorMessage = "Error loading comments: \(error.localizedDescription)"
+            commentsError = "Error loading comments: \(error.localizedDescription)"
+            canLoadMoreComments = false
         } catch {
-            errorMessage = "An unexpected error occurred while loading comments: \(error.localizedDescription)"
+            commentsError = "An unexpected error occurred while loading comments: \(error.localizedDescription)"
+            canLoadMoreComments = false
         }
-        isLoadingDetails = false
+        isLoadingMoreComments = false
     }
 
     @MainActor
-    func loadFilesForSelectedPullRequest() async {
+    func loadReviewComments(refresh: Bool = false) async {
         guard let selectedPR = selectedPullRequest else { return }
 
-        isLoadingDetails = true
-        // errorMessage = nil // Don't clear general error message here
-        files = [] // Clear previous files
+        if refresh {
+            currentReviewCommentsPage = 1
+            reviewComments = []
+            canLoadMoreReviewComments = true
+            reviewCommentsError = nil
+        }
+
+        guard canLoadMoreReviewComments, !isLoadingMoreReviewComments else { return }
+        isLoadingMoreReviewComments = true
+
+        do {
+            let fetchedReviewComments = try await gitProviderService.fetchPullRequestReviewComments(
+                owner: repository.owner?.login ?? "",
+                repoName: repository.name,
+                prNumber: selectedPR.number,
+                account: account,
+                page: currentReviewCommentsPage,
+                perPage: reviewCommentsPerPage
+            )
+
+            if fetchedReviewComments.isEmpty {
+                canLoadMoreReviewComments = false
+            } else {
+                reviewComments.append(contentsOf: fetchedReviewComments)
+                currentReviewCommentsPage += 1
+            }
+        } catch let error as GitProviderServiceError {
+            reviewCommentsError = "Error loading review comments: \(error.localizedDescription)"
+            canLoadMoreReviewComments = false
+        } catch {
+            reviewCommentsError = "An unexpected error occurred while loading review comments: \(error.localizedDescription)"
+            canLoadMoreReviewComments = false
+        }
+        isLoadingMoreReviewComments = false
+    }
+
+    @MainActor
+    func loadFiles(refresh: Bool = false) async {
+         guard let selectedPR = selectedPullRequest else { return }
+
+        if refresh {
+            currentFilesPage = 1
+            files = []
+            canLoadMoreFiles = true
+            filesError = nil
+        }
+
+        guard canLoadMoreFiles, !isLoadingMoreFiles else { return }
+        isLoadingMoreFiles = true
 
         do {
             let fetchedFiles = try await gitProviderService.fetchPullRequestFiles(
@@ -135,36 +224,81 @@ class PullRequestViewModel  {
                 repoName: repository.name,
                 prNumber: selectedPR.number,
                 account: account,
-                page: 1, // Add pagination for files if needed
-                perPage: 100 // GitHub API typically limits files per page
+                page: currentFilesPage,
+                perPage: filesPerPage
             )
-            files = fetchedFiles
+
+            if fetchedFiles.isEmpty {
+                canLoadMoreFiles = false
+            } else {
+                files.append(contentsOf: fetchedFiles)
+                currentFilesPage += 1
+            }
         } catch let error as GitProviderServiceError {
-            errorMessage = "Error loading files: \(error.localizedDescription)"
+            filesError = "Error loading files: \(error.localizedDescription)"
+            canLoadMoreFiles = false
         } catch {
-            errorMessage = "An unexpected error occurred while loading files: \(error.localizedDescription)"
+            filesError = "An unexpected error occurred while loading files: \(error.localizedDescription)"
+            canLoadMoreFiles = false
         }
-        isLoadingDetails = false
+        isLoadingMoreFiles = false
     }
 
-    // MARK: - Data Loading and Actions for Creating PRs
+    // MARK: - Selection and Filtering
+    @MainActor
+    func selectPullRequest(_ pr: PullRequest) async {
+        selectedPullRequest = pr
+
+        isLoadingInitialDetails = true // Indicate that the initial set of details is being loaded.
+
+        // Load initial page for all details concurrently, ensuring pagination states are reset by refresh:true.
+        // Error properties (commentsError, etc.) are also reset within these load methods when refresh is true.
+        async let commentsTask: () = loadComments(refresh: true)
+        async let reviewCommentsTask: () = loadReviewComments(refresh: true)
+        async let filesTask: () = loadFiles(refresh: true)
+
+        _ = await [commentsTask, reviewCommentsTask, filesTask]
+
+        isLoadingInitialDetails = false // All initial detail loads are complete.
+    }
+
+    @MainActor
+    func clearSelection() {
+        selectedPullRequest = nil
+        pullRequestListError = nil
+
+        comments = []
+        reviewComments = []
+        files = []
+
+        commentsError = nil
+        reviewCommentsError = nil
+        filesError = nil
+
+        currentCommentsPage = 1
+        canLoadMoreComments = true
+        currentReviewCommentsPage = 1
+        canLoadMoreReviewComments = true
+        currentFilesPage = 1
+        canLoadMoreFiles = true
+    }
+
+    // MARK: - Data Loading and Actions for Creating PRs (Implementation mostly unchanged)
     @MainActor
     func fetchBranchesForCurrentRepository() async {
         isLoadingBranches = true
-        prCreationError = nil // Clear previous creation errors when fetching branches
+        prCreationError = nil
         do {
             availableBranches = try await gitProviderService.fetchBranches(
                 owner: repository.owner?.login ?? "",
                 repoName: repository.name,
                 account: account
             )
-            // Try to set a sensible default for head branch if not already set and different from base
             if newPRHeadBranch == nil, let currentLocalBranch = currentBranchNameFromGitService, availableBranches.contains(where: { $0.name == currentLocalBranch }) {
                  newPRHeadBranch = currentLocalBranch
             } else if newPRHeadBranch == nil, let firstNonBaseBranch = availableBranches.first(where: { $0.name != newPRBaseBranch}) {
                  newPRHeadBranch = firstNonBaseBranch.name
             }
-            // Ensure base branch is set if it was nil and default is available
             if newPRBaseBranch == nil, let defaultBranch = repository.defaultBranch, availableBranches.contains(where: { $0.name == defaultBranch }) {
                 newPRBaseBranch = defaultBranch
             }
@@ -185,15 +319,12 @@ class PullRequestViewModel  {
             prCreationError = "Title, base branch, and head branch are required."
             return
         }
-
         guard base != head else {
             prCreationError = "Base and head branches cannot be the same."
             return
         }
-
         isCreatingPR = true
         prCreationError = nil
-
         do {
             let newPR = try await gitProviderService.createPullRequest(
                 owner: repository.owner?.login ?? "",
@@ -204,19 +335,12 @@ class PullRequestViewModel  {
                 head: head,
                 base: base
             )
-            // Success
             isCreatingPR = false
-            // Add to the list of PRs (or refresh list)
-            pullRequests.insert(newPR, at: 0) // Add to top for immediate visibility
-            // Reset form
+            pullRequests.insert(newPR, at: 0)
             newPRTitle = ""
             newPRBody = ""
-            // newPRBaseBranch = repository.defaultBranch // Keep base branch as is or reset? User might want to create another PR against same base.
-            // newPRHeadBranch = nil // Reset head branch or smart select next?
-
-            // Optionally, reload all pull requests to ensure data consistency
+            // Consider refreshing the PR list to get the absolute latest state from server
             // await loadPullRequests(refresh: true)
-
         } catch let error as GitProviderServiceError {
             prCreationError = "Failed to create pull request: \(error.localizedDescription)"
         } catch {
@@ -224,26 +348,5 @@ class PullRequestViewModel  {
         }
         isCreatingPR = false
     }
-
-    // MARK: - Selection and Filtering
-    @MainActor
-    func selectPullRequest(_ pr: PullRequest) {
-        selectedPullRequest = pr
-        // Automatically load details when a PR is selected
-        Task {
-            // Clear previous details first
-            self.comments = []
-            self.files = []
-            // Load new details
-            await loadCommentsForSelectedPullRequest()
-            await loadFilesForSelectedPullRequest()
-        }
-    }
-
-    @MainActor
-    func clearSelection() {
-        selectedPullRequest = nil
-        comments = []
-        files = []
-    }
 }
+

@@ -2,9 +2,9 @@ import SwiftUI
 
 struct PullRequestDetailView: View {
     let pullRequest: PullRequest
-    @Bindable var viewModel: PullRequestViewModel // Ensure @Bindable if viewModel's properties are changed by this view directly
+    @Bindable var viewModel: PullRequestViewModel
 
-    @State private var selectedTab: Int = 0 // 0: Description, 1: Comments, 2: Files
+    @State private var selectedTab: Int = 0 // 0: Description, 1: Comments, 2: Code Comments, 3: Files
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -15,7 +15,8 @@ struct PullRequestDetailView: View {
             Picker("Details", selection: $selectedTab) {
                 Label("Description", systemImage: "doc.text").tag(0)
                 Label("Comments (\(viewModel.comments.count))", systemImage: "bubble.left.and.bubble.right").tag(1)
-                Label("Files (\(viewModel.files.count))", systemImage: "doc.on.doc").tag(2)
+                Label("Code Comments (\(viewModel.reviewComments.count))", systemImage: "text.bubble").tag(2)
+                Label("Files (\(viewModel.files.count))", systemImage: "doc.on.doc").tag(3)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
@@ -35,6 +36,9 @@ struct PullRequestDetailView: View {
                     commentsView
                         .frame(maxWidth: .infinity, maxHeight: .infinity) // Ensure it expands
                 case 2:
+                    reviewCommentsView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case 3:
                     filesView
                         .frame(maxWidth: .infinity, maxHeight: .infinity) // Ensure it expands
                 default:
@@ -47,6 +51,17 @@ struct PullRequestDetailView: View {
                 .padding()
         }
         .background(Color(nsColor: .windowBackgroundColor)) // Ensures a solid background
+        // Trigger initial load of details if not already loaded (e.g. if view appears standalone)
+        // However, `selectPullRequest` in the list view is the primary trigger.
+        // This .task might be redundant if the typical flow always involves `selectPullRequest`.
+        // Consider if selectedPullRequest is set *before* this view appears without `selectPullRequest` being called.
+        .task(id: viewModel.selectedPullRequest?.id) { // Re-run if selected PR changes
+            if viewModel.selectedPullRequest != nil && viewModel.comments.isEmpty && viewModel.reviewComments.isEmpty && viewModel.files.isEmpty && !viewModel.isLoadingInitialDetails {
+                 // This ensures that if the view is somehow presented with a PR but details weren't loaded,
+                 // they get loaded. This is a safety net.
+                await viewModel.selectPullRequest(pullRequest) // Pass the local pullRequest
+            }
+        }
     }
 
     private var prInfoHeader: some View {
@@ -105,12 +120,13 @@ struct PullRequestDetailView: View {
 
     @ViewBuilder
     private var descriptionView: some View {
-        // Ensure ScrollView is only used if content might actually overflow.
-        // If body is typically short, ScrollView might not be needed, or conditional.
         Group {
-            if let body = pullRequest.body, !body.isEmpty {
+            if viewModel.isLoadingInitialDetails && (pullRequest.body == nil || pullRequest.body!.isEmpty) {
+                ProgressView("Loading Description...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let body = pullRequest.body, !body.isEmpty {
                 ScrollView {
-                    Text(body) // Consider a Markdown renderer for richer text
+                    Text(body)
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
@@ -124,35 +140,112 @@ struct PullRequestDetailView: View {
     @ViewBuilder
     private var commentsView: some View {
         Group {
-            if viewModel.isLoadingDetails && viewModel.comments.isEmpty {
+            if viewModel.isLoadingInitialDetails && viewModel.comments.isEmpty && viewModel.commentsError == nil {
                 ProgressView("Loading Comments...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if viewModel.comments.isEmpty {
-                CenteredContentMessage(systemImage: "bubble.middle.bottom.fill", message: "No comments yet.")
+            } else if let errorMessage = viewModel.commentsError, viewModel.comments.isEmpty {
+                 CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Comments", message: errorMessage)
+            } else if viewModel.comments.isEmpty && !viewModel.isLoadingMoreComments && !viewModel.isLoadingInitialDetails {
+                CenteredContentMessage(systemImage: "bubble.middle.bottom.fill", message: "No discussion comments yet.")
             } else {
-                List(viewModel.comments) { comment in
-                    PullRequestCommentView(comment: comment)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                List {
+                    ForEach(viewModel.comments) { comment in
+                        PullRequestCommentView(comment: comment)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                            .onAppear {
+                                if comment.id == viewModel.comments.last?.id && viewModel.canLoadMoreComments && !viewModel.isLoadingMoreComments {
+                                    Task {
+                                        await viewModel.loadComments(refresh: false)
+                                    }
+                                }
+                            }
+                    }
+                    if viewModel.isLoadingMoreComments {
+                        ProgressView("Loading more comments...")
+                            .frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
+                    }
+                    if !viewModel.canLoadMoreComments && !viewModel.comments.isEmpty && viewModel.commentsError == nil {
+                        Text("No more comments.").font(.caption).foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
+                    }
                 }
-                .listStyle(.plain) // Or .inset for a slightly different look
+                .listStyle(.plain)
+                 // Add pull to refresh if desired for this specific list
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var reviewCommentsView: some View {
+        Group {
+            if viewModel.isLoadingInitialDetails && viewModel.reviewComments.isEmpty && viewModel.reviewCommentsError == nil {
+                ProgressView("Loading Code Comments...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage = viewModel.reviewCommentsError, viewModel.reviewComments.isEmpty {
+                 CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Code Comments", message: errorMessage)
+            } else if viewModel.reviewComments.isEmpty && !viewModel.isLoadingMoreReviewComments && !viewModel.isLoadingInitialDetails {
+                CenteredContentMessage(systemImage: "text.bubble.fill", message: "No code comments on this pull request.")
+            } else {
+                List {
+                    ForEach(viewModel.reviewComments) { comment in
+                        PullRequestCommentView(comment: comment)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                            .onAppear {
+                                if comment.id == viewModel.reviewComments.last?.id && viewModel.canLoadMoreReviewComments && !viewModel.isLoadingMoreReviewComments {
+                                    Task {
+                                        await viewModel.loadReviewComments(refresh: false)
+                                    }
+                                }
+                            }
+                    }
+                    if viewModel.isLoadingMoreReviewComments {
+                        ProgressView("Loading more code comments...")
+                            .frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
+                    }
+                     if !viewModel.canLoadMoreReviewComments && !viewModel.reviewComments.isEmpty && viewModel.reviewCommentsError == nil {
+                        Text("No more code comments.").font(.caption).foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
+                    }
+                }
+                .listStyle(.plain)
             }
         }
     }
 
     @ViewBuilder
     private var filesView: some View {
-        if viewModel.isLoadingDetails && viewModel.files.isEmpty {
-            ProgressView("Loading Files...")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.files.isEmpty {
-            CenteredContentMessage(systemImage: "doc.on.doc.fill",
-                                   message: "No files changed in this pull request.")
-        } else {
-            List(viewModel.files) { file in
-                PullRequestFileView(file: file)
-                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16)) // Adjusted vertical
+        Group {
+            if viewModel.isLoadingInitialDetails && viewModel.files.isEmpty && viewModel.filesError == nil {
+                ProgressView("Loading Files...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage = viewModel.filesError, viewModel.files.isEmpty {
+                CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Files", message: errorMessage)
+            } else if viewModel.files.isEmpty && !viewModel.isLoadingMoreFiles && !viewModel.isLoadingInitialDetails {
+                CenteredContentMessage(systemImage: "doc.on.doc.fill", message: "No files changed in this pull request.")
+            } else {
+                List {
+                    ForEach(viewModel.files) { file in
+                        PullRequestFileView(file: file)
+                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                            .onAppear {
+                                if file.id == viewModel.files.last?.id && viewModel.canLoadMoreFiles && !viewModel.isLoadingMoreFiles {
+                                    Task {
+                                        await viewModel.loadFiles(refresh: false)
+                                    }
+                                }
+                            }
+                    }
+                    if viewModel.isLoadingMoreFiles {
+                        ProgressView("Loading more files...")
+                            .frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
+                    }
+                    if !viewModel.canLoadMoreFiles && !viewModel.files.isEmpty && viewModel.filesError == nil {
+                        Text("No more files.").font(.caption).foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
+                    }
+                }
+                .listStyle(.plain)
             }
-            .listStyle(.plain)
         }
     }
 
@@ -177,6 +270,7 @@ struct PullRequestDetailView: View {
 // Helper View for centered messages (like "No description")
 struct CenteredContentMessage: View {
     let systemImage: String
+    var title: String? = nil // Optional title
     let message: String
 
     var body: some View {
@@ -184,9 +278,15 @@ struct CenteredContentMessage: View {
             Image(systemName: systemImage)
                 .font(.system(size: 40))
                 .foregroundColor(.secondary.opacity(0.6))
+            if let title = title, !title.isEmpty {
+                 Text(title)
+                    .font(.title3)
+                    .fontWeight(.medium)
+            }
             Text(message)
                 .font(.callout)
                 .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
