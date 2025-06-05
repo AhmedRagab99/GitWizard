@@ -33,6 +33,7 @@ struct RepositorySelectionView: View {
     @State private var selectedTab: RepositorySourceTab = .recent
     @State private var searchText: String = ""
     var themeManger: ThemeManager
+    private let gitService = GitService() // Add gitService instance
 
     @Environment(\.openWindow) private var openWindow
     @Environment(\.colorScheme) private var colorScheme
@@ -221,143 +222,138 @@ struct RepositorySelectionView: View {
 
     private func handleWindow(with url: URL) {
         let windowId = url.lastPathComponent
-        // Ensure GitProviderService is available
-        let gitProviderService = GitProviderService()
+        Task { // Wrap in a Task for async operations
+            let gitProviderService = GitProviderService()
+            var pullRequestVM: PullRequestViewModel
 
-        // Attempt to find a suitable account and repository details for PRs
-        // This is a simplified approach. Robust implementation might require:
-        // 1. GitService to fetch remote URL for the local repo.
-        // 2. A parser for git remote URLs (e.g., https://github.com/owner/repo.git or git@github.com:owner/repo.git)
-        // 3. Matching the parsed host with an account provider.
+            do {
+                let remoteURLString = try await gitService.getRemoteURL(in: url)
+                let parsedRemote = try GitURLParser.parse(remoteURL: remoteURLString)
 
-        // Placeholder: Try to find the first GitHub account
-        var foundAccount = accountManager.accounts.first { $0.provider.lowercased().contains( "github") }
-        let token = accountManager.getToken(for: foundAccount!)
-        foundAccount?.token = token!
-        
-        // Placeholder: Create a GitHubRepository object.
-        // In a real scenario, you'd parse owner/name from the local repo's remote URL.
-        // For now, let's assume a function `createPlaceholderGitHubRepository(from: url, account: foundAccount)` exists or use dummy data.
-        // This part is CRUCIAL for the PullRequestViewModel to function correctly.
+                let matchedAccount = await findMatchingAccount(for: parsedRemote)
+                pullRequestVM = createPullRequestViewModel(
+                    for: url,
+                    gitProviderService: gitProviderService,
+                    matchedAccount: matchedAccount,
+                    determinedRepoOwner: parsedRemote.owner,
+                    determinedRepoName: parsedRemote.repoName
+                )
+            } catch {
+                print("Error processing repository details for \(url.path) or creating PullRequestViewModel: \(error.localizedDescription). Using dummy VM.")
+                pullRequestVM = createPullRequestViewModel(
+                    for: url,
+                    gitProviderService: gitProviderService,
+                    matchedAccount: nil,
+                    determinedRepoOwner: nil,
+                    determinedRepoName: nil
+                )
+            }
 
-        // Example of how you might try to get owner/repo (NEEDS ACTUAL IMPLEMENTATION)
-        // let (owner, repoName) = getOwnerRepoFromLocalGitRepo(url: url) // This function needs to be created
-        // For now, using placeholder values or attempting to derive from URL if it matches a known pattern.
-        let (repoOwnerName, repoName) = (foundAccount?.username ?? "",url.lastPathComponent) // Simplified parsing
+            // UI updates must be on the main thread
+            await MainActor.run {
+                if isWindowVisible(id: windowId) {
+                    bringWindowToFront(id: windowId)
+                } else {
+                    openNewWindow(
+                        with: GitClientView(
+                            viewModel: GitViewModel(),
+                            themeManager: themeManger,
+                            url: url,
+                            accountManager: accountManager,
+                            repoViewModel: viewModel,
+                            pullRequestViewModel: pullRequestVM
+                        ),
+                        id: windowId,
+                        title: windowId,
+                        width: (NSScreen.main?.frame.width ?? 600) / 2,
+                        height: (NSScreen.main?.frame.height ?? 600) / 2
+                    )
+                }
+                print("Attempting to open window for: \(url.path) with ID: \(windowId)")
+            }
+        }
+    }
 
-        var pullRequestVM: PullRequestViewModel?
+    private func findMatchingAccount(for parsedRemote: GitURLParser.ParsedURL) async -> Account? {
+        for account in accountManager.accounts {
+            var accountHost: String?
+            switch account.type {
+            case .githubCom:
+                accountHost = "github.com"
+            case .githubEnterprise:
+                if let serverURL = account.serverURL, let enterpriseHost = URL(string: serverURL)?.host {
+                    accountHost = enterpriseHost
+                }
+            }
 
-        if let account = foundAccount, !repoOwnerName.isEmpty, !repoName.isEmpty {
-            // Create a dummy GitHubUser for the owner if not available directly
+            if let accHost = accountHost, accHost.lowercased() == parsedRemote.hostname.lowercased() {
+                if var potentialMatch = accountManager.accounts.first(where: { $0.id == account.id }) {
+                    if let token = accountManager.getToken(for: potentialMatch) {
+                        potentialMatch.token = token
+                        print("Found matching account: \(potentialMatch.username) for host \(parsedRemote.hostname)")
+                        return potentialMatch
+                    } else {
+                        print("Error: Token not found for potentially matched account \(account.username) on host \(parsedRemote.hostname)")
+                    }
+                }
+            }
+        }
+        print("Warning: No matching account found for remote host: \(parsedRemote.hostname)")
+        return nil
+    }
+
+    private func createPullRequestViewModel(
+        for localRepoURL: URL, // Added for context in logging if needed
+        gitProviderService: GitProviderService,
+        matchedAccount: Account?,
+        determinedRepoOwner: String?,
+        determinedRepoName: String?
+    ) -> PullRequestViewModel {
+        if let account = matchedAccount,
+           let ownerName = determinedRepoOwner, !ownerName.isEmpty,
+           let repoName = determinedRepoName, !repoName.isEmpty {
+
             let ownerUser = GitHubUser(
                 id: 0, // Placeholder ID
-                login: repoOwnerName,
-                avatarUrl: nil,
-                htmlUrl: "https://github.com/\(repoOwnerName)", // Best guess
-                name: repoOwnerName, // Or nil if not known
-                company: nil,
-                blog: nil,
-                location: nil,
-                email: nil,
-                bio: nil,
-                publicRepos: nil, // Use nil for optional Ints if unknown
-                followers: nil,
-                following: nil
+                login: ownerName,
+                avatarUrl: account.avatarURL, // Use account avatar, or fetch PR author specific later
+                htmlUrl: "https://\(account.apiEndpoint?.host ?? "github.com")/\(ownerName)", // Construct carefully
+                name: ownerName,
+                company: nil, blog: nil, location: nil, email: nil, bio: nil,
+                publicRepos: nil, followers: nil, following: nil
             )
+
             let githubRepo = GitHubRepository(
-                id: 0,
+                id: Int.random(in: 1000...9999), // Placeholder ID
                 name: repoName,
-                fullName: "\(repoOwnerName)/\(repoName)",
+                fullName: "\(ownerName)/\(repoName)",
                 owner: ownerUser,
-                htmlUrl: "https://github.com/\(repoOwnerName)/\(repoName)",
-                description: nil, sshUrl: "Local repository",
-                cloneUrl: "",
+                htmlUrl: "\(account.webURL?.absoluteString ?? "https://github.com")/\(ownerName)/\(repoName)", // Use account's webURL
+                description: nil,
+                sshUrl: nil,
+                cloneUrl: "\(account.webURL?.absoluteString ?? "https://github.com")/\(ownerName)/\(repoName).git",
                 stargazersCount: 0,
                 watchersCount: 0,
-                language: "",
+                language: nil,
                 forksCount: 0,
                 openIssuesCount: 0,
                 license: nil,
-                isPrivate: false,
-                defaultBranch: nil
+                isPrivate: false, // Placeholder
+                defaultBranch: "main" // Placeholder
             )
-            pullRequestVM = PullRequestViewModel(gitProviderService: gitProviderService, account: account, repository: githubRepo)
-        }
-
-        if isWindowVisible(id: windowId) {
-            bringWindowToFront(id: windowId)
+            print("Successfully created PullRequestViewModel for \(ownerName)/\(repoName) with account \(account.username)")
+            return PullRequestViewModel(gitProviderService: gitProviderService, account: account, repository: githubRepo)
         } else {
-            openNewWindow(
-                with: GitClientView(
-                    viewModel: GitViewModel(),
-                    themeManager: themeManger,
-                    url: url,
-                    accountManager: accountManager,
-                    repoViewModel: viewModel,
-                    pullRequestViewModel: pullRequestVM // Force unwrap, as we provide a dummy if nil
-                ),
-                id: windowId,
-                title: windowId,
-                width: (NSScreen.main?.frame.width ?? 600) / 2,
-                height: (NSScreen.main?.frame.height ?? 600) / 2
-            )
+            print("Warning: Using dummy PullRequestViewModel. Repo URL: \(localRepoURL.path). Owner: \(determinedRepoOwner ?? "nil"), Repo: \(determinedRepoName ?? "nil"), Matched Account: \(matchedAccount?.username ?? "nil")")
+            let dummyOwner = GitHubUser(id: -1, login: "unknown", avatarUrl: nil, htmlUrl: nil, name: "Unknown", company: nil, blog: nil, location: nil, email: nil, bio: nil, publicRepos: nil, followers: nil, following: nil)
+            let dummyRepo = GitHubRepository(id: -1, name: "unknown", fullName: "unknown/unknown", owner: dummyOwner, htmlUrl: "", description: nil, sshUrl: nil, cloneUrl: nil, stargazersCount: 0, watchersCount: 0, language: nil, forksCount: 0, openIssuesCount: 0, license: nil, isPrivate: false, defaultBranch: "main")
+            // Prefer first account, then a completely dummy one if no accounts exist.
+            let fallbackAccount = accountManager.accounts.first ?? Account(type: .githubCom, username: "dummy", token: "dummy-token")
+            return PullRequestViewModel(gitProviderService: gitProviderService, account: fallbackAccount, repository: dummyRepo)
         }
-
-        print("Attempting to open window for: \(url.path) with ID: \(windowId)")
     }
 
 }
 
-struct RepositoryRowView: View {
-    let url: URL
-    let isSelected: Bool
-    let onOpen: () -> Void
-    let onRemove: () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "folder.fill")
-                .font(.title2)
-                .foregroundColor(.accentColor)
-                .frame(width: 25, alignment: .center)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(url.lastPathComponent.replacingOccurrences(of: ".git", with: ""))
-                    .font(.headline)
-                    .fontWeight(.medium)
-                Text(url.deletingLastPathComponent().path)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            Spacer()
-        }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.init(nsColor: .selectedContentBackgroundColor).opacity(0.5) : Color.clear)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onOpen()
-        }
-        .contextMenu {
-            Button {
-                onOpen()
-            } label: {
-                Label("Open Repo", systemImage: "folder")
-            }
-
-            Button(role: .destructive) {
-                onRemove()
-            } label: {
-                Label("Remove from Recent", systemImage: "trash")
-            }
-        }
-    }
-}
 

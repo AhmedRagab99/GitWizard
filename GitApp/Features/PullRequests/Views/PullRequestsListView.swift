@@ -33,7 +33,6 @@ struct PullRequestsListView: View {
                 listContentView
             }
         }
-        .navigationTitle("Pull Requests") // Assuming this view is within a NavigationView
         .toolbar {
             ToolbarItem(placement: .automatic) { // Or .navigationBarTrailing for macOS
                 Button {

@@ -42,7 +42,7 @@ class GitProviderService {
     }
 
     // MARK: - GitHub API Constants
-    private let githubAPIBaseURL = "https://api.github.com"
+    // private let githubAPIBaseURL = "https://api.github.com" // No longer needed as a class constant
 
     // MARK: - Pull Request Fetching
 
@@ -64,11 +64,17 @@ class GitProviderService {
         page: Int = 1,
         perPage: Int = 30
     ) async throws -> [PullRequest] {
-        guard account.provider.lowercased() == "github" else {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL // Or a more specific error if account.apiEndpoint is nil
+        }
+
+        // The provider check can remain as is, or be more specific if needed.
+        // e.g., guard account.type == .githubCom || account.type == .githubEnterprise else { ... }
+        guard account.provider.lowercased().contains("github") else {
             throw GitProviderServiceError.unsupportedProvider(account.provider)
         }
 
-        var urlComponents = URLComponents(string: "\(githubAPIBaseURL)/repos/\(owner)/\(repoName)/pulls")
+        var urlComponents = URLComponents(string: "\(baseURLString)/repos/\(owner)/\(repoName)/pulls")
 
         var queryItems = [
             URLQueryItem(name: "page", value: String(page)),
@@ -129,11 +135,14 @@ class GitProviderService {
         prNumber: Int,
         account: Account
     ) async throws -> PullRequest {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
         guard account.type.rawValue.lowercased().contains("github") else {
             throw GitProviderServiceError.unsupportedProvider(account.type.rawValue)
         }
 
-        let urlString = "\(githubAPIBaseURL)/repos/\(owner)/\(repoName)/pulls/\(prNumber)"
+        let urlString = "\(baseURLString)/repos/\(owner)/\(repoName)/pulls/\(prNumber)"
         guard let url = URL(string: urlString) else {
             throw GitProviderServiceError.invalidURL
         }
@@ -173,13 +182,16 @@ class GitProviderService {
         page: Int = 1,
         perPage: Int = 30
     ) async throws -> [PullRequestComment] {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
         guard account.provider.lowercased().contains("github") else {
             throw GitProviderServiceError.unsupportedProvider(account.provider)
         }
 
 
         // Using issue comments endpoint: /repos/{owner}/{repo}/issues/{issue_number}/comments
-        var urlComponents = URLComponents(string: "\(githubAPIBaseURL)/repos/\(owner)/\(repoName)/issues/\(prNumber)/comments")
+        var urlComponents = URLComponents(string: "\(baseURLString)/repos/\(owner)/\(repoName)/issues/\(prNumber)/comments")
         urlComponents?.queryItems = [
             URLQueryItem(name: "page", value: String(page)),
             URLQueryItem(name: "per_page", value: String(perPage))
@@ -222,12 +234,15 @@ class GitProviderService {
         page: Int = 1,
         perPage: Int = 100 // Max per_page for files is often 100 for GitHub
     ) async throws -> [PullRequestFile] {
-        guard account.provider.lowercased() == "github" else {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
+        guard account.provider.lowercased().contains("github") else {
             throw GitProviderServiceError.unsupportedProvider(account.provider)
         }
 
         // Endpoint: /repos/{owner}/{repo}/pulls/{pull_number}/files
-        var urlComponents = URLComponents(string: "\(githubAPIBaseURL)/repos/\(owner)/\(repoName)/pulls/\(prNumber)/files")
+        var urlComponents = URLComponents(string: "\(baseURLString)/repos/\(owner)/\(repoName)/pulls/\(prNumber)/files")
         urlComponents?.queryItems = [
             URLQueryItem(name: "page", value: String(page)),
             URLQueryItem(name: "per_page", value: String(perPage))
