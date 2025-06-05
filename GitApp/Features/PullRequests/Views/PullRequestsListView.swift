@@ -2,92 +2,127 @@ import SwiftUI
 
 struct PullRequestsListView: View {
     @Bindable var viewModel: PullRequestViewModel
+    @State private var isShowingCreatePRView = false
 
     var body: some View {
-        VStack(alignment: .leading) {
-            // Header and Filter
-            headerView
+        VStack(alignment: .leading, spacing: 0) {
+            // New unified header
+            newHeaderView
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(.bar) // A slight background to distinguish the header area
 
+            Divider() // Visually separate header from list content
+
+            // Content Area (Progress, Error, or List)
             if viewModel.isLoadingPullRequests && viewModel.pullRequests.isEmpty {
                 ProgressView("Loading Pull Requests...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let errorMessage = viewModel.errorMessage, viewModel.pullRequests.isEmpty {
-                VStack {
-                    Text("Error")
-                        .font(.title)
-                    Text(errorMessage)
+                VStack(spacing: 15) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.largeTitle)
                         .foregroundColor(.red)
-                    Button("Retry") {
+                    Text("Error Loading Pull Requests")
+                        .font(.title2)
+                    Text(errorMessage)
+                        .font(.callout)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+                    Button {
                         Task {
                             await viewModel.loadPullRequests(refresh: true)
                         }
+                    } label: {
+                        Label("Retry", systemImage: "arrow.clockwise")
+                            .padding(.horizontal)
                     }
-                    .padding(.top)
+                    .buttonStyle(.borderedProminent)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.pullRequests.isEmpty {
-                Text("No pull requests found for the current filter.")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 15) {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.largeTitle)
+                        .foregroundColor(.secondary)
+                    Text("No Pull Requests")
+                        .font(.title2)
+                    Text("No pull requests found matching the current filter.")
+                        .font(.callout)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+                     // Optionally, a Retry button here as well if applicable
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 listContentView
             }
         }
         .onChange(of: viewModel.selectedPullRequest) { oldValue, newValue in
             guard let selectedPR = newValue else { return }
-
             Task {
                 await viewModel.selectPullRequest(selectedPR)
-
-
-                // Generate a unique ID for the window to allow for multiple PR detail windows
-                // and to potentially reopen/focus existing ones if desired (though openNewWindow creates a new one or brings existing to front based on ID).
                 let windowId = "pull-request-detail-\(selectedPR.id)-\(selectedPR.number)"
                 let windowTitle = "PR #\(selectedPR.number): \(selectedPR.title)"
-
                 openNewWindow(
                     with: PullRequestDetailView(pullRequest: selectedPR, viewModel: viewModel),
                     id: windowId,
                     title: windowTitle,
-                    width: 800, // Adjust width as needed
-                    height: 600 // Adjust height as needed
+                    width: 800,
+                    height: 600
                 )
-            }            
-             viewModel.selectedPullRequest = nil
-            
-        }
-        .toolbar {
-            ToolbarItem(placement: .automatic) { // Or .navigationBarTrailing for macOS
-                Button {
-                    Task {
-                        await viewModel.loadPullRequests(refresh: true)
-                    }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .disabled(viewModel.isLoadingPullRequests)
             }
+//            viewModel.selectedPullRequest = nil
+        }
+        .sheet(isPresented: $isShowingCreatePRView) {
+            CreatePullRequestView(viewModel: viewModel)
         }
         .task {
             if viewModel.pullRequests.isEmpty {
                 await viewModel.loadPullRequests()
             }
         }
+        .background(Color(nsColor: .controlBackgroundColor))
     }
 
-    private var headerView: some View {
-        HStack {
-            Text("Filter by:")
-            Picker("Filter Pull Requests", selection: $viewModel.currentFilterState) {
+    // Redesigned headerView
+    private var newHeaderView: some View {
+        HStack(spacing: 12) {
+            Picker("Filter", selection: $viewModel.currentFilterState) {
                 ForEach(PullRequestState.allCases) { state in
                     Text(state.displayName).tag(state)
                 }
             }
-            .pickerStyle(.segmented) // Or .menu for more options / macOS HIG
-            .labelsHidden()
+            .pickerStyle(.segmented)
+            // .labelsHidden() // Keep labels for clarity or style as preferred
+            .frame(minWidth: 200, idealWidth: 250) // Give picker some defined space
+
             Spacer()
+
+            Button {
+                Task {
+                    await viewModel.loadPullRequests(refresh: true)
+                }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .help("Refresh Pull Requests")
+            .disabled(viewModel.isLoadingPullRequests)
+            .buttonStyle(.borderless) // More subtle button style for header icons
+            .padding(.leading)
+
+            Button {
+                isShowingCreatePRView = true
+            } label: {
+                Image(systemName: "plus.circle.fill")
+                Text("New") // Shortened text for header button
+            }
+            .help("Create New Pull Request")
+            // .buttonStyle(.bordered) // or .borderless, choose based on desired emphasis
+            .disabled(viewModel.isLoadingPullRequests) // Could have other disabling logic
         }
-        .padding()
     }
 
     private var listContentView: some View {
@@ -122,56 +157,3 @@ struct PullRequestsListView: View {
         .listStyle(.inset) // Or .plain for macOS
     }
 }
-
-// Preview needs a mock ViewModel, Account, and GitHubRepository
-#if DEBUG
-//@MainActor // Ensure preview struct runs on main actor if it involves @Observable types directly
-//struct PullRequestsListView_Previews: PreviewProvider {
-//    static var previews: some View {
-//        // Mock Account
-//        let mockLoginAuthor = PullRequestAuthor(id: 1, login: "user", avatarUrl: nil, htmlUrl: nil)
-//        // For Account model, ensure user parameter can take PullRequestAuthor or adapt Account model if it expects a different User type.
-//        // Assuming Account.User can be represented by PullRequestAuthor for simplicity in preview, or use a more specific GitHubUser if Account model requires it.
-//        let mockAccount = Account(id: UUID(), provider: "GitHub", username: "mockUser", token: "mockToken", avatarUrl: nil, user: mockLoginAuthor, organizations: [])
-//
-//        // Mock GitHubRepository
-//        let mockRepoOwner = GitHubUser(login: "mockOwner", id: 1, nodeId: "node", avatarUrl: nil, name: "Mock Owner", email: nil, company: nil, location: nil, bio: nil, publicRepos: 1, followers: 0, following: 0, createdAt: Date(), updatedAt: Date())
-//        let mockRepo = GitHubRepository(id: 1, nodeId: "repoNode", name: "SampleRepo", fullName: "mockOwner/SampleRepo", isPrivate: false, owner: mockRepoOwner, htmlUrl: "", description: "A sample repository", fork: false, url: "", createdAt: Date(), updatedAt: Date(), pushedAt: Date(), homepage: nil, language: "Swift", forksCount: 0, stargazersCount: 0, watchersCount: 0, openIssuesCount: 5, defaultBranch: "main", license: nil)
-//
-//        // Mock GitProviderService
-//        class MockGitProviderService: GitProviderService {
-//            override func fetchPullRequests(owner: String, repoName: String, account: Account, state: PullRequestState, page: Int, perPage: Int) async throws -> [PullRequest] {
-//                let author = PullRequestAuthor(id: 1, login: "octocat", avatarUrl: nil, htmlUrl: nil)
-//                let pr1 = PullRequest(id: 1, number: 1, title: "First PR", user: author, state: "open", body: "Body1", createdAt: Date(), updatedAt: Date(), closedAt: nil, mergedAt: nil, htmlUrl: "", diffUrl: "", patchUrl: "", commentsUrl: "")
-//                let pr2 = PullRequest(id: 2, number: 2, title: "Second PR", user: author, state: "closed", body: "Body2", createdAt: Date(), updatedAt: Date(), closedAt: Date(), mergedAt: nil, htmlUrl: "", diffUrl: "", patchUrl: "", commentsUrl: "")
-//                if page > 1 { return [] }
-//
-//                var results = [pr1, pr2]
-//                if state != .all {
-//                    results = results.filter { $0.prState == state }
-//                }
-//                return results
-//            }
-//        }
-//
-//        let mockService = MockGitProviderService()
-//        // The ViewModel should be created as @State here for the preview to own it.
-//        // However, the view itself defines `var viewModel`, expecting it to be passed.
-//        // For previews, we can wrap it in a struct that holds it as state.
-//        struct PreviewWrapper: View {
-//            @State var viewModel: PullRequestViewModel
-//            init() {
-//                _viewModel = State(initialValue: PullRequestViewModel(gitProviderService: mockService, account: mockAccount, repository: mockRepo))
-//            }
-//            var body: some View {
-//                PullRequestsListView(viewModel: viewModel)
-//            }
-//        }
-//
-//        return NavigationView {
-//            PreviewWrapper()
-//        }
-//        .previewDisplayName("Pull Requests List")
-//    }
-//}
-#endif

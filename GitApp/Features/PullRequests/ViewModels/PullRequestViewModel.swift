@@ -2,7 +2,7 @@ import Foundation
 
 @Observable
 class PullRequestViewModel  {
-    // MARK: - Properties
+    // MARK: - Properties for Listing/Viewing PRs
     var pullRequests: [PullRequest] = []
     var comments: [PullRequestComment] = []
     var files: [PullRequestFile] = []
@@ -25,10 +25,22 @@ class PullRequestViewModel  {
         }
     }
 
+    // MARK: - Properties for Creating PRs
+    var newPRTitle: String = ""
+    var newPRBody: String = ""
+    var newPRBaseBranch: String? = nil
+    var newPRHeadBranch: String? = nil
+    var availableBranches: [GitHubBranchs] = []
+    var isLoadingBranches: Bool = false
+    var isCreatingPR: Bool = false
+    var prCreationError: String? = nil
+    // Placeholder for current branch, ideally obtained from a local GitService
+    var currentBranchNameFromGitService: String? = nil
+
     // MARK: - Dependencies
     private let gitProviderService: GitProviderService
     private let account: Account
-    private let repository: GitHubRepository // Contains owner login and repo name
+    let repository: GitHubRepository // Made public for CreatePullRequestView to access defaultBranch
 
     // MARK: - Pagination State (Example for PR list)
     private var currentPage = 1
@@ -39,6 +51,8 @@ class PullRequestViewModel  {
         self.gitProviderService = gitProviderService
         self.account = account
         self.repository = repository
+        // Attempt to set default base branch. Head branch might need more specific logic (e.g., current local branch).
+        self.newPRBaseBranch = repository.defaultBranch
     }
 
     // MARK: - Data Loading Methods
@@ -131,6 +145,84 @@ class PullRequestViewModel  {
             errorMessage = "An unexpected error occurred while loading files: \(error.localizedDescription)"
         }
         isLoadingDetails = false
+    }
+
+    // MARK: - Data Loading and Actions for Creating PRs
+    @MainActor
+    func fetchBranchesForCurrentRepository() async {
+        isLoadingBranches = true
+        prCreationError = nil // Clear previous creation errors when fetching branches
+        do {
+            availableBranches = try await gitProviderService.fetchBranches(
+                owner: repository.owner?.login ?? "",
+                repoName: repository.name,
+                account: account
+            )
+            // Try to set a sensible default for head branch if not already set and different from base
+            if newPRHeadBranch == nil, let currentLocalBranch = currentBranchNameFromGitService, availableBranches.contains(where: { $0.name == currentLocalBranch }) {
+                 newPRHeadBranch = currentLocalBranch
+            } else if newPRHeadBranch == nil, let firstNonBaseBranch = availableBranches.first(where: { $0.name != newPRBaseBranch}) {
+                 newPRHeadBranch = firstNonBaseBranch.name
+            }
+            // Ensure base branch is set if it was nil and default is available
+            if newPRBaseBranch == nil, let defaultBranch = repository.defaultBranch, availableBranches.contains(where: { $0.name == defaultBranch }) {
+                newPRBaseBranch = defaultBranch
+            }
+
+        } catch let error as GitProviderServiceError {
+            prCreationError = "Failed to load branches: \(error.localizedDescription)"
+            availableBranches = []
+        } catch {
+            prCreationError = "An unexpected error occurred while loading branches: \(error.localizedDescription)"
+            availableBranches = []
+        }
+        isLoadingBranches = false
+    }
+
+    @MainActor
+    func createPullRequest() async {
+        guard let base = newPRBaseBranch, let head = newPRHeadBranch, !newPRTitle.isEmpty else {
+            prCreationError = "Title, base branch, and head branch are required."
+            return
+        }
+
+        guard base != head else {
+            prCreationError = "Base and head branches cannot be the same."
+            return
+        }
+
+        isCreatingPR = true
+        prCreationError = nil
+
+        do {
+            let newPR = try await gitProviderService.createPullRequest(
+                owner: repository.owner?.login ?? "",
+                repoName: repository.name,
+                account: account,
+                title: newPRTitle,
+                body: newPRBody,
+                head: head,
+                base: base
+            )
+            // Success
+            isCreatingPR = false
+            // Add to the list of PRs (or refresh list)
+            pullRequests.insert(newPR, at: 0) // Add to top for immediate visibility
+            // Reset form
+            newPRTitle = ""
+            newPRBody = ""
+            // newPRBaseBranch = repository.defaultBranch // Keep base branch as is or reset? User might want to create another PR against same base.
+            // newPRHeadBranch = nil // Reset head branch or smart select next?
+
+            // Optionally, reload all pull requests to ensure data consistency
+            // await loadPullRequests(refresh: true)
+
+        } catch let error as GitProviderServiceError {
+            prCreationError = "Failed to create pull request: \(error.localizedDescription)"
+        } catch {
+            prCreationError = "An unexpected error occurred while creating the pull request: \(error.localizedDescription)"
+        }
+        isCreatingPR = false
     }
 
     // MARK: - Selection and Filtering

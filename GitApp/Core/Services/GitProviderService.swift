@@ -275,4 +275,141 @@ class GitProviderService {
             throw GitProviderServiceError.networkError(error)
         }
     }
+
+    // MARK: - Branch Fetching
+
+    /// Fetches branches for a given repository from GitHub.
+    /// - Parameters:
+    ///   - owner: The owner of the repository.
+    ///   - repoName: The name of the repository.
+    ///   - account: The account to use for authentication.
+    ///   - page: The page number for pagination.
+    ///   - perPage: The number of items per page (max 100).
+    /// - Returns: An array of `GitHubBranchs` objects.
+    /// - Throws: `GitProviderServiceError` if an error occurs.
+    func fetchBranches(
+        owner: String,
+        repoName: String,
+        account: Account,
+        page: Int = 1,
+        perPage: Int = 100 // Max 100 per page for branches
+    ) async throws -> [GitHubBranchs] {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
+        // Assuming GitHub-like provider
+        guard account.provider.lowercased().contains("github") else {
+            throw GitProviderServiceError.unsupportedProvider(account.provider)
+        }
+
+        var urlComponents = URLComponents(string: "\(baseURLString)/repos/\(owner)/\(repoName)/branches")
+        urlComponents?.queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "per_page", value: String(perPage))
+        ]
+
+        guard let url = urlComponents?.url else {
+            throw GitProviderServiceError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(account.token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw GitProviderServiceError.malformedResponse
+            }
+            guard (200..<300).contains(httpResponse.statusCode) else {
+                let errorMessage = String(data: data, encoding: .utf8)
+                throw GitProviderServiceError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
+            }
+            // Assuming your Branch model matches the GitHub API response for branches
+            let branches = try decoder.decode([GitHubBranchs].self, from: data)
+            return branches
+        } catch let error as GitProviderServiceError {
+            throw error
+        } catch let decodingError as DecodingError {
+            throw GitProviderServiceError.decodingError(decodingError)
+        } catch {
+            throw GitProviderServiceError.networkError(error)
+        }
+    }
+
+    // MARK: - Pull Request Creation
+
+    /// Creates a new pull request on GitHub.
+    /// - Parameters:
+    ///   - owner: The owner of the repository.
+    ///   - repoName: The name of the repository.
+    ///   - account: The account to use for authentication.
+    ///   - title: The title of the pull request.
+    ///   - body: The description/body of the pull request.
+    ///   - head: The name of the branch where your changes are implemented.
+    ///   - base: The name of the branch you want the changes pulled into.
+    /// - Returns: The created `PullRequest` object.
+    /// - Throws: `GitProviderServiceError` if an error occurs.
+    func createPullRequest(
+        owner: String,
+        repoName: String,
+        account: Account,
+        title: String,
+        body: String,
+        head: String, // e.g., "feature-branch"
+        base: String  // e.g., "main"
+    ) async throws -> PullRequest {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
+        guard account.provider.lowercased().contains("github") else {
+            throw GitProviderServiceError.unsupportedProvider(account.provider)
+        }
+
+        let urlString = "\(baseURLString)/repos/\(owner)/\(repoName)/pulls"
+        guard let url = URL(string: urlString) else {
+            throw GitProviderServiceError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(account.token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let parameters: [String: Any] = [
+            "title": title,
+            "body": body,
+            "head": head,
+            "base": base
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: parameters, options: [])
+        } catch {
+            throw GitProviderServiceError.networkError(error) // Or a more specific parameter encoding error
+        }
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw GitProviderServiceError.malformedResponse
+            }
+            // GitHub returns 201 Created on success
+            guard (200..<300).contains(httpResponse.statusCode) else { // 201 is typical for successful POST
+                let errorMessage = String(data: data, encoding: .utf8)
+                // Attempt to parse GitHub's error message structure if possible
+                // For now, just passing the raw string.
+                throw GitProviderServiceError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
+            }
+            let createdPR = try decoder.decode(PullRequest.self, from: data)
+            return createdPR
+        } catch let error as GitProviderServiceError {
+            throw error
+        } catch let decodingError as DecodingError {
+            throw GitProviderServiceError.decodingError(decodingError)
+        } catch {
+            throw GitProviderServiceError.networkError(error)
+        }
+    }
 }
