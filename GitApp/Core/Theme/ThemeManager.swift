@@ -22,6 +22,13 @@ class ThemeManager {
     }
 
     private func updateTheme() {
+        guard NSApp != nil, !NSApp.windows.isEmpty else {
+            // Defer theme update until NSApp and its windows are available
+            // This can be done by observing NSApplication.didFinishLaunchingNotification
+            // or by calling updateTheme() at a later point.
+            // For now, we'll simply return if NSApp or its windows are not ready.
+            return
+        }
         if isDarkMode {
             NSApp.appearance = NSAppearance(named: .vibrantDark)
         } else {

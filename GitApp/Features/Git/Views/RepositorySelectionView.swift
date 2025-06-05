@@ -18,12 +18,12 @@ import AppKit
 enum RepositorySourceTab: String, CaseIterable, Identifiable {
     case recent = "Local"
     case accounts = "Remote"
-    
+
     var id: String { self.rawValue }
 }
 
 struct RepositorySelectionView: View {
-    @State var viewModel: RepositoryViewModel
+    @Bindable var viewModel: RepositoryViewModel
     @Bindable var accountManager :AccountManager
     @State private var selectedRepository: URL?
     @State private var isShowingFilePicker = false
@@ -32,10 +32,11 @@ struct RepositorySelectionView: View {
     @State private var errorMessage = ""
     @State private var selectedTab: RepositorySourceTab = .recent
     @State private var searchText: String = ""
-    
+    var themeManger: ThemeManager
+
     @Environment(\.openWindow) private var openWindow
     @Environment(\.colorScheme) private var colorScheme
-    
+
     // Determine available tabs based on account presence
     private var availableTabs: [RepositorySourceTab] {
         if accountManager.accounts.isEmpty {
@@ -43,13 +44,13 @@ struct RepositorySelectionView: View {
         }
         return RepositorySourceTab.allCases
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             headerView
                 .padding(.horizontal)
                 .padding(.bottom, 10)
-            
+
             // Only show Picker if there are multiple sources (i.e., accounts exist)
             if !accountManager.accounts.isEmpty {
                 Picker("Source", selection: $selectedTab) {
@@ -64,7 +65,7 @@ struct RepositorySelectionView: View {
                 // Add some spacing if picker is hidden, or adjust headerView padding
                 Spacer(minLength: 12) // Placeholder for picker's bottom padding
             }
-            
+
             contentView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -88,7 +89,7 @@ struct RepositorySelectionView: View {
             Text(errorMessage)
         }
         .onAppear {
-            
+
             viewModel.loadRepositoryList()
             // Ensure selectedTab is valid if accounts are initially empty
             if accountManager.accounts.isEmpty && selectedTab == .accounts {
@@ -102,7 +103,7 @@ struct RepositorySelectionView: View {
             }
         }
     }
-    
+
     @ViewBuilder
     private var contentView: some View {
         // Show content based on selectedTab, but only show Accounts if accounts exist
@@ -124,13 +125,13 @@ struct RepositorySelectionView: View {
             repositoryListView
         }
     }
-    
+
     private var headerView: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Repositories")
                 .font(.system(size: 28, weight: .bold))
                 .padding(.top)
-            
+
             HStack(spacing: 12) {
                 Button {
                     isShowingFilePicker = true
@@ -141,7 +142,7 @@ struct RepositorySelectionView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .keyboardShortcut("o", modifiers: .command)
-                
+
                 Button {
                     viewModel.cloneURL = ""
                     isShowingCloneSheet = true
@@ -155,7 +156,7 @@ struct RepositorySelectionView: View {
             }
         }
     }
-    
+
     private var filteredRecentRepositories: [URL] {
         if searchText.isEmpty {
             return viewModel.recentRepositories
@@ -166,7 +167,7 @@ struct RepositorySelectionView: View {
             }
         }
     }
-    
+
     private var repositoryListView: some View {
         Group {
             let repositoriesToDisplay = filteredRecentRepositories
@@ -204,7 +205,7 @@ struct RepositorySelectionView: View {
             }
         }
     }
-    
+
     private func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
@@ -217,7 +218,7 @@ struct RepositorySelectionView: View {
             isShowingErrorAlert = true
         }
     }
-    
+
     private func handleWindow(with url: URL) {
         let windowId = url.lastPathComponent
         if isWindowVisible(id: windowId) {
@@ -225,7 +226,7 @@ struct RepositorySelectionView: View {
         } else {
             openNewWindow(
                 with: GitClientView(
-                    viewModel: GitViewModel(),
+                    viewModel: GitViewModel(), themeManager: themeManger,
                     url: url,
                     accountManager: accountManager,
                     repoViewModel: viewModel
@@ -236,7 +237,7 @@ struct RepositorySelectionView: View {
                 height: (NSScreen.main?.frame.height ?? 600) / 2
             )
         }
-        
+
         print("Attempting to open window for: \(url.path) with ID: \(windowId)")
     }
 }
@@ -246,16 +247,16 @@ struct RepositoryRowView: View {
     let isSelected: Bool
     let onOpen: () -> Void
     let onRemove: () -> Void
-    
+
     @Environment(\.colorScheme) private var colorScheme
-    
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "folder.fill")
                 .font(.title2)
                 .foregroundColor(.accentColor)
                 .frame(width: 25, alignment: .center)
-            
+
             VStack(alignment: .leading, spacing: 3) {
                 Text(url.lastPathComponent.replacingOccurrences(of: ".git", with: ""))
                     .font(.headline)
@@ -284,7 +285,7 @@ struct RepositoryRowView: View {
             } label: {
                 Label("Open Repo", systemImage: "folder")
             }
-            
+
             Button(role: .destructive) {
                 onRemove()
             } label: {
