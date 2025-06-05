@@ -31,54 +31,54 @@ class RepositoryViewModel {
     var selectedRepository: URL?
     var recentRepositories: [URL] = []
     var errorMessage: String?
-    
+
     private let gitService = GitService()
-    
+
     struct ImportProgress: Identifiable {
         let id = UUID()
         var current: Int
         var total: Int
         var status: String
     }
-    
+
     init() {
         loadRepositoryList()
     }
-    
+
     func isGitRepository(at: URL) async -> Bool {
         return  await gitService.isGitRepository(at: at)
     }
 
-    
-    
-    
+
+
+
     func cloneRepository(from url: String, to directory: URL) async throws -> Bool {
         guard !url.isEmpty else {
             errorMessage = "Please enter a repository URL"
             return false
         }
-        
+
         isCloning = true
         cloneProgress = 0.0
         cloneStatus = "Starting clone..."
-        
+
         defer {
             isCloning = false
             cloneProgress = 0.0
             cloneStatus = ""
         }
-        
+
         do {
             let success =  await gitService.cloneRepository(from: url, to: directory)
-            
+
             if success {
                 let repoName = url.components(separatedBy: "/").last?.replacingOccurrences(of: ".git", with: "") ?? "repository"
                 let repoPath = directory.appendingPathComponent(repoName)
-                
+
                 addClonedRepository(repoPath)
                 repositoryURL = repoPath
                 selectedRepository = repoPath
-                
+
                 if !recentRepositories.contains(repoPath) {
                     recentRepositories.insert(repoPath, at: 0)
                     if recentRepositories.count > 10 {
@@ -86,7 +86,7 @@ class RepositoryViewModel {
                     }
                     saveRepositoryList()
                 }
-                
+
                 cloneProgress = 1.0
                 cloneStatus = "Clone completed successfully"
                 return true
@@ -94,28 +94,28 @@ class RepositoryViewModel {
             return false
         }
     }
-    
+
     func selectRepository(_ url: URL) {
         selectedRepository = url
         repositoryURL = url
     }
-    
+
     func removeFromRecentRepositories(_ url: URL) {
         recentRepositories.removeAll { $0 == url }
         saveRepositoryList()
     }
-    
+
     private func saveRepositoryList() {
         let encoder = JSONEncoder()
         do {
             let clonedData = try encoder.encode(recentRepositories.map { $0.path })
-            
+
             UserDefaults.standard.set(clonedData, forKey: "clonedRepositories")
         } catch {
             print("Failed to save repository list: \(error)")
         }
     }
-    
+
      func loadRepositoryList() {
         let decoder = JSONDecoder()
         if let clonedData = UserDefaults.standard.data(forKey: "clonedRepositories")
@@ -128,20 +128,20 @@ class RepositoryViewModel {
             }
         }
     }
-    
+
     func addClonedRepository(_ url: URL) {
         if !recentRepositories.contains(url) {
             recentRepositories.append(url)
             saveRepositoryList()
         }
     }
-    
+
     func addImportedRepository(_ url: URL) {
         if !recentRepositories.contains(url) {
             recentRepositories.append(url)
-            
+
             saveRepositoryList()
         }
     }
-    
+
 }

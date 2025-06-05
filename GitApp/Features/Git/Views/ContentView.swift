@@ -8,14 +8,11 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var viewModel = RepositoryViewModel()
-    @State private var accountManger: AccountManager = AccountManager()
+    var viewModel: RepositoryViewModel
+    var accountManger: AccountManager
+    var themeManager: ThemeManager
 
     var body: some View {
-        RepositorySelectionView(viewModel: viewModel,accountManager: accountManger)
+        RepositorySelectionView(viewModel: viewModel,accountManager: accountManger,themeManger: themeManager)
     }
-}
-
-#Preview {
-    ContentView()
 }

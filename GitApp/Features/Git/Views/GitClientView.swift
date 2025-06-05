@@ -6,7 +6,7 @@ import AppKit
 
 struct GitClientView: View {
     @Bindable var viewModel: GitViewModel
-    var themeManager = ThemeManager()
+    var themeManager : ThemeManager
     var url: URL
     let accountManager: AccountManager
     let repoViewModel : RepositoryViewModel // Add view model
@@ -33,7 +33,7 @@ struct GitClientView: View {
 
     // MARK: - Initialization (Example)
     // If you need a custom initializer, it would look something like this:
-    init(viewModel: GitViewModel, themeManager: ThemeManager = ThemeManager(), url: URL, accountManager: AccountManager,repoViewModel : RepositoryViewModel) {
+    init(viewModel: GitViewModel, themeManager: ThemeManager, url: URL, accountManager: AccountManager,repoViewModel : RepositoryViewModel) {
         self.viewModel = viewModel
         self.themeManager = themeManager
         self.url = url
