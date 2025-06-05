@@ -118,10 +118,13 @@ class AccountManager {
             }
 
             // 3. Create Account object
-            let newAccount = Account(type: type, serverURL: actualServerURL, username: accountUsername, token: "", avatarURL: githubUser.avatarUrl) // Token placeholder
+            var newAccount = Account(type: type, serverURL: actualServerURL, username: accountUsername, token: "", avatarURL: githubUser.avatarUrl) // Token placeholder
 
             // 4. Save token to Keychain
             try keychainService.save(token: token, forAccountName: keychainAccountName(for: newAccount), serviceName: serviceName)
+            let NewToken = getToken(for: newAccount)
+            newAccount.token = NewToken ?? ""
+            
 
             // 5. Add to accounts array and save metadata
             accounts.append(newAccount)

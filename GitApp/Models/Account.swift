@@ -1,7 +1,7 @@
 import Foundation
 
 enum AccountType: String, Codable, CaseIterable, Identifiable {
-    case githubCom = "GitHub.com"
+    case githubCom = "GitHub"
     case githubEnterprise = "GitHub Enterprise"
 
     var id: String { self.rawValue }
@@ -14,6 +14,10 @@ struct Account: Identifiable, Codable, Hashable {
     var username: String
     var token: String // This will be stored in Keychain, not directly in UserDefaults or similar
     var avatarURL: String?
+    
+    var provider: String {
+        return type.rawValue
+    }
 
     init(id: UUID = UUID(), type: AccountType, serverURL: String? = nil, username: String, token: String, avatarURL: String? = nil) {
         self.id = id

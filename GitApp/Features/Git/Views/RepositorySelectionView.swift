@@ -221,15 +221,80 @@ struct RepositorySelectionView: View {
 
     private func handleWindow(with url: URL) {
         let windowId = url.lastPathComponent
+        // Ensure GitProviderService is available
+        let gitProviderService = GitProviderService()
+
+        // Attempt to find a suitable account and repository details for PRs
+        // This is a simplified approach. Robust implementation might require:
+        // 1. GitService to fetch remote URL for the local repo.
+        // 2. A parser for git remote URLs (e.g., https://github.com/owner/repo.git or git@github.com:owner/repo.git)
+        // 3. Matching the parsed host with an account provider.
+
+        // Placeholder: Try to find the first GitHub account
+        var foundAccount = accountManager.accounts.first { $0.provider.lowercased().contains( "github") }
+        let token = accountManager.getToken(for: foundAccount!)
+        foundAccount?.token = token!
+        
+        // Placeholder: Create a GitHubRepository object.
+        // In a real scenario, you'd parse owner/name from the local repo's remote URL.
+        // For now, let's assume a function `createPlaceholderGitHubRepository(from: url, account: foundAccount)` exists or use dummy data.
+        // This part is CRUCIAL for the PullRequestViewModel to function correctly.
+
+        // Example of how you might try to get owner/repo (NEEDS ACTUAL IMPLEMENTATION)
+        // let (owner, repoName) = getOwnerRepoFromLocalGitRepo(url: url) // This function needs to be created
+        // For now, using placeholder values or attempting to derive from URL if it matches a known pattern.
+        let (repoOwnerName, repoName) = (foundAccount?.username ?? "",url.lastPathComponent) // Simplified parsing
+
+        var pullRequestVM: PullRequestViewModel?
+
+        if let account = foundAccount, !repoOwnerName.isEmpty, !repoName.isEmpty {
+            // Create a dummy GitHubUser for the owner if not available directly
+            let ownerUser = GitHubUser(
+                id: 0, // Placeholder ID
+                login: repoOwnerName,
+                avatarUrl: nil,
+                htmlUrl: "https://github.com/\(repoOwnerName)", // Best guess
+                name: repoOwnerName, // Or nil if not known
+                company: nil,
+                blog: nil,
+                location: nil,
+                email: nil,
+                bio: nil,
+                publicRepos: nil, // Use nil for optional Ints if unknown
+                followers: nil,
+                following: nil
+            )
+            let githubRepo = GitHubRepository(
+                id: 0,
+                name: repoName,
+                fullName: "\(repoOwnerName)/\(repoName)",
+                owner: ownerUser,
+                htmlUrl: "https://github.com/\(repoOwnerName)/\(repoName)",
+                description: nil, sshUrl: "Local repository",
+                cloneUrl: "",
+                stargazersCount: 0,
+                watchersCount: 0,
+                language: "",
+                forksCount: 0,
+                openIssuesCount: 0,
+                license: nil,
+                isPrivate: false,
+                defaultBranch: nil
+            )
+            pullRequestVM = PullRequestViewModel(gitProviderService: gitProviderService, account: account, repository: githubRepo)
+        }
+
         if isWindowVisible(id: windowId) {
             bringWindowToFront(id: windowId)
         } else {
             openNewWindow(
                 with: GitClientView(
-                    viewModel: GitViewModel(), themeManager: themeManger,
+                    viewModel: GitViewModel(),
+                    themeManager: themeManger,
                     url: url,
                     accountManager: accountManager,
-                    repoViewModel: viewModel
+                    repoViewModel: viewModel,
+                    pullRequestViewModel: pullRequestVM // Force unwrap, as we provide a dummy if nil
                 ),
                 id: windowId,
                 title: windowId,
@@ -240,6 +305,7 @@ struct RepositorySelectionView: View {
 
         print("Attempting to open window for: \(url.path) with ID: \(windowId)")
     }
+
 }
 
 struct RepositoryRowView: View {

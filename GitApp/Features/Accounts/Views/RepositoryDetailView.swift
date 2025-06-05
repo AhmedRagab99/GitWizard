@@ -2,7 +2,10 @@ import SwiftUI
 
 struct RepositoryDetailView: View {
     let repository: GitHubRepository
-    // Future: Add viewModel for more complex interactions if needed, e.g., fetching branches, commits for this repo.
+    let account: Account // Added to provide context for PRs
+
+    // Instantiate GitProviderService here or receive from environment/initializer if it has complex dependencies
+    private let gitProviderService = GitProviderService()
 
     var body: some View {
         ScrollView {
@@ -31,6 +34,24 @@ struct RepositoryDetailView: View {
 
                 Divider()
 
+                // Section for Pull Requests Link
+                Section {
+                    NavigationLink {
+                        // Lazily create the ViewModel and View for Pull Requests
+                        let prViewModel = PullRequestViewModel(
+                            gitProviderService: gitProviderService,
+                            account: account,
+                            repository: repository
+                        )
+                        PullRequestsListView(viewModel: prViewModel)
+                    } label: {
+                        Label("View Pull Requests", systemImage: "arrow.triangle.pull")
+                    }
+                    .font(.headline)
+                }
+
+                Divider()
+
                 Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 10) {
                     GridRow {
                         Text("Owner:").fontWeight(.semibold)
@@ -55,7 +76,6 @@ struct RepositoryDetailView: View {
                                                   .onTapGesture {
                                                       NSPasteboard.general.clearContents()
                                                       NSPasteboard.general.setString(SshUrl, forType: .string)
-                                                      // Add toast feedback if available
                                                   }
                                                   .help("Click to copy SSH URL")
                                           }
@@ -69,7 +89,6 @@ struct RepositoryDetailView: View {
                                 .onTapGesture {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(cloneURL, forType: .string)
-                                    // Add toast feedback
                                 }
                                 .help("Click to copy HTTPS URL")
                         }
@@ -101,7 +120,6 @@ struct RepositoryDetailView: View {
         .navigationTitle(repository.name)
     }
 
-    // Helper from AccountsListView, could be moved to a shared utility
     private func languageColor(_ language: String) -> Color {
         switch language.lowercased() {
         case "swift": return .orange
@@ -114,4 +132,50 @@ struct RepositoryDetailView: View {
         }
     }
 }
+
+// Previews would need to be updated to pass an Account
+#if DEBUG
+//struct RepositoryDetailView_Previews: PreviewProvider {
+//    static var previews: some View {
+//        // Mock GitHubUser for repository owner
+//        let mockOwner = GitHubUser(login: "octocat", id: 1, nodeId: "MDQ6VXNlcjU4MzIzMQ==", avatarUrl: "https://avatars.githubusercontent.com/u/583231?v=4", name: "The Octocat", email: nil, company: "GitHub", location: "San Francisco", bio: nil, publicRepos: 8, followers: 3900, following: 9, createdAt: Date(), updatedAt: Date())
+//
+//        // Mock GitHubRepository
+//        let sampleRepo = GitHubRepository(
+//            id: 1296269,
+//            nodeId: "MDEwOlJlcG9zaXRvcnkxMjk2MjY5",
+//            name: "Hello-World",
+//            fullName: "octocat/Hello-World",
+//            isPrivate: false,
+//            owner: mockOwner,
+//            htmlUrl: "https://github.com/octocat/Hello-World",
+//            description: "My first repository on GitHub!",
+//            fork: false,
+//            url: "https://api.github.com/repos/octocat/Hello-World",
+//            createdAt: Date(),
+//            updatedAt: Date(),
+//            pushedAt: Date(),
+//            homepage: "https://github.com",
+//            language: "Swift",
+//            forksCount: 2000,
+//            stargazersCount: 10000,
+//            watchersCount: 10000,
+//            openIssuesCount: 100,
+//            defaultBranch: "main",
+//            license: GitHubRepository.License(key: "mit", name: "MIT License", spdxId: "MIT", url: "https://api.github.com/licenses/mit", nodeId: "MDc6TGljZW5zZTEz"),
+//            sshUrl: "git@github.com:octocat/Hello-World.git",
+//            cloneUrl: "https://github.com/octocat/Hello-World.git"
+//        )
+//
+//        // Mock PullRequestAuthor for Account
+//        let mockAccountUser = PullRequestAuthor(id: 1, login: "currentUser", avatarUrl: nil, htmlUrl: nil)
+//        // Mock Account
+//        let sampleAccount = Account(id: UUID(), provider: "GitHub", username: "currentUser", token: "faketoken", avatarUrl: nil, user: mockAccountUser, organizations: [])
+//
+//        NavigationView {
+//            RepositoryDetailView(repository: sampleRepo, account: sampleAccount)
+//        }
+//    }
+//}
+#endif
 

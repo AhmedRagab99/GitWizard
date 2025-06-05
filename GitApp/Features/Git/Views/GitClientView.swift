@@ -8,8 +8,9 @@ struct GitClientView: View {
     @Bindable var viewModel: GitViewModel
     var themeManager : ThemeManager
     var url: URL
-    let accountManager: AccountManager
-    let repoViewModel : RepositoryViewModel // Add view model
+    var accountManager: AccountManager
+    var repoViewModel : RepositoryViewModel // Add view model
+    var pullRequestViewModel: PullRequestViewModel?
     @State private var selectedWorkspaceItem: WorkspaceSidebarItem = .history
     @State private var showStashSheet = false
     @State private var showDeleteAlert = false
@@ -24,19 +25,8 @@ struct GitClientView: View {
     @State private var showFetchSheet = false
     @State private var showSearchFilters = false
     
+    
 
-    // Expose GitHubAPIService for URL parsing, or move parsing to a shared utility
-    private let githubAPIService = GitHubAPIService()
-
-    // MARK: - Initialization (Example)
-    // If you need a custom initializer, it would look something like this:
-    init(viewModel: GitViewModel, themeManager: ThemeManager, url: URL, accountManager: AccountManager,repoViewModel : RepositoryViewModel) {
-        self.viewModel = viewModel
-        self.themeManager = themeManager
-        self.url = url
-        self.accountManager = accountManager
-        self.repoViewModel = repoViewModel
-    }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -48,6 +38,10 @@ struct GitClientView: View {
                     CommitView(viewModel: viewModel)
                 } else if selectedWorkspaceItem == .history {
                     HistoryView(viewModel: viewModel)
+                } else if selectedWorkspaceItem == .pullRequests {
+                    if let pullRequestViewModel = pullRequestViewModel {
+                        PullRequestsListView(viewModel: pullRequestViewModel)
+                    }
                 } else {
                     // Optionally, add a search view or placeholder
                     Text(" coming soon...")
