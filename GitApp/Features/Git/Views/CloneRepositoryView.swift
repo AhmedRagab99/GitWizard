@@ -8,61 +8,73 @@
 import SwiftUI
 
 struct CloneRepositoryView: View {
-    @Bindable var viewModel: RepositoryViewModel
-    let accountManager: AccountManager
-    @Environment(\.dismiss) private var dismiss
-    @State private var cloneURL: String = ""
-    @State private var selectedDirectory: URL?
-    @State private var isShowingErrorAlert = false
-    @State private var errorMessage = ""
-    @State private var extractedRepoName: String?
+    @Environment(\.dismiss) var dismiss
+    @State var viewModel: RepositoryViewModel
+    @Bindable var accountManager: AccountManager
 
-    private var isValidURL: Bool {
-        guard !cloneURL.isEmpty else { return false }
-        return cloneURL.hasPrefix("https://") || cloneURL.hasPrefix("git@")
-    }
+    @State private var repositoryURL: String
+    @State private var destinationPath: String = CloneRepositoryView.defaultPath()
+    @State private var selectedAccount: Account?
+    @State private var isShowingFileImporter = false
+    @State private var isCloning = false
+    @State private var cloneError: String?
 
-    private var canClone: Bool {
-        isValidURL && selectedDirectory != nil && !viewModel.isCloning
+    init(viewModel: RepositoryViewModel, accountManager: AccountManager, initialCloneURL: String = "") {
+        self.viewModel = viewModel
+        self.accountManager = accountManager
+        self._repositoryURL = State(initialValue: initialCloneURL)
+        self._destinationPath = State(initialValue: Self.defaultPath())
+
+        if !initialCloneURL.isEmpty {
+            self._selectedAccount = State(initialValue: accountManager.accounts.first { acc in
+                guard let serverURLString = acc.serverURL, !serverURLString.isEmpty,
+                      let serverURL = URL(string: serverURLString),
+                      let repoHost = URL(string: initialCloneURL)?.host else {
+                    return initialCloneURL.lowercased().contains("github.com") && acc.type == .githubCom
+                }
+                return serverURL.host?.lowercased() == repoHost.lowercased() && acc.type == (repoHost.lowercased().contains("github.com") ? .githubCom : .githubEnterprise)
+            } ?? accountManager.accounts.first(where: { $0.type == .githubCom && initialCloneURL.lowercased().contains("github.com") }))
+        } else {
+             self._selectedAccount = State(initialValue: accountManager.accounts.first)
+        }
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Repository URL") {
-                    TextField("https://github.com/username/repo.git", text: $cloneURL)
-                        .textContentType(.URL)
-                        .autocorrectionDisabled()
-//                        .textInputAutocapitalization(.never)
-                        .onChange(of: cloneURL) { _ in
-                            extractRepoName()
+                Section("Repository Details") {
+                    TextField("Git Repository URL (HTTPS or SSH)", text: $repositoryURL)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .onChange(of: repositoryURL) { _, newValue in
+                            selectedAccount = accountManager.accounts.first { acc in
+                                guard let serverURLString = acc.serverURL, !serverURLString.isEmpty,
+                                      let serverURL = URL(string: serverURLString),
+                                      let repoHost = URL(string: newValue)?.host else {
+                                    return newValue.lowercased().contains("github.com") && acc.type == .githubCom
+                                }
+                                return serverURL.host?.lowercased() == repoHost.lowercased() && acc.type == (repoHost.lowercased().contains("github.com") ? .githubCom : .githubEnterprise)
+                            } ?? accountManager.accounts.first(where: { $0.type == .githubCom && newValue.lowercased().contains("github.com") })
                         }
 
-                    if let repoName = extractedRepoName {
-                        Label("Repository: \(repoName)", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                    Picker("Account (Optional)", selection: $selectedAccount) {
+                        Text("None").tag(nil as Account?)
+                        ForEach(accountManager.accounts) { account in
+                            Text(account.displayName).tag(account as Account?)
+                        }
                     }
                 }
 
                 Section("Clone Location") {
-                    if let directory = selectedDirectory {
-                        HStack {
-                            Image(systemName: "folder.fill")
-                                .foregroundStyle(.blue)
-                            Text(directory.path)
-                                .foregroundStyle(.secondary)
+                    HStack {
+                        TextField("Local Path", text: $destinationPath)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .disabled(true)
+                        Button {
+                            isShowingFileImporter = true
+                        } label: {
+                            Image(systemName: "folder.badge.plus")
                         }
-                    }
-
-                    Button("Choose Directory") {
-                        let panel = NSOpenPanel()
-                        panel.canChooseFiles = false
-                        panel.canChooseDirectories = true
-                        panel.allowsMultipleSelection = false
-
-                        if panel.runModal() == .OK, let url = panel.url {
-                            selectedDirectory = url
-                        }
+                        .buttonStyle(.borderless)
                     }
                 }
 
@@ -90,59 +102,74 @@ struct CloneRepositoryView: View {
                     Button("Clone") {
                         cloneRepository()
                     }
-                    .disabled(!canClone)
+                    .disabled(repositoryURL.isEmpty)
                 }
-            }
-            .alert("Error", isPresented: $isShowingErrorAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage)
             }
         }
         .frame(minWidth: 400, minHeight: 200)
-        .errorAlert(viewModel.errorMessage)
+        .errorAlert(cloneError ?? viewModel.errorMessage)
+        .fileImporter(
+            isPresented: $isShowingFileImporter,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    destinationPath = url.path
+                }
+            case .failure(let error):
+                cloneError = "Failed to select directory: \(error.localizedDescription)"
+            }
+        }
     }
 
-    private func extractRepoName() {
-        guard isValidURL else {
-            extractedRepoName = nil
-            return
+    private static func defaultPath() -> String {
+        let fileManager = FileManager.default
+        if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
+            return documentsURL.appendingPathComponent("GitAppClones").path
         }
-
-        // Extract repository name from URL
-        if let lastComponent = cloneURL.components(separatedBy: "/").last?
-            .replacingOccurrences(of: ".git", with: "") {
-            extractedRepoName = lastComponent
-        }
+        return ""
     }
 
     private func cloneRepository() {
-        guard let directory = selectedDirectory else {
-            errorMessage = "Please select a directory to clone into"
-            isShowingErrorAlert = true
+        guard !repositoryURL.isEmpty else {
+            cloneError = "Repository URL cannot be empty."
+            return
+        }
+        guard !destinationPath.isEmpty, let destinationURL = URL(string: "file://\(destinationPath)") else {
+            cloneError = "Invalid or empty destination path."
             return
         }
 
+        isCloning = true
+        cloneError = nil
+
         Task {
             do {
-                if try await viewModel.cloneRepository(from: cloneURL, to: directory) {
-                    // Show success feedback
-                    viewModel.errorMessage = "Repository cloned successfully"
-                    dismiss()
+                let success = try await viewModel.cloneRepository(from: repositoryURL, to: destinationURL)
+                await MainActor.run {
+                    isCloning = false
+                    if success {
+                        dismiss()
+                    } else {
+                        cloneError = viewModel.errorMessage ?? "Cloning failed. Check repository URL and permissions."
+                    }
                 }
             } catch {
-                errorMessage = "Clone failed: \(error.localizedDescription)"
-                isShowingErrorAlert = true
+                await MainActor.run {
+                    isCloning = false
+                    cloneError = error.localizedDescription
+                    viewModel.errorMessage = error.localizedDescription
+                }
             }
         }
     }
 }
 
-// Extend your preview provider if necessary to pass a mock AccountManager
 #if DEBUG
 struct CloneRepositoryView_Previews: PreviewProvider {
     static var previews: some View {
-        // Create a mock RepositoryViewModel and AccountManager for the preview
         let mockRepoVM = RepositoryViewModel()
         let mockAccountManager = AccountManager()
 

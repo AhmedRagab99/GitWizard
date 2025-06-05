@@ -7,32 +7,70 @@
 import SwiftUI
 import AppKit
 
+// Assuming RepositoryViewModel and AccountManager are defined elsewhere and are Observable
+// If RepositoryViewModel is an @Observable class, this is fine.
+// If AccountManager is an ObservableObject, it should be @ObservedObject or @StateObject.
+// For this example, I'll assume they are correctly set up.
+
+// Assuming these view models are correctly defined:
+// import YourAppModule // Or ensure they are in the same module
+
+enum RepositorySourceTab: String, CaseIterable, Identifiable {
+    case recent = "Recent"
+    case accounts = "Accounts"
+
+    var id: String { self.rawValue }
+}
+
 struct RepositorySelectionView: View {
-     var viewModel: RepositoryViewModel
-    var accountManager :AccountManager
+    @State var viewModel: RepositoryViewModel
+    @Bindable var accountManager :AccountManager
     @State private var selectedRepository: URL?
     @State private var isShowingFilePicker = false
     @State private var isShowingCloneSheet = false
     @State private var isShowingErrorAlert = false
     @State private var errorMessage = ""
+    @State private var selectedTab: RepositorySourceTab = .recent
 
-    // Use @Environment instead of creating values directly
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
-            // Modern header section
             headerView
+                .padding(.horizontal)
+                .padding(.bottom, 10)
 
-            // Repository List - optimized to use lazy loading
-            repositoryListView
+            Picker("Source", selection: $selectedTab) {
+                ForEach(RepositorySourceTab.allCases) { tab in
+                    Text(tab.rawValue).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.bottom, 12)
+
+            Group {
+                if selectedTab == .recent {
+                    repositoryListView
+                } else {
+                    AccountRepositoriesListView(
+                        viewModel: viewModel,
+                        accountManager: accountManager,
+                        onCloneInitiated: { account, repo in
+                            viewModel.cloneURL = repo.cloneUrl ?? ""
+                            isShowingCloneSheet = true
+                        }
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.windowBackgroundColor))
-        .errorAlert(viewModel.errorMessage)
+        .background(Color(NSColor.windowBackgroundColor))
+        .errorAlert(viewModel.errorMessage ?? errorMessage)
         .sheet(isPresented: $isShowingCloneSheet) {
-            CloneRepositoryView(viewModel: viewModel, accountManager: accountManager)
+            CloneRepositoryView(viewModel: viewModel, accountManager: accountManager, initialCloneURL: viewModel.cloneURL)
         }
         .fileImporter(
             isPresented: $isShowingFilePicker,
@@ -53,76 +91,70 @@ struct RepositorySelectionView: View {
         }
     }
 
-    // MARK: - Extracted Views
     private var headerView: some View {
-        VStack(spacing: 16) {
-            Text("Git Client")
-                .font(.title2)
-                .fontWeight(.semibold)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Repositories")
+                .font(.system(size: 28, weight: .bold))
+                .padding(.top)
 
             HStack(spacing: 12) {
                 Button {
                     isShowingFilePicker = true
                 } label: {
-                    HStack {
-                        Image(systemName: "folder.badge.plus")
-                        Text("Open")
-                    }
-                    .frame(maxWidth: .infinity)
+                    Label("Open Local", systemImage: "folder.badge.plus")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut("o", modifiers: .command)
 
                 Button {
+                    viewModel.cloneURL = ""
                     isShowingCloneSheet = true
                 } label: {
-                    HStack {
-                        Image(systemName: "arrow.down.doc")
-                        Text("Clone")
-                    }
-                    .frame(maxWidth: .infinity)
+                    Label("Clone Remote", systemImage: "icloud.and.arrow.down")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.large)
+                .keyboardShortcut("n", modifiers: [.command, .shift])
             }
-            .controlSize(.large)
         }
-        .padding()
-        .background(Color(.windowBackgroundColor))
     }
 
     private var repositoryListView: some View {
-        List(selection: $selectedRepository) {
+        Group {
             if viewModel.recentRepositories.isEmpty {
                 ContentUnavailableView {
-                    Label("No Recent Repositories", systemImage: "folder.badge.questionmark")
+                    Label("No Recent Repositories", systemImage: "clock.arrow.circlepath")
                 } description: {
-                    Text("Open a local repository or clone from remote to get started")
+                    Text("Open a local repository or clone one from your accounts to see it here.")
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Text("Recent Repositories")
-                    .font(.headline)
-                    .padding(.vertical, 4)
-
-                // Use LazyVStack to reduce memory usage
-                ForEach(viewModel.recentRepositories, id: \.self) { url in
-                    RepositoryRowView(
-                        url: url,
-                        isSelected: url == selectedRepository,
-                        onOpen: {
-                            handleWindow(with: url)
-                        },
-                        onRemove: {
-                            viewModel.removeFromRecentRepositories(url)
-                            if url == selectedRepository {
-                                selectedRepository = nil
+                List(selection: $selectedRepository) {
+                    ForEach(viewModel.recentRepositories, id: \.self) { url in
+                        RepositoryRowView(
+                            url: url,
+                            isSelected: url == selectedRepository,
+                            onOpen: {
+                                handleWindow(with: url)
+                            },
+                            onRemove: {
+                                viewModel.removeFromRecentRepositories(url)
+                                if url == selectedRepository {
+                                    selectedRepository = nil
+                                }
                             }
-                        }
-                    )
+                        )
+                        .listRowInsets(EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10))
+                    }
                 }
+                .listStyle(.plain)
             }
         }
     }
 
-    // MARK: - Helper Methods
     private func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
@@ -141,7 +173,6 @@ struct RepositorySelectionView: View {
         if isWindowVisible(id: windowId) {
             bringWindowToFront(id: windowId)
         } else {
-            // Instead of creating view models directly, use a factory pattern
             openNewWindow(
                 with: GitClientView(
                     viewModel: GitViewModel(),
@@ -155,37 +186,48 @@ struct RepositorySelectionView: View {
                 height: (NSScreen.main?.frame.height ?? 600) / 2
             )
         }
+
+        print("Attempting to open window for: \(url.path) with ID: \(windowId)")
     }
 }
 
-// MARK: - Supporting Views
 struct RepositoryRowView: View {
     let url: URL
     let isSelected: Bool
     let onOpen: () -> Void
     let onRemove: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "folder.fill")
+                .font(.title2)
                 .foregroundColor(.accentColor)
-                .font(.title3)
+                .frame(width: 25, alignment: .center)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(url.lastPathComponent)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(url.lastPathComponent.replacingOccurrences(of: ".git", with: ""))
                     .font(.headline)
-                Text(url.path)
+                    .fontWeight(.medium)
+                Text(url.deletingLastPathComponent().path)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
+                    .truncationMode(.middle)
             }
+            Spacer()
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.blue.opacity(0.2) : Color.clear)
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.init(nsColor: .selectedContentBackgroundColor).opacity(0.5) : Color.clear)
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onOpen()
+        }
         .contextMenu {
             Button {
                 onOpen()
@@ -197,13 +239,6 @@ struct RepositoryRowView: View {
                 onRemove()
             } label: {
                 Label("Remove from Recent", systemImage: "trash")
-            }
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                onRemove()
-            } label: {
-                Label("Remove", systemImage: "trash")
             }
         }
     }
