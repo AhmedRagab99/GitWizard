@@ -40,7 +40,7 @@ struct CloneRepositoryView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        
             Form {
                 Section("Repository Details") {
                     TextField("Git Repository URL (HTTPS or SSH)", text: $repositoryURL)
@@ -90,7 +90,6 @@ struct CloneRepositoryView: View {
                     }
                 }
             }
-            .navigationTitle("Clone Repository")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -105,8 +104,8 @@ struct CloneRepositoryView: View {
                     .disabled(repositoryURL.isEmpty)
                 }
             }
-        }
         .frame(minWidth: 400, minHeight: 200)
+        .padding()
         .errorAlert(cloneError ?? viewModel.errorMessage)
         .fileImporter(
             isPresented: $isShowingFileImporter,
@@ -166,14 +165,3 @@ struct CloneRepositoryView: View {
         }
     }
 }
-
-#if DEBUG
-struct CloneRepositoryView_Previews: PreviewProvider {
-    static var previews: some View {
-        let mockRepoVM = RepositoryViewModel()
-        let mockAccountManager = AccountManager()
-
-        CloneRepositoryView(viewModel: mockRepoVM, accountManager: mockAccountManager)
-    }
-}
-#endif

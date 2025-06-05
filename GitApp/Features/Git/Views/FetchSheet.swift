@@ -85,7 +85,6 @@ struct FetchSheet: View {
             }
             .padding()
             .frame(maxWidth: 500)
-            .navigationTitle("Git Fetch")
         }
     }
 }

@@ -167,7 +167,6 @@ struct DeleteBranchesView: View {
                 }
                 .background(ModernUI.colors.secondaryBackground)
             }
-            .navigationTitle("Delete Branches")
         }
         .frame(width: 400, height: 500)
     }

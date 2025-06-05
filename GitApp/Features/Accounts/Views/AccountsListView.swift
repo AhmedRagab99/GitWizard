@@ -20,15 +20,6 @@ struct AccountsListView: View {
         } detail: {
             detailView
         }
-        .navigationTitle("Accounts")
-        .toolbar {
-            ToolbarItem(placement: .navigation) { // Example: For a potential sidebar toggle
-                Button(action: { NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil) }) {
-                    Image(systemName: "sidebar.leading")
-                }
-                .help("Toggle Sidebar")
-            }
-        }
         .sheet(isPresented: $showingAddAccountSheet) {
             AddAccountView(accountManager: accountManager)
         }

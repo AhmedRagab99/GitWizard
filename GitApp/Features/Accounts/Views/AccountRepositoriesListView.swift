@@ -20,6 +20,7 @@ struct RepositorySection: Identifiable {
 struct AccountRepositoriesListView: View {
     @State var viewModel: RepositoryViewModel
     @Bindable var accountManager: AccountManager
+    var searchText: String
     var onCloneInitiated: (Account, GitHubRepository) -> Void
 
     @State private var selectedAccount: Account?
@@ -27,6 +28,32 @@ struct AccountRepositoriesListView: View {
     @State private var isLoadingRepos = false // Overall loading for initial account selection
     @State private var repoErrorMessage: String?
     @State private var cloningRepositoryId: String? = nil
+
+    // Filtered sections based on searchText
+    private var filteredRepositorySections: [RepositorySection] {
+        if searchText.isEmpty {
+            return repositorySections
+        }
+
+        return repositorySections.compactMap { section in
+            let filteredRepos = section.repositories.filter { repo in
+                repo.name.localizedCaseInsensitiveContains(searchText) ||
+                (repo.description?.localizedCaseInsensitiveContains(searchText) ?? false) ||
+                (repo.cloneUrl?.localizedCaseInsensitiveContains(searchText) ?? false)
+            }
+            // Only include the section if it has matching repos or if the section name itself matches
+            if !filteredRepos.isEmpty || section.name.localizedCaseInsensitiveContains(searchText) {
+                var newSection = section
+                newSection.repositories = filteredRepos // Keep original repos if section name matched but no repos did
+                if !section.name.localizedCaseInsensitiveContains(searchText) && filteredRepos.isEmpty {
+                    return nil // Section name didn't match, and no repos within it matched
+                }
+                newSection.repositories = filteredRepos // Assign filtered repos
+                return newSection
+            }
+            return nil
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -77,11 +104,11 @@ struct AccountRepositoriesListView: View {
 
             // Use a Group to conditionally show content without extra VStack
             Group {
-                if isLoadingRepos && repositorySections.isEmpty { // Show main loader only if sections are empty
+                if isLoadingRepos && filteredRepositorySections.isEmpty { // Show main loader only if sections are empty
                     ProgressView("Loading account data...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding()
-                } else if let errorMsg = repoErrorMessage, repositorySections.isEmpty {
+                } else if let errorMsg = repoErrorMessage, filteredRepositorySections.isEmpty {
                     ContentUnavailableView {
                         Label("Error Loading Repositories", systemImage: "exclamationmark.triangle")
                     } description: {
@@ -97,16 +124,22 @@ struct AccountRepositoriesListView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding()
-                } else if repositorySections.isEmpty && !isLoadingRepos { // No repos and not loading
-                    ContentUnavailableView {
-                        Label("No Repositories", systemImage: "folder.fill.badge.questionmark")
-                    } description: {
-                         Text(selectedAccount != nil ? "No repositories found for \(selectedAccount!.displayName)." : "Select an account to see repositories.")
+                } else if filteredRepositorySections.isEmpty && !isLoadingRepos { // No repos and not loading
+                    if searchText.isEmpty {
+                        ContentUnavailableView {
+                            Label("No Repositories", systemImage: "folder.fill.badge.questionmark")
+                        } description: {
+                             Text(selectedAccount != nil ? "No repositories found for \(selectedAccount!.displayName)." : "Select an account to see repositories.")
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding()
+                    } else {
+                        ContentUnavailableView.search(text: searchText)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding()
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding()
                 } else {
-                    repositoriesListView
+                    repositoriesListView(sections: filteredRepositorySections)
                 }
             }
         }
@@ -118,7 +151,7 @@ struct AccountRepositoriesListView: View {
             Text("Select an Account...").tag(nil as Account?)
             ForEach(accountManager.accounts) { account in
                 HStack {
-                               
+
                     Text(account.displayName)
                 }
                 .tag(account as Account?)
@@ -130,8 +163,12 @@ struct AccountRepositoriesListView: View {
     }
 
     private var repositoriesListView: some View {
+        repositoriesListView(sections: filteredRepositorySections)
+    }
+
+    private func repositoriesListView(sections: [RepositorySection]) -> some View {
         List {
-            ForEach(repositorySections) { section in
+            ForEach(sections) { section in
                 // Using a custom header view for better styling control
                 Section {
                     ForEach(section.repositories) { repo in

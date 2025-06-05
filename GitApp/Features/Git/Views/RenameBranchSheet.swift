@@ -32,7 +32,6 @@ struct RenameBranchSheet: View {
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle("Rename Branch")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
