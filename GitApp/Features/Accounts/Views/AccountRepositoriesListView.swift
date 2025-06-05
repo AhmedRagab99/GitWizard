@@ -6,7 +6,6 @@
 //
 
 
-// GitApp/Features/Git/Views/AccountRepositoriesListView.swift
 import SwiftUI
 
 // Helper struct to organize repositories by source (Personal or Organization)
@@ -18,7 +17,7 @@ struct RepositorySection: Identifiable {
 }
 
 struct AccountRepositoriesListView: View {
-    @State var viewModel: RepositoryViewModel
+    @Bindable var viewModel: RepositoryViewModel
     @Bindable var accountManager: AccountManager
     var searchText: String
     var onCloneInitiated: (Account, GitHubRepository) -> Void

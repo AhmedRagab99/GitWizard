@@ -8,8 +8,9 @@ struct GitClientView: View {
     @Bindable var viewModel: GitViewModel
     var themeManager : ThemeManager
     var url: URL
-    let accountManager: AccountManager
-    let repoViewModel : RepositoryViewModel // Add view model
+    var accountManager: AccountManager
+    var repoViewModel : RepositoryViewModel // Add view model
+    var pullRequestViewModel: PullRequestViewModel?
     @State private var selectedWorkspaceItem: WorkspaceSidebarItem = .history
     @State private var showStashSheet = false
     @State private var showDeleteAlert = false
@@ -23,23 +24,9 @@ struct GitClientView: View {
     @State private var showMergeSheet = false
     @State private var showFetchSheet = false
     @State private var showSearchFilters = false
+    
+    
 
-    // Add a State variable for the AccountManager
-    @State private var determinedRepositoryAccount: Account? = nil
-    @State private var attemptedAccountMatching = false
-
-    // Expose GitHubAPIService for URL parsing, or move parsing to a shared utility
-    private let githubAPIService = GitHubAPIService()
-
-    // MARK: - Initialization (Example)
-    // If you need a custom initializer, it would look something like this:
-    init(viewModel: GitViewModel, themeManager: ThemeManager, url: URL, accountManager: AccountManager,repoViewModel : RepositoryViewModel) {
-        self.viewModel = viewModel
-        self.themeManager = themeManager
-        self.url = url
-        self.accountManager = accountManager
-        self.repoViewModel = repoViewModel
-    }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -51,8 +38,10 @@ struct GitClientView: View {
                     CommitView(viewModel: viewModel)
                 } else if selectedWorkspaceItem == .history {
                     HistoryView(viewModel: viewModel)
-                } else if selectedWorkspaceItem == .accounts { // Added Accounts view
-                    AccountsListView(accountManager: accountManager,repoViewModel:repoViewModel)
+                } else if selectedWorkspaceItem == .pullRequests {
+                    if let pullRequestViewModel = pullRequestViewModel {
+                        PullRequestsListView(viewModel: pullRequestViewModel)
+                    }
                 } else {
                     // Optionally, add a search view or placeholder
                     Text(" coming soon...")
@@ -321,78 +310,10 @@ struct GitClientView: View {
         }
         .onAppear {
             viewModel.selectRepository(url)
-            Task {
-                // Initial load of repo data by GitViewModel should happen here or before
-                // For now, assuming viewModel.repoInfo is populated by its own onAppear or init.
-                await matchRepositoryToAccount()
-            }
-        }
-        .onChange(of: viewModel.repoInfo.remoteURL) { _, newRemoteURL in
-            Task {
-                await matchRepositoryToAccount()
-            }
+            
         }
     }
 
-    private func matchRepositoryToAccount() async {
-        attemptedAccountMatching = false
-        determinedRepositoryAccount = nil // Reset first
-        let remoteURLString = viewModel.repoInfo.remoteURL
-
-        guard !remoteURLString.isEmpty, let remoteURL = URL(string: remoteURLString) else {
-            print("Remote URL is empty or invalid, cannot match account.")
-            attemptedAccountMatching = true
-            return
-        }
-
-        // Extract hostname from the remote URL to match against account server URLs
-        // This needs to be robust for different URL formats (https, ssh)
-        let remoteHost = remoteURL.host?.lowercased()
-        let remotePath = remoteURL.path.lowercased()
-
-        // More robust matching: Compare owner/repo from remoteURL with account's username/type
-        // This assumes that for GitHub.com, the account username matches the repo owner in many cases,
-        // or for GHE, the server URL matches.
-
-        for acc in accountManager.accounts {
-            if acc.type == .githubCom {
-                // For GitHub.com, check if remoteURL points to github.com
-                // A more advanced check could involve seeing if the repo owner matches account.username
-                // or if the repo is accessible via this account's token (requires an API call).
-                if remoteHost == "github.com" || remoteHost == "api.github.com" {
-                    // Simplistic match for now: if it's a github.com URL, associate with the first github.com account.
-                    // A better approach would be to allow user to explicitly link a repo to an account if multiple exist.
-                    if determinedRepositoryAccount == nil { // Take the first match for simplicity
-                         determinedRepositoryAccount = acc
-                    }
-                    // If you want to find a *specific* github.com account (e.g. if repo owner matches account username)
-                    // if let ownerAndRepo = githubAPIService.extractOwnerAndRepo(from: remoteURLString),
-                    //    ownerAndRepo.owner.lowercased() == acc.username.lowercased() {
-                    //     determinedRepositoryAccount = acc
-                    //     break
-                    // }
-                }
-            } else if acc.type == .githubEnterprise {
-                if let accountServerURLString = acc.serverURL,
-                   let accountServerURL = URL(string: accountServerURLString),
-                   let accountHost = accountServerURL.host?.lowercased() {
-                    if remoteHost == accountHost {
-                        // Further check: does the remote path start with the GHE account's base path if applicable?
-                        // e.g. if GHE is at corp.com/github/ and repo is corp.com/github/owner/repo
-                        // For now, matching host is considered a good candidate.
-                        determinedRepositoryAccount = acc
-                        break // Found a matching enterprise account
-                    }
-                }
-            }
-        }
-
-        if determinedRepositoryAccount == nil {
-            print("Could not find a matching account for remote URL: \\(remoteURLString)")
-            // The PullRequestsContainerView will show an error if determinedRepositoryAccount remains nil.
-        }
-        attemptedAccountMatching = true
-    }
 }
 
 struct SearchFilterView: View {

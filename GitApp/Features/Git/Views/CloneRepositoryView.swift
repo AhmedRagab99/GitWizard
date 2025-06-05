@@ -40,7 +40,7 @@ struct CloneRepositoryView: View {
     }
 
     var body: some View {
-        
+
             Form {
                 Section("Repository Details") {
                     TextField("Git Repository URL (HTTPS or SSH)", text: $repositoryURL)
