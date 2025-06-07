@@ -1190,8 +1190,8 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.resolveConflictUsingOurs(filePath: filePath, in: url)
-            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            try await gitService.resolveConflict(in: url, filePath: filePath, useOurs: true)
+            try await gitService.stage(files: [filePath], in: url)
             await loadChanges()
         } catch {
             errorMessage = "Error resolving conflict: \(error.localizedDescription)"
@@ -1206,8 +1206,8 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.resolveConflictUsingTheirs(filePath: filePath, in: url)
-            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            try await gitService.resolveConflict(in: url, filePath: filePath, useOurs: false)
+            try await gitService.stage(files: [filePath], in: url)
             await loadChanges()
         } catch {
             errorMessage = "Error resolving conflict: \(error.localizedDescription)"
@@ -1222,7 +1222,7 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            try await gitService.stage(files: [filePath], in: url)
             await loadChanges()
         } catch {
             errorMessage = "Error marking conflict resolved: \(error.localizedDescription)"
@@ -1287,6 +1287,40 @@ class GitViewModel {
                 isLoading = false
                 errorMessage = "Error resetting chunk: \(error.localizedDescription)"
             }
+        }
+    }
+
+    func abortMerge() async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await gitService.abortMerge(in: url)
+            await loadChanges()
+        } catch {
+            errorMessage = "Failed to abort merge: \(error.localizedDescription)"
+        }
+    }
+
+    // --- Branch Operations ---
+    func createBranch(from branchName: String, at startPoint: String? = nil, track: Bool, remoteName: String? = nil, remoteBranch: String? = nil) async {
+        guard let url = repositoryURL else {
+            errorMessage = "No repository selected"
+            return
+        }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            // Create the branch
+            try await gitService.createBranch(branchName, in: url)
+            // Optionally check out the new branch
+            if track {
+                try await gitService.switchBranch(to: branchName, in: url)
+            }
+            // Refresh branches and current branch state
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Error creating branch: \(error.localizedDescription)"
         }
     }
 }

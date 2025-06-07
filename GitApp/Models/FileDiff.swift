@@ -169,6 +169,12 @@ struct FileDiff: Identifiable, Hashable {
     }
     var raw: String
 
+    var lineStats: (added: Int, removed: Int) {
+        let added = chunks.flatMap { $0.lines }.filter { $0.kind == .added }.count
+        let removed = chunks.flatMap { $0.lines }.filter { $0.kind == .removed }.count
+        return (added, removed)
+    }
+
     private static func extractChunks(from lines: [String]) -> [String] {
         var chunks: [String] = []
         var currentChunk: String?

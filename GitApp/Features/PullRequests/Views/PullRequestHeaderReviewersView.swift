@@ -29,7 +29,7 @@ struct PullRequestHeaderReviewersView: View {
                         .overlay(statusIcon(for: reviewer.state), alignment: .bottomTrailing)
 
                         Text(reviewer.user.login)
-                            .font(.caption)                            
+                            .font(.caption)
                             .truncationMode(.tail)
 
                     }
