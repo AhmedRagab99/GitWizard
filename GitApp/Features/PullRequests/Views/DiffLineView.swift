@@ -5,7 +5,7 @@ struct DiffLineView: View {
     let line: Line // Using the Line struct from Chunk.swift
     let file: PullRequestFile
     let prCommitId: String
-    var viewModel: PullRequestViewModel
+    @Bindable var viewModel: PullRequestViewModel
 
     @State private var isHovering = false
     @State private var showCommentField = false

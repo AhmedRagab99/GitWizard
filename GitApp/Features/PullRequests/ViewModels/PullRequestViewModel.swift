@@ -11,7 +11,8 @@ class PullRequestViewModel  {
     // MARK: - Properties for Listing/Viewing PRs
     var pullRequests: [PullRequest] = []
     var comments: [PullRequestComment] = []
-    var reviewComments: [PullRequestComment] = []
+    var reviewComments: [PullRequestComment] = [] // This will be deprecated in favor of lineCommentsByFile
+    var lineCommentsByFile: [String: [PullRequestComment]] = [:]
     var files: [PullRequestFile] = []
     var reviews: [PullRequestReview] = []
     var selectedPullRequest: PullRequest? {
@@ -77,6 +78,26 @@ class PullRequestViewModel  {
     var mergeCommitMessage: String = ""
     var isMerging: Bool = false
     var wasMergeSuccessful: Bool = false
+
+    var reviewerStates: [ReviewerStateSummary] {
+        var latestStates: [String: ReviewerStateSummary] = [:]
+
+        // Sort reviews by submission time to process them chronologically
+        let sortedReviews = reviews.sorted { ($0.submittedAt ?? .distantPast) < ($1.submittedAt ?? .distantPast) }
+
+        for review in sortedReviews {
+            // Ignore pending reviews
+            guard review.state.uppercased() != "PENDING" else { continue }
+
+            let summary = ReviewerStateSummary(
+                user: PullRequestAuthor(id: review.user.id, login: review.user.login, avatarUrl: review.user.avatarUrl, htmlUrl: review.user.htmlUrl),
+                state: ReviewerStateSummary.State(from: review.state)
+            )
+            latestStates[review.user.login] = summary
+        }
+
+        return Array(latestStates.values).sorted { $0.user.login < $1.user.login }
+    }
 
     // MARK: - Dependencies
     private let gitProviderService: GitProviderService
@@ -184,35 +205,46 @@ class PullRequestViewModel  {
             reviewComments = []
             canLoadMoreReviewComments = true
             reviewCommentsError = nil
+            lineCommentsByFile = [:] // Reset the new dictionary
         }
 
-        guard canLoadMoreReviewComments, !isLoadingMoreReviewComments else { return }
+        // This function will now fetch ALL review comments for the PR to build the lookup dictionary.
+        // The old pagination logic is removed in favor of a comprehensive fetch.
+        guard !isLoadingMoreReviewComments else { return }
         isLoadingMoreReviewComments = true
+        defer { isLoadingMoreReviewComments = false }
+
+        var allComments: [PullRequestComment] = []
+        var page = 1
+        let perPage = 100 // Fetch max per page
 
         do {
-            let fetchedReviewComments = try await gitProviderService.fetchPullRequestReviewComments(
-                owner: repository.owner?.login ?? "",
-                repoName: repository.name,
-                prNumber: selectedPR.number,
-                account: account,
-                page: currentReviewCommentsPage,
-                perPage: reviewCommentsPerPage
-            )
+            while true {
+                let fetchedComments = try await gitProviderService.fetchPullRequestReviewComments(
+                    owner: repository.owner?.login ?? "",
+                    repoName: repository.name,
+                    prNumber: selectedPR.number,
+                    account: account,
+                    page: page,
+                    perPage: perPage
+                )
 
-            if fetchedReviewComments.isEmpty {
-                canLoadMoreReviewComments = false
-            } else {
-                reviewComments.append(contentsOf: fetchedReviewComments)
-                currentReviewCommentsPage += 1
+                allComments.append(contentsOf: fetchedComments)
+
+                if fetchedComments.count < perPage {
+                    break // Last page reached
+                }
+                page += 1
             }
+
+            // Group comments by file path
+            self.lineCommentsByFile = Dictionary(grouping: allComments.filter { $0.path != nil }, by: { $0.path! })
+
         } catch let error as GitProviderServiceError {
             reviewCommentsError = "Error loading review comments: \(error.localizedDescription)"
-            canLoadMoreReviewComments = false
         } catch {
             reviewCommentsError = "An unexpected error occurred while loading review comments: \(error.localizedDescription)"
-            canLoadMoreReviewComments = false
         }
-        isLoadingMoreReviewComments = false
     }
 
     @MainActor
@@ -290,9 +322,19 @@ class PullRequestViewModel  {
     // MARK: - Selection and Filtering
     @MainActor
     func selectPullRequest(_ pr: PullRequest) async {
+        // Always clear state before loading new PR
         selectedPullRequest = pr
-
+        comments = []
+        reviewComments = []
+        files = []
+        reviews = []
+        lineCommentsByFile = [:]
+        commentsError = nil
+        reviewCommentsError = nil
+        filesError = nil
+        reviewsError = nil
         isLoadingInitialDetails = true
+
         // Use a TaskGroup to load details concurrently
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.loadComments(refresh: true) }
@@ -312,6 +354,7 @@ class PullRequestViewModel  {
         reviewComments = []
         files = []
         reviews = []
+        lineCommentsByFile = [:]
 
         commentsError = nil
         reviewCommentsError = nil
@@ -488,6 +531,28 @@ class PullRequestViewModel  {
         } catch {
             // Handle error, e.g., show an alert
             print("Failed to submit review: \(error.localizedDescription)")
+        }
+    }
+}
+
+struct ReviewerStateSummary: Identifiable {
+    var id: String { user.login }
+    let user: PullRequestAuthor
+    let state: State
+
+    enum State: String {
+        case approved = "Approved"
+        case changesRequested = "Changes Requested"
+        case commented = "Commented"
+        case unknown = "Unknown"
+
+        init(from string: String) {
+            switch string.uppercased() {
+            case "APPROVED": self = .approved
+            case "CHANGES_REQUESTED": self = .changesRequested
+            case "COMMENTED": self = .commented
+            default: self = .unknown
+            }
         }
     }
 }

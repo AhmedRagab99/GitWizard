@@ -8,6 +8,9 @@ struct PullRequestComment: Codable, Identifiable, Hashable {
     let createdAt: Date
     let updatedAt: Date
     let htmlUrl: String? // URL to view the comment on the web
+    let path: String? // File path of the comment
+    let line: Int? // The line number in the new diff
+    let originalLine: Int? // The line number in the old diff
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -16,5 +19,8 @@ struct PullRequestComment: Codable, Identifiable, Hashable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case htmlUrl = "html_url"
+        case path
+        case line
+        case originalLine = "original_line"
     }
 }

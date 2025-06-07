@@ -5,7 +5,7 @@ struct PullRequestDetailView: View {
     @Bindable var viewModel: PullRequestViewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedTab: Int = 0 // 0: Description, 1: Comments, 2: Code Comments, 3: Files, 4: Reviews
+    @State private var selectedTab: Int = 0 // 0: Description, 1: Comments, 2: Files
     @State private var isShowingMergeSheet = false
     @State private var isShowingRequestChangesSheet = false
 
@@ -18,9 +18,7 @@ struct PullRequestDetailView: View {
             Picker("Details", selection: $selectedTab) {
                 Label("Description", systemImage: "doc.text").tag(0)
                 Label("Comments (\(viewModel.comments.count))", systemImage: "bubble.left.and.bubble.right").tag(1)
-                Label("Code Comments (\(viewModel.reviewComments.count))", systemImage: "text.bubble").tag(2)
-                Label("Files (\(viewModel.files.count))", systemImage: "doc.on.doc").tag(3)
-                Label("Reviews (\(viewModel.reviews.count))", systemImage: "person.crop.circle.badge.checkmark").tag(4)
+                Label("Files (\(viewModel.files.count))", systemImage: "doc.on.doc").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
@@ -40,13 +38,7 @@ struct PullRequestDetailView: View {
                     commentsView
                         .frame(maxWidth: .infinity, maxHeight: .infinity) // Ensure it expands
                 case 2:
-                    reviewCommentsView
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case 3:
                     filesView
-                        .frame(maxWidth: .infinity, maxHeight: .infinity) // Ensure it expands
-                case 4:
-                    reviewsView
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 default:
                     EmptyView()
@@ -65,7 +57,7 @@ struct PullRequestDetailView: View {
         // This .task might be redundant if the typical flow always involves `selectPullRequest`.
         // Consider if selectedPullRequest is set *before* this view appears without `selectPullRequest` being called.
         .task(id: viewModel.selectedPullRequest?.id) { // Re-run if selected PR changes
-            if viewModel.selectedPullRequest != nil && viewModel.comments.isEmpty && viewModel.reviewComments.isEmpty && viewModel.files.isEmpty && !viewModel.isLoadingInitialDetails {
+            if viewModel.selectedPullRequest != nil && viewModel.comments.isEmpty && viewModel.files.isEmpty && !viewModel.isLoadingInitialDetails {
                  // This ensures that if the view is somehow presented with a PR but details weren't loaded,
                  // they get loaded. This is a safety net.
                 await viewModel.selectPullRequest(pullRequest) // Pass the local pullRequest
@@ -82,6 +74,9 @@ struct PullRequestDetailView: View {
         .sheet(isPresented: $isShowingRequestChangesSheet) {
             RequestChangesView(viewModel: viewModel, isPresented: $isShowingRequestChangesSheet)
         }
+        .task(id: pullRequest.id) {
+            await viewModel.selectPullRequest(pullRequest)
+        }
     }
 
     private var prInfoHeader: some View {
@@ -92,9 +87,29 @@ struct PullRequestDetailView: View {
                 .lineLimit(2)
                 .textSelection(.enabled)
 
+            HStack(spacing: 8) {
+                Text(pullRequest.head.ref)
+                    .font(.subheadline.monospaced())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.2))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                Image(systemName: "arrow.right")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                Text(pullRequest.base.ref)
+                    .font(.subheadline.monospaced())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.gray.opacity(0.2))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
             HStack(spacing: 10) {
                 statusBadge(for: pullRequest.prState, merged: pullRequest.mergedAt != nil)
-                Label{
+                Label {
                     Text("by \(pullRequest.user.login)")
                 } icon: {
                      Image(systemName: "person.fill")
@@ -122,6 +137,13 @@ struct PullRequestDetailView: View {
                      Image(systemName: "xmark.octagon.fill")
                 }
                 .font(.caption).foregroundColor(.red)
+            }
+
+            if !viewModel.reviewerStates.isEmpty {
+                Divider()
+                Text("Reviewers")
+                    .font(.headline)
+                PullRequestHeaderReviewersView(reviewers: viewModel.reviewerStates)
             }
         }
     }
@@ -192,41 +214,6 @@ struct PullRequestDetailView: View {
     }
 
     @ViewBuilder
-    private var reviewCommentsView: some View {
-        if viewModel.isLoadingInitialDetails && viewModel.reviewComments.isEmpty && viewModel.reviewCommentsError == nil {
-            ProgressView("Loading Code Comments...")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let errorMessage = viewModel.reviewCommentsError, viewModel.reviewComments.isEmpty {
-             CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Code Comments", message: errorMessage)
-        } else if viewModel.reviewComments.isEmpty && !viewModel.isLoadingMoreReviewComments && !viewModel.isLoadingInitialDetails {
-            CenteredContentMessage(systemImage: "text.bubble.fill", message: "No code comments on this pull request.")
-        } else {
-            List {
-                ForEach(viewModel.reviewComments) { comment in
-                    PullRequestCommentView(comment: comment)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                        .onAppear {
-                            if comment.id == viewModel.reviewComments.last?.id && viewModel.canLoadMoreReviewComments && !viewModel.isLoadingMoreReviewComments {
-                                Task {
-                                    await viewModel.loadReviewComments(refresh: false)
-                                }
-                            }
-                        }
-                }
-                if viewModel.isLoadingMoreReviewComments {
-                    ProgressView("Loading more code comments...")
-                        .frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
-                }
-                 if !viewModel.canLoadMoreReviewComments && !viewModel.reviewComments.isEmpty && viewModel.reviewCommentsError == nil {
-                    Text("No more code comments.").font(.caption).foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
-                }
-            }
-            .listStyle(.plain)
-        }
-    }
-
-    @ViewBuilder
     private var filesView: some View {
         if viewModel.isLoadingInitialDetails && viewModel.files.isEmpty && viewModel.filesError == nil {
             ProgressView("Loading Files...")
@@ -238,15 +225,20 @@ struct PullRequestDetailView: View {
         } else {
             List {
                 ForEach(viewModel.files) { file in
-                    PullRequestFileView(file: file, viewModel: viewModel, prCommitId: pullRequest.head.sha)
-                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                        .onAppear {
-                            if file.id == viewModel.files.last?.id && viewModel.canLoadMoreFiles && !viewModel.isLoadingMoreFiles {
-                                Task {
-                                    await viewModel.loadFiles(refresh: false)
-                                }
+                    PullRequestFileView(
+                        file: file,
+                        viewModel: viewModel,
+                        prCommitId: pullRequest.head.sha,
+                        comments: viewModel.lineCommentsByFile[file.filename] ?? []
+                    )
+                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                    .onAppear {
+                        if file.id == viewModel.files.last?.id && viewModel.canLoadMoreFiles && !viewModel.isLoadingMoreFiles {
+                            Task {
+                                await viewModel.loadFiles(refresh: false)
                             }
                         }
+                    }
                 }
                 if viewModel.isLoadingMoreFiles {
                     ProgressView("Loading more files...")
@@ -255,26 +247,6 @@ struct PullRequestDetailView: View {
                 if !viewModel.canLoadMoreFiles && !viewModel.files.isEmpty && viewModel.filesError == nil {
                     Text("No more files.").font(.caption).foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
-                }
-            }
-            .listStyle(.plain)
-        }
-    }
-
-    @ViewBuilder
-    private var reviewsView: some View {
-        if viewModel.isLoadingReviews && viewModel.reviews.isEmpty {
-            ProgressView("Loading Reviews...")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let errorMessage = viewModel.reviewsError, viewModel.reviews.isEmpty {
-             CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Reviews", message: errorMessage)
-        } else if viewModel.reviews.isEmpty && !viewModel.isLoadingReviews {
-            CenteredContentMessage(systemImage: "person.crop.circle.badge.checkmark", message: "No reviews have been submitted.")
-        } else {
-            List {
-                ForEach(viewModel.reviews) { review in
-                    PullRequestReviewView(review: review)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
             }
             .listStyle(.plain)

@@ -51,18 +51,18 @@ struct PullRequestsListView: View {
                     Text("No pull requests found matching the current filter.")
                         .font(.callout)
                         .multilineTextAlignment(.center)
-                        .foregroundColor(.secondary)
+                    .foregroundColor(.secondary)
                         .padding(.horizontal)
                      // Optionally, a Retry button here as well if applicable
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 listContentView
             }
         }
         .onChange(of: viewModel.selectedPullRequest) { oldValue, newValue in
             guard let selectedPR = newValue else { return }
-            Task {
+                    Task {
                 let windowId = "pull-request-detail-\(selectedPR.id)-\(selectedPR.number)"
                 let windowTitle = "PR #\(selectedPR.number): \(selectedPR.title)"
                 openNewWindow(
@@ -72,7 +72,7 @@ struct PullRequestsListView: View {
                     width: 800,
                     height: 600
                 )
-            }
+                }
             // viewModel.selectedPullRequest = nil // Decide if PR should be deselected after opening new window
         }
         .sheet(isPresented: $isShowingCreatePRView) {

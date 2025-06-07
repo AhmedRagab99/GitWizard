@@ -2,10 +2,18 @@ import SwiftUI
 
 struct PullRequestFileView: View {
     let file: PullRequestFile
-    let viewModel: PullRequestViewModel
+    @Bindable var viewModel: PullRequestViewModel
     let prCommitId: String
-    @State private var showDiff: Bool = false
+    let comments: [PullRequestComment]
+    @State private var showDiff: Bool = true // Show diff by default
     @State private var parsedChunks: [Chunk] = []
+    @State private var parseState: ParseState = .idle
+
+    enum ParseState {
+        case idle
+        case parsing
+        case parsed
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -15,20 +23,26 @@ struct PullRequestFileView: View {
                 diffContentView
             }
         }
-        .padding(.vertical, 8) // Consistent vertical padding for the whole view
+        .padding(.vertical, 8)
+        .task(id: file.patch) {
+            // This task runs when the view appears or the patch content changes.
+            if showDiff && parsedChunks.isEmpty && parseState == .idle {
+                parsePatch()
+            }
+        }
     }
 
     private var fileHeaderView: some View {
         HStack(alignment: .center, spacing: 10) {
             statusIcon(for: file.fileStatus)
-                .font(.title3) // Slightly larger icon
+                .font(.title3)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.filename)
-                    .fontWeight(.medium) // Medium weight for better readability
+                    .fontWeight(.medium)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .help(file.filename) // Show full name on hover
+                    .help(file.filename)
 
                 if let previousFilename = file.previousFilename {
                      Text("Renamed from \(previousFilename)")
@@ -52,15 +66,15 @@ struct PullRequestFileView: View {
                     .foregroundColor(.red)
                     .help("Deletions")
             }
-            .padding(.trailing, file.patch != nil ? 0 : 8) // Add padding if no chevron
+            .padding(.trailing, file.patch != nil ? 0 : 8)
 
             if file.patch != nil && !file.patch!.isEmpty {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { // Add animation
+                    withAnimation(.easeInOut(duration: 0.2)) {
                         showDiff.toggle()
                     }
-                    if showDiff && parsedChunks.isEmpty {
-                        parsePatch() // Parsing logic remains
+                    if showDiff && parsedChunks.isEmpty && parseState == .idle {
+                        parsePatch()
                     }
                 } label: {
                     Image(systemName: showDiff ? "chevron.down.circle.fill" : "chevron.right.circle.fill")
@@ -75,32 +89,63 @@ struct PullRequestFileView: View {
 
     @ViewBuilder
     private var diffContentView: some View {
-        if parsedChunks.isEmpty && file.patch != nil && !file.patch!.isEmpty {
+        switch diffContentState {
+        case .loading:
             ProgressView("Loading diff...")
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding()
-        } else if parsedChunks.isEmpty && (file.patch == nil || file.patch!.isEmpty) {
-            Text("No textual diff available for this file (e.g., binary file or no content changes).")
+        case .noDiff:
+            Text("No textual diff available for this file.")
                 .font(.callout)
                 .foregroundColor(.secondary)
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .center)
+        case .hasDiff:
+            DiffView(
+                chunks: parsedChunks,
+                file: file,
+                prCommitId: prCommitId,
+                viewModel: viewModel,
+                comments: comments
+            )
+        }
+    }
+
+    private enum DiffContentState {
+        case loading
+        case noDiff
+        case hasDiff
+    }
+
+    private var diffContentState: DiffContentState {
+        if parseState == .parsing {
+            return .loading
         } else if !parsedChunks.isEmpty {
-            DiffView(chunks: parsedChunks, file: file, prCommitId: prCommitId, viewModel: viewModel)
+            return .hasDiff
+        } else {
+            return .noDiff
         }
     }
 
     private func parsePatch() {
-        guard let patchString = file.patch, !patchString.isEmpty else {
-            self.parsedChunks = []
-            return
-        }
+        parseState = .parsing
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let patchString = file.patch, !patchString.isEmpty else {
+                DispatchQueue.main.async {
+                    self.parsedChunks = []
+                    self.parseState = .parsed
+                }
+                return
+            }
 
-        let lines = patchString.split(separator: "\n", omittingEmptySubsequences: false).map { String($0) }
-        let rawChunkStrings = extractRawChunkStrings(from: lines)
+            let lines = patchString.split(separator: "\n", omittingEmptySubsequences: false).map { String($0) }
+            let rawChunkStrings = extractRawChunkStrings(from: lines)
+            let chunks = rawChunkStrings.compactMap { Chunk(raw: $0) }
 
-        self.parsedChunks = rawChunkStrings.compactMap { rawChunkString in
-            return Chunk(raw: rawChunkString)
+            DispatchQueue.main.async {
+                self.parsedChunks = chunks
+                self.parseState = .parsed
+            }
         }
     }
 
@@ -128,25 +173,15 @@ struct PullRequestFileView: View {
     private func statusIcon(for status: PullRequestFile.FileStatus) -> some View {
         switch status {
         case .added:
-            Image(systemName: "plus.circle.fill")
-                .foregroundColor(.green)
-                .help("Added")
+            Image(systemName: "plus.circle.fill").foregroundColor(.green).help("Added")
         case .modified:
-            Image(systemName: "pencil.circle.fill")
-                .foregroundColor(.orange)
-                .help("Modified")
+            Image(systemName: "pencil.circle.fill").foregroundColor(.orange).help("Modified")
         case .removed:
-            Image(systemName: "minus.circle.fill")
-                .foregroundColor(.red)
-                .help("Removed")
+            Image(systemName: "minus.circle.fill").foregroundColor(.red).help("Removed")
         case .renamed:
-            Image(systemName: "arrow.right.circle.fill") // Or arrow.left.arrow.right.circle.fill
-                .foregroundColor(.blue)
-                .help("Renamed")
-        default: // .copied, .changed, .unchanged, .unknown etc.
-            Image(systemName: "doc.circle.fill")
-                .foregroundColor(.gray)
-                .help("Status: \(file.status.capitalized)")
+            Image(systemName: "arrow.right.circle.fill").foregroundColor(.blue).help("Renamed")
+        default:
+            Image(systemName: "doc.circle.fill").foregroundColor(.gray).help("Status: \(file.status.capitalized)")
         }
     }
 }
@@ -157,13 +192,34 @@ struct DiffView: View {
     let file: PullRequestFile
     let prCommitId: String
     var viewModel: PullRequestViewModel
+    var comments: [PullRequestComment]
+
+    // Pre-calculates a lookup dictionary for comments by line number for efficiency.
+    private var commentsByLine: [Int: [PullRequestComment]] {
+        Dictionary(grouping: comments) { $0.line ?? 0 }
+    }
 
     var body: some View {
         ScrollView(.vertical) {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(chunks) { chunk in
                     ForEach(chunk.lines) { line in
-                        DiffLineView(line: line, file: file, prCommitId: prCommitId,viewModel: viewModel)
+                        // Check if there are any comments for this specific line and render them ABOVE the line.
+                        if let lineComments = commentsByLine[line.toFileLineNumber ?? 0], !lineComments.isEmpty {
+                            ForEach(lineComments) { comment in
+                                InlineCommentView(comment: comment)
+                                    .padding(.leading, 40) // Indent comments for clarity
+                                    .padding(.vertical, 4)
+                            }
+                        }
+
+                        // Render the actual line of code from the diff.
+                        DiffLineView(
+                            line: line,
+                            file: file,
+                            prCommitId: prCommitId,
+                            viewModel: viewModel
+                        )
                     }
                     if chunk.id != chunks.last?.id {
                          Divider().padding(.vertical, 4)
@@ -183,6 +239,5 @@ struct DiffView: View {
 }
 
 #if DEBUG
-// Updated Preview (if needed, requires mock Chunk/Line and updated PullRequestFile)
-// ... Preview code would go here ...
+// Preview code can be added here if needed.
 #endif
