@@ -124,30 +124,38 @@ struct FileDiff: Identifiable, Hashable {
     }
 
     var fromFilePath: String {
-        // More robustly parse the "from" file path, handling quotes
-        let components = header.components(separatedBy: "\"")
-        if components.count > 1 && components[0].contains(" a/") {
-            return String(components[1].dropFirst(2)) // "a/path" -> "path"
+        let components = header.components(separatedBy: " ")
+        // Handle combined diff format for conflicts, e.g., "diff --cc path/to/file"
+        if components.count > 2 && components[1] == "--cc" {
+            return components.last ?? ""
+        }
+
+        // Handle regular diff format
+        let quoteComponents = header.components(separatedBy: "\"")
+        if quoteComponents.count >= 2 && quoteComponents[0].contains(" a/") {
+            return String(quoteComponents[1].dropFirst(2)) // "a/path" -> "path"
         } else {
-            // Fallback for paths without quotes
-            let spaceComponents = header.components(separatedBy: " ")
-            if spaceComponents.count > 2 && spaceComponents[2].hasPrefix("a/") {
-                return String(spaceComponents[2].dropFirst(2))
+            if components.count > 2 && components[2].hasPrefix("a/") {
+                return String(components[2].dropFirst(2))
             }
         }
         return ""
     }
 
     var toFilePath: String {
-        // More robustly parse the "to" file path, handling quotes
-        let components = header.components(separatedBy: "\"")
-        if components.count > 3 && components[2].contains(" b/") {
-            return String(components[3].dropFirst(2)) // "b/path" -> "path"
+        let components = header.components(separatedBy: " ")
+        // Handle combined diff format for conflicts, e.g., "diff --cc path/to/file"
+        if components.count > 2 && components[1] == "--cc" {
+            return components.last ?? ""
+        }
+
+        // Handle regular diff format
+        let quoteComponents = header.components(separatedBy: "\"")
+        if quoteComponents.count >= 4 && quoteComponents[2].contains(" b/") {
+            return String(quoteComponents[3].dropFirst(2)) // "b/path" -> "path"
         } else {
-            // Fallback for paths without quotes
-            let spaceComponents = header.components(separatedBy: " ")
-            if spaceComponents.count > 3 && spaceComponents[3].hasPrefix("b/") {
-                return String(spaceComponents[3].dropFirst(2))
+            if components.count > 3 && components[3].hasPrefix("b/") {
+                return String(components[3].dropFirst(2))
             }
         }
         return ""
