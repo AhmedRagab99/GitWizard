@@ -86,10 +86,8 @@ struct FileDiff: Identifiable, Hashable {
     var status: FileStatus
 
     private static func calculateStatus(header: String, fromFilePath: String, toFilePath: String, chunks: [Chunk], extendedHeaderLines: [String], fromFileToFileLines: [String]) -> FileStatus {
-        // Check for conflicts in chunks first, as this is the most specific status
-        if chunks.contains(where: { $0.hasConflict }) {
-            return .conflict
-        }
+        // NOTE: Conflict detection is now handled in the GitViewModel by checking the output
+        // of `git status`. This is more reliable than trying to infer conflicts from diff chunks.
 
         // Check if header contains file mode information that indicates file status
         if header.contains("new file mode") {
