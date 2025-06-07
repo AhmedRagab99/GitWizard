@@ -142,23 +142,27 @@ struct Chunk: Identifiable, Hashable {
 
         let rawLines = raw.split(separator: "\n").enumerated()
         for (offset, element) in rawLines {
-            var line = Line(id: offset, raw: String(element))
+            let rawLine = String(element)
+            var line = Line(id: offset, raw: rawLine)
 
-            // Handle conflict markers
-            if line.raw.starts(with: "<<<<<<<") {
+            // A line is part of a conflict's content if the state is already set,
+            // but the line itself is not a marker.
+            if !rawLine.starts(with: "<<<<<<<") && !rawLine.starts(with: "=======") && !rawLine.starts(with: ">>>>>>>") {
+                line.isInOurConflict = inOurConflict
+                line.isInTheirConflict = inTheirConflict
+            }
+
+            // Update the state for subsequent lines based on markers.
+            if rawLine.starts(with: "<<<<<<<") {
                 inOurConflict = true
                 inTheirConflict = false
-            } else if line.raw.starts(with: "=======") {
+            } else if rawLine.starts(with: "=======") {
                 inOurConflict = false
                 inTheirConflict = true
-            } else if line.raw.starts(with: ">>>>>>>") {
+            } else if rawLine.starts(with: ">>>>>>>") {
                 inOurConflict = false
                 inTheirConflict = false
             }
-
-            // Set conflict section flags
-            line.isInOurConflict = inOurConflict
-            line.isInTheirConflict = inTheirConflict
 
             // Set line numbers for non-conflict lines
             switch line.kind {
