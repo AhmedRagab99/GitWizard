@@ -3,37 +3,105 @@ import SwiftUI
 /// A view to display a single line within a diff (patch).
 struct DiffLineView: View {
     let line: Line // Using the Line struct from Chunk.swift
+    let file: PullRequestFile
+    let prCommitId: String
+    @Bindable var viewModel: PullRequestViewModel
+
+    @State private var isHovering = false
+    @State private var showCommentField = false
+    @State private var commentText = ""
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Line number (from/to based on availability or context)
-            // Chunk.Line has toFileLineNumber, which is relevant for the "new" file state.
-            // For a unified diff, you often show both old and new line numbers or adapt based on line type.
-            // For simplicity, we'll use toFileLineNumber for added/unchanged, and try to infer for removed.
-            Text(lineNumberText)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundColor(.secondary)
-                .frame(width: 40, alignment: .trailing)
-                .padding(.trailing, 8)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                // Line numbers
+                Text(lineNumberText)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 40, alignment: .trailing)
+                    .padding(.trailing, 8)
 
-            // Change indicator (+, -, space, or other symbols for headers/conflicts)
-            Text(lineIndicator)
-                .font(.system(.body, design: .monospaced))
-                .foregroundColor(lineColor)
-                .frame(width: 20, alignment: .center)
+                // Change indicator
+                Text(lineIndicator)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(lineColor)
+                    .frame(width: 20, alignment: .center)
 
-            // Content
-            // Remove the first character if it's +, -, or space, as it's represented by the indicator
-            Text(lineContent)
-                .font(.system(.body, design: .monospaced))
-                .foregroundColor(lineColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+                // Content
+                Text(lineContent)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(lineColor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+
+                Spacer()
+
+                if isHovering && canCommentOnLine {
+                    Button(action: {
+                        showCommentField.toggle()
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.accentColor)
+                    .padding(.horizontal, 8)
+                }
+            }
+            .padding(.vertical, 1)
+            .background(backgroundColor)
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isHovering = hovering
+                }
+            }
+
+            if showCommentField {
+                commentInputField
+                    .padding(.leading, 68) // Indent to align with content
+            }
         }
-        .padding(.vertical, 1)
-        // Removed horizontal padding to align with typical diff views, parent can add if needed.
-        // Background color can also be set here based on line.kind if desired for whole line bg highlight
-        .background(backgroundColor)
+    }
+
+    private var commentInputField: some View {
+        VStack {
+            TextEditor(text: $commentText)
+                .frame(height: 80)
+                .border(Color.gray.opacity(0.5), width: 1)
+                .font(.body)
+            HStack {
+                Button("Cancel") {
+                    showCommentField = false
+                    commentText = ""
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Button("Save Comment") {
+                    guard let lineNumber = line.toFileLineNumber else { return }
+                    Task {
+                        await viewModel.addLineComment(
+                            body: commentText,
+                            commitId: prCommitId, // The head commit of the PR
+                            path: file.filename,
+                            line: lineNumber
+                        )
+                        showCommentField = false
+                        commentText = ""
+                    }
+                }
+                .disabled(commentText.isEmpty)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var canCommentOnLine: Bool {
+        switch line.kind {
+        case .added, .unchanged:
+            return true
+        default:
+            return false
+        }
     }
 
     private var lineNumberText: String {

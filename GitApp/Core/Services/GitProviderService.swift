@@ -201,19 +201,11 @@ class GitProviderService {
             throw GitProviderServiceError.invalidURL
         }
 
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(account.token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        let request = try createAuthenticatedRequest(url: url, account: account, httpMethod: "GET")
 
         do {
             let (data, response) = try await session.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw GitProviderServiceError.malformedResponse
-            }
-            guard (200..<300).contains(httpResponse.statusCode) else {
-                let errorMessage = String(data: data, encoding: .utf8)
-                throw GitProviderServiceError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
-            }
+            try self.validateResponse(response: response, data: data)
             let comments = try decoder.decode([PullRequestComment].self, from: data)
             return comments
         } catch let error as GitProviderServiceError {
@@ -463,6 +455,206 @@ class GitProviderService {
             throw GitProviderServiceError.decodingError(decodingError)
         } catch {
             throw GitProviderServiceError.networkError(error)
+        }
+    }
+
+    // MARK: - Pull Request Actions
+
+    func mergePullRequest(
+        owner: String,
+        repoName: String,
+        prNumber: Int,
+        account: Account,
+        commitTitle: String,
+        commitMessage: String?,
+        mergeMethod: String
+    ) async throws {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
+        guard account.provider.lowercased().contains("github") else {
+            throw GitProviderServiceError.unsupportedProvider(account.provider)
+        }
+
+        let urlString = "\(baseURLString)/repos/\(owner)/\(repoName)/pulls/\(prNumber)/merge"
+        guard let url = URL(string: urlString) else {
+            throw GitProviderServiceError.invalidURL
+        }
+
+        var request = try createAuthenticatedRequest(url: url, account: account, httpMethod: "PUT")
+
+        let body: [String: Any?] = [
+            "commit_title": commitTitle,
+            "commit_message": commitMessage,
+            "merge_method": mergeMethod // "merge", "squash", or "rebase"
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body.compactMapValues { $0 })
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            try self.validateResponse(response: response, data: data, expectedStatusCode: 200)
+        } catch {
+            // More specific error handling could be added here based on the response body
+            // For example, if merging is not allowed.
+            throw error
+        }
+    }
+
+    enum PullRequestReviewEvent: String {
+        case approve = "APPROVE"
+        case requestChanges = "REQUEST_CHANGES"
+        case comment = "COMMENT"
+    }
+
+    func submitPullRequestReview(
+        owner: String,
+        repoName: String,
+        prNumber: Int,
+        account: Account,
+        event: PullRequestReviewEvent,
+        body: String?
+    ) async throws {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
+        guard account.provider.lowercased().contains("github") else {
+            throw GitProviderServiceError.unsupportedProvider(account.provider)
+        }
+
+        let urlString = "\(baseURLString)/repos/\(owner)/\(repoName)/pulls/\(prNumber)/reviews"
+        guard let url = URL(string: urlString) else {
+            throw GitProviderServiceError.invalidURL
+        }
+
+        var request = try createAuthenticatedRequest(url: url, account: account, httpMethod: "POST")
+
+        let bodyDict: [String: Any?] = [
+            "event": event.rawValue,
+            "body": body
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: bodyDict.compactMapValues { $0 })
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            try self.validateResponse(response: response, data: data)
+        } catch {
+            throw error
+        }
+    }
+
+    func fetchPullRequestReviews(
+        owner: String,
+        repoName: String,
+        prNumber: Int,
+        account: Account,
+        page: Int = 1,
+        perPage: Int = 100
+    ) async throws -> [PullRequestReview] {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
+        guard account.provider.lowercased().contains("github") else {
+            throw GitProviderServiceError.unsupportedProvider(account.provider)
+        }
+
+        var urlComponents = URLComponents(string: "\(baseURLString)/repos/\(owner)/\(repoName)/pulls/\(prNumber)/reviews")
+        urlComponents?.queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "per_page", value: String(perPage))
+        ]
+
+        guard let url = urlComponents?.url else {
+            throw GitProviderServiceError.invalidURL
+        }
+
+        let request = try createAuthenticatedRequest(url: url, account: account, httpMethod: "GET")
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            try self.validateResponse(response: response, data: data)
+            let reviews = try decoder.decode([PullRequestReview].self, from: data)
+            return reviews
+        } catch let error as GitProviderServiceError {
+            throw error
+        } catch let decodingError as DecodingError {
+            throw GitProviderServiceError.decodingError(decodingError)
+        } catch {
+            throw GitProviderServiceError.networkError(error)
+        }
+    }
+
+    func addLineCommentToPullRequest(
+        owner: String,
+        repoName: String,
+        prNumber: Int,
+        account: Account,
+        body: String,
+        commitId: String,
+        path: String,
+        line: Int
+    ) async throws {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
+        guard account.provider.lowercased().contains("github") else {
+            throw GitProviderServiceError.unsupportedProvider(account.provider)
+        }
+
+        let urlString = "\(baseURLString)/repos/\(owner)/\(repoName)/pulls/\(prNumber)/comments"
+        guard let url = URL(string: urlString) else {
+            throw GitProviderServiceError.invalidURL
+        }
+
+        var request = try createAuthenticatedRequest(url: url, account: account, httpMethod: "POST")
+
+        let bodyDict: [String: Any] = [
+            "body": body,
+            "commit_id": commitId,
+            "path": path,
+            "line": line
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: bodyDict)
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            try self.validateResponse(response: response, data: data)
+        } catch {
+            throw error
+        }
+    }
+
+    // MARK: - Branch Management
+
+    /// Fetches branches for a given repository from the Git provider.
+    private func createAuthenticatedRequest(url: URL, account: Account, httpMethod: String = "GET") throws -> URLRequest {
+        var request = URLRequest(url: url)
+        guard !account.token.isEmpty else {
+            throw GitProviderServiceError.noAccessToken
+        }
+        request.setValue("Bearer \(account.token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        request.httpMethod = httpMethod
+        if httpMethod == "POST" || httpMethod == "PUT" || httpMethod == "PATCH" {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        return request
+    }
+
+    private func validateResponse(response: URLResponse, data: Data, expectedStatusCode: Int = -1) throws {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GitProviderServiceError.malformedResponse
+        }
+
+        let successRange = (200..<300)
+        let isValidStatus = (expectedStatusCode != -1) ? (httpResponse.statusCode == expectedStatusCode) : successRange.contains(httpResponse.statusCode)
+
+        guard isValidStatus else {
+            let errorMessage = String(data: data, encoding: .utf8)
+            throw GitProviderServiceError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
         }
     }
 }

@@ -13,6 +13,7 @@ class PullRequestViewModel  {
     var comments: [PullRequestComment] = []
     var reviewComments: [PullRequestComment] = []
     var files: [PullRequestFile] = []
+    var reviews: [PullRequestReview] = []
     var selectedPullRequest: PullRequest? {
         didSet {
             // Data loading is now primarily handled in selectPullRequest method
@@ -25,12 +26,15 @@ class PullRequestViewModel  {
     var isLoadingMoreComments = false
     var isLoadingMoreReviewComments = false
     var isLoadingMoreFiles = false
+    var isLoadingReviews = false
 
     // MARK: - Error Messages
     var pullRequestListError: String?
     var commentsError: String?
     var reviewCommentsError: String?
     var filesError: String?
+    var reviewsError: String?
+    var mergeError: String?
 
     var currentFilterState: PullRequestState = .open {
         didSet {
@@ -66,6 +70,12 @@ class PullRequestViewModel  {
     var isCreatingPR: Bool = false
     var prCreationError: String? = nil
     var currentBranchNameFromGitService: String? = nil
+
+    // MARK: - Properties for Merging PRs
+    var mergeMethod: String = "merge"
+    var mergeCommitTitle: String = ""
+    var mergeCommitMessage: String = ""
+    var isMerging: Bool = false
 
     // MARK: - Dependencies
     private let gitProviderService: GitProviderService
@@ -244,22 +254,52 @@ class PullRequestViewModel  {
         isLoadingMoreFiles = false
     }
 
+    @MainActor
+    func loadReviews(refresh: Bool = false) async {
+        guard let selectedPR = selectedPullRequest else { return }
+
+        // For reviews, we usually load all of them, but pagination is possible.
+        // Here, we'll just load the first page for simplicity unless refresh is true.
+        if refresh {
+            reviews = []
+            reviewsError = nil
+        }
+
+        // Avoid re-loading if we already have reviews, unless refreshing.
+        guard reviews.isEmpty || refresh else { return }
+
+        isLoadingReviews = true
+        defer { isLoadingReviews = false }
+
+        do {
+            let fetchedReviews = try await gitProviderService.fetchPullRequestReviews(
+                owner: repository.owner?.login ?? "",
+                repoName: repository.name,
+                prNumber: selectedPR.number,
+                account: account
+            )
+            reviews = fetchedReviews
+        } catch let error as GitProviderServiceError {
+            reviewsError = "Error loading reviews: \(error.localizedDescription)"
+        } catch {
+            reviewsError = "An unexpected error occurred while loading reviews: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Selection and Filtering
     @MainActor
     func selectPullRequest(_ pr: PullRequest) async {
         selectedPullRequest = pr
 
-        isLoadingInitialDetails = true // Indicate that the initial set of details is being loaded.
-
-        // Load initial page for all details concurrently, ensuring pagination states are reset by refresh:true.
-        // Error properties (commentsError, etc.) are also reset within these load methods when refresh is true.
-        async let commentsTask: () = loadComments(refresh: true)
-        async let reviewCommentsTask: () = loadReviewComments(refresh: true)
-        async let filesTask: () = loadFiles(refresh: true)
-
-        _ = await [commentsTask, reviewCommentsTask, filesTask]
-
-        isLoadingInitialDetails = false // All initial detail loads are complete.
+        isLoadingInitialDetails = true
+        // Use a TaskGroup to load details concurrently
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.loadComments(refresh: true) }
+            group.addTask { await self.loadReviewComments(refresh: true) }
+            group.addTask { await self.loadFiles(refresh: true) }
+            group.addTask { await self.loadReviews(refresh: true) }
+        }
+        isLoadingInitialDetails = false
     }
 
     @MainActor
@@ -270,10 +310,12 @@ class PullRequestViewModel  {
         comments = []
         reviewComments = []
         files = []
+        reviews = []
 
         commentsError = nil
         reviewCommentsError = nil
         filesError = nil
+        reviewsError = nil
 
         currentCommentsPage = 1
         canLoadMoreComments = true
@@ -347,6 +389,104 @@ class PullRequestViewModel  {
             prCreationError = "An unexpected error occurred while creating the pull request: \(error.localizedDescription)"
         }
         isCreatingPR = false
+    }
+
+    // MARK: - PR Actions
+
+    @MainActor
+    func prepareMergeDetails() {
+        guard let pr = selectedPullRequest else { return }
+        mergeCommitTitle = pr.title
+        mergeCommitMessage = pr.body ?? ""
+        mergeError = nil
+    }
+
+    @MainActor
+    func mergePullRequest() async {
+        guard let pr = selectedPullRequest else {
+            mergeError = "No pull request selected."
+            return
+        }
+
+        isMerging = true
+        mergeError = nil
+        defer { isMerging = false }
+
+        do {
+            try await gitProviderService.mergePullRequest(
+                owner: repository.owner?.login ?? "",
+                repoName: repository.name,
+                prNumber: pr.number,
+                account: account,
+                commitTitle: mergeCommitTitle,
+                commitMessage: mergeCommitMessage,
+                mergeMethod: mergeMethod
+            )
+            // After successful merge, refresh the PR state
+            await self.loadPullRequests(refresh: true)
+            // Optionally, close the detail view or show a success message
+        } catch let error as GitProviderServiceError {
+            mergeError = error.localizedDescription
+        } catch {
+            mergeError = "An unexpected error occurred during merge: \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    func approvePullRequest() async {
+        await submitReview(event: .approve, body: "Approved")
+    }
+
+    @MainActor
+    func requestChanges(comment: String) async {
+        await submitReview(event: .requestChanges, body: comment)
+    }
+
+    @MainActor
+    func addLineComment(body: String, commitId: String, path: String, line: Int) async {
+        guard let pr = selectedPullRequest else { return }
+
+        // This is a simplified approach. A full implementation might involve creating a pending review,
+        // adding comments to it, and then submitting the review.
+        // For now, we post a standalone comment.
+        do {
+            try await gitProviderService.addLineCommentToPullRequest(
+                owner: repository.owner?.login ?? "",
+                repoName: repository.name,
+                prNumber: pr.number,
+                account: account,
+                body: body,
+                commitId: commitId,
+                path: path,
+                line: line
+            )
+            // Refresh code comments after adding one
+            await loadReviewComments(refresh: true)
+        } catch {
+            // Handle error, e.g., show an alert to the user
+            print("Failed to add line comment: \(error.localizedDescription)")
+        }
+    }
+
+    private func submitReview(event: GitProviderService.PullRequestReviewEvent, body: String?) async {
+        guard let pr = selectedPullRequest else { return }
+
+        // You might want to handle loading/error states for this action
+        do {
+            try await gitProviderService.submitPullRequestReview(
+                owner: repository.owner?.login ?? "",
+                repoName: repository.name,
+                prNumber: pr.number,
+                account: account,
+                event: event,
+                body: body
+            )
+            // Refresh reviews and PR details
+            await self.loadReviews(refresh: true)
+        } catch {
+            // Handle error, e.g., show an alert
+            print("Failed to submit review: \(error.localizedDescription)")
+        }
     }
 }
 
