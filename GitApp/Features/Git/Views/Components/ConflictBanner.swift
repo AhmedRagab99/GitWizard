@@ -6,41 +6,40 @@ struct ConflictBanner: View {
 
     var body: some View {
         HStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                .font(.title2)
-                .foregroundStyle(.white)
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title)
+                .foregroundColor(.orange)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Merge Conflict")
+                Text("Merge Conflicts Detected")
+                    .font(.headline)
                     .fontWeight(.bold)
-                    .foregroundStyle(.white)
-                Text("\(conflictedFilesCount) file\(conflictedFilesCount > 1 ? "s" : "") with conflicts")
+                Text("\(conflictedFilesCount) file\(conflictedFilesCount > 1 ? "s" : "") with conflicts. Please resolve them to continue.")
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundColor(.secondary)
             }
 
             Spacer()
 
-            Button {
+            Button(role: .destructive) {
                 onAbortMerge()
             } label: {
                 Label("Abort Merge", systemImage: "xmark.octagon.fill")
-                    .fontWeight(.medium)
             }
-            .buttonStyle(.bordered)
-            .tint(.white.opacity(0.5))
             .controlSize(.large)
-            .help("Abort the current merge process (git merge --abort)")
+
         }
         .padding()
-        .background(Color.red.gradient)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(radius: 5)
-        .frame(maxWidth: .infinity)
+        .background(Material.ultraThin)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.5), lineWidth: 1)
+        )
     }
 }
 
 #Preview {
-    ConflictBanner(conflictedFilesCount: 2, onAbortMerge: {})
-    .padding()
+    ConflictBanner(conflictedFilesCount: 3, onAbortMerge: {})
+        .padding()
 }
