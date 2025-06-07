@@ -15,6 +15,7 @@ struct CommitView: View {
     // Track visible files to optimize memory management
     @State private var visibleStagedFiles = Set<String>()
     @State private var visibleUnstagedFiles = Set<String>()
+    @State private var visibleConflictedFiles = Set<String>()
 
     // Lazily load diff content
     @State private var shouldLoadDiff = false
@@ -26,13 +27,12 @@ struct CommitView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if hasConflicts {
+            if !viewModel.conflictedFileDiffs.isEmpty {
                 ConflictBanner(
-                    conflictedFilesCount: conflictedFiles.count,
+                    conflictedFilesCount: viewModel.conflictedFileDiffs.count,
                     onAbortMerge: {
                         Task {
                             await viewModel.abortMerge()
-                            await checkForConflicts()
                         }
                     }
                 )
@@ -44,7 +44,6 @@ struct CommitView: View {
         .onAppear {
             Task {
                 await viewModel.loadChanges()
-                await checkForConflicts()
                 // Delay loading diff content until after initial UI rendering
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     shouldLoadDiff = true
@@ -104,6 +103,34 @@ struct CommitView: View {
                 // Left pane - Staged, Modified, and Untracked changes
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
+                        // Conflicts Section
+                        if !viewModel.conflictedFileDiffs.isEmpty {
+                            ChangesSection(
+                                title: "Conflicts",
+                                icon: "exclamationmark.triangle.fill",
+                                iconColor: .red,
+                                files: viewModel.conflictedFileDiffs,
+                                selectedFile: $selectedFileItem,
+                                visibleFiles: $visibleConflictedFiles,
+                                isExpanded: .constant(true), // Always expanded
+                                actionIcon: "", // No primary action
+                                actionColor: .clear,
+                                action: { _ in },
+                                onResolveWithMine: { file in
+                                    let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                    Task { await viewModel.resolveConflictUsingOurs(filePath: path) }
+                                },
+                                onResolveWithTheirs: { file in
+                                    let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                    Task { await viewModel.resolveConflictUsingTheirs(filePath: path) }
+                                },
+                                onMarkAsResolved: { file in
+                                    let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                    Task { await viewModel.markConflictResolved(filePath: path) }
+                                }
+                            )
+                        }
+
                         // Staged changes section
                         ChangesSection(
                             title: "Staged Changes",
@@ -123,31 +150,7 @@ struct CommitView: View {
                             },
                             onHeaderAction: { Task { await viewModel.unstageAllChanges() } },
                             headerActionTitle: "Unstage All",
-                            isStaged: true,
-                            onResolveWithMine: { file in
-                                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                Task {
-                                    await viewModel.resolveConflictUsingOurs(filePath: path)
-                                    await viewModel.loadChanges()
-                                    await checkForConflicts()
-                                }
-                            },
-                            onResolveWithTheirs: { file in
-                                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                Task {
-                                    await viewModel.resolveConflictUsingTheirs(filePath: path)
-                                    await viewModel.loadChanges()
-                                    await checkForConflicts()
-                                }
-                            },
-                            onMarkAsResolved: { file in
-                                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                Task {
-                                    await viewModel.markConflictResolved(filePath: path)
-                                    await viewModel.loadChanges()
-                                    await checkForConflicts()
-                                }
-                            }
+                            isStaged: true
                         )
 
                         // Modified (Unstaged) changes section
@@ -169,31 +172,7 @@ struct CommitView: View {
                             },
                             onHeaderAction: { Task { await viewModel.stageAllChanges() } },
                             headerActionTitle: "Stage All",
-                            isStaged: false,
-                            onResolveWithMine: { file in
-                                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                Task {
-                                    await viewModel.resolveConflictUsingOurs(filePath: path)
-                                    await viewModel.loadChanges()
-                                    await checkForConflicts()
-                                }
-                            },
-                            onResolveWithTheirs: { file in
-                                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                Task {
-                                    await viewModel.resolveConflictUsingTheirs(filePath: path)
-                                    await viewModel.loadChanges()
-                                    await checkForConflicts()
-                                }
-                            },
-                            onMarkAsResolved: { file in
-                                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                Task {
-                                    await viewModel.markConflictResolved(filePath: path)
-                                    await viewModel.loadChanges()
-                                    await checkForConflicts()
-                                }
-                            }
+                            isStaged: false
                         )
 
                         // Untracked files section

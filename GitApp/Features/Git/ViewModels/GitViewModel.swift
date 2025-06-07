@@ -54,6 +54,7 @@ class GitViewModel {
      var stagedDiff: Diff?
      var unstagedDiff: Diff?
      var untrackedFiles: [String] = []
+     var conflictedFileDiffs: [FileDiff] = []
 
     var syncState = SyncState()
     var commits = [Commit]()
@@ -349,41 +350,46 @@ class GitViewModel {
     func loadChanges() async {
         guard let url = repositoryURL else { return }
         do {
-            // Save the currently selected file info before refreshing
             let selectedFileId = selectedFileDiff?.id
 
+            // 1. Get status, the source of truth for conflicted paths
             let status = try await gitService.getStatus(in: url)
-
-            // Get staged and unstaged changes
-            var stagedDiff = try await gitService.getDiff(in: url, cached: true)
-            var unstagedDiff = try await gitService.getDiff(in: url, cached: false)
-
-            // Correct the status for conflicted files by iterating with an index
             let conflictedPaths = Set(status.conflicted)
 
-            for i in 0..<stagedDiff.fileDiffs.count {
-                let file = stagedDiff.fileDiffs[i]
+            // 2. Get all staged and unstaged diffs
+            var stagedChanges = try await gitService.getDiff(in: url, cached: true)
+            var unstagedChanges = try await gitService.getDiff(in: url, cached: false)
+
+            // 3. Create a combined list of all files to check for conflicts
+            let allFiles = stagedChanges.fileDiffs + unstagedChanges.fileDiffs
+
+            // 4. Identify the FileDiff objects that are in a conflict state
+            let conflictedFiles = allFiles.filter { file in
                 let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                if conflictedPaths.contains(path) {
-                    stagedDiff.fileDiffs[i].status = .conflict
-                }
+                return conflictedPaths.contains(path)
             }
 
-            for i in 0..<unstagedDiff.fileDiffs.count {
-                let file = unstagedDiff.fileDiffs[i]
-                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                if conflictedPaths.contains(path) {
-                    unstagedDiff.fileDiffs[i].status = .conflict
-                }
+            // Set the status for conflicted files and assign to the dedicated property
+            self.conflictedFileDiffs = conflictedFiles.map { file in
+                var mutableFile = file
+                mutableFile.status = .conflict
+                return mutableFile
             }
 
-            self.stagedDiff = stagedDiff
-            self.unstagedDiff = unstagedDiff
+            // 5. Filter the original staged and unstaged diffs to remove conflicted files
+            let conflictedFileIds = Set(self.conflictedFileDiffs.map { $0.id })
+
+            stagedChanges.fileDiffs.removeAll { conflictedFileIds.contains($0.id) }
+            unstagedChanges.fileDiffs.removeAll { conflictedFileIds.contains($0.id) }
+
+            // 6. Update the view model's properties
+            self.stagedDiff = stagedChanges
+            self.unstagedDiff = unstagedChanges
             self.untrackedFiles = status.untrackedFiles
 
             // Restore selection if a file was selected
             if let selectedId = selectedFileId {
-                selectedFileDiff = (stagedDiff.fileDiffs + unstagedDiff.fileDiffs).first { $0.id == selectedId }
+                selectedFileDiff = (self.conflictedFileDiffs + self.stagedDiff!.fileDiffs + self.unstagedDiff!.fileDiffs).first { $0.id == selectedId }
             }
 
         } catch {
