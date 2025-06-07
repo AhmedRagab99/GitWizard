@@ -60,7 +60,7 @@ enum FileStatus: String {
         case .removed: return .red
         case .copied: return .yellow
         case .unknown: return .purple
-        case .conflict: return .red
+        case .conflict: return .purple
         }
     }
 
@@ -83,7 +83,9 @@ enum FileStatus: String {
 struct FileDiff: Identifiable, Hashable {
     var id: String { raw }
     var header: String
-    var status: FileStatus  {
+    var status: FileStatus
+
+    private static func calculateStatus(header: String, fromFilePath: String, toFilePath: String, chunks: [Chunk], extendedHeaderLines: [String], fromFileToFileLines: [String]) -> FileStatus {
         // Check for conflicts in chunks first, as this is the most specific status
         if chunks.contains(where: { $0.hasConflict }) {
             return .conflict
@@ -204,21 +206,32 @@ struct FileDiff: Identifiable, Hashable {
         guard let firstLine else {
             throw GenericError(errorDescription: "Parse error for first line in FileDiff")
         }
-        header = firstLine
-        let fromFileIndex = splited.firstIndex { $0.hasPrefix("--- ") }
-        guard let fromFileIndex else {
-            extendedHeaderLines = splited[1..<splited.endIndex].map { String($0) }
-            fromFileToFileLines = []
-            chunks = []
-            return
+        self.header = firstLine
+
+        let fromFileIndexOptional = splited.firstIndex { $0.hasPrefix("--- ") }
+
+        if let fromFileIndex = fromFileIndexOptional {
+            self.extendedHeaderLines = splited[1..<fromFileIndex].map { String($0) }
+            let toFileIndex = splited.lastIndex { $0.hasPrefix("+++ ") }
+            guard let toFileIndex else {
+                throw GenericError(errorDescription: "Parse error for toFileIndex in FileDiff")
+            }
+            self.fromFileToFileLines = splited[fromFileIndex...toFileIndex].map { String($0) }
+            self.chunks = Self.extractChunks(from: splited).map { Chunk(raw: $0) }
+        } else {
+            self.extendedHeaderLines = splited.count > 1 ? splited[1...].map { String($0) } : []
+            self.fromFileToFileLines = []
+            self.chunks = []
         }
-        extendedHeaderLines = splited[1..<fromFileIndex].map { String($0) }
-        let toFileIndex = splited.lastIndex { $0.hasPrefix("+++ ") }
-        guard let toFileIndex else {
-            throw GenericError(errorDescription: "Parse error for toFileIndex in FileDiff")
-        }
-        fromFileToFileLines = splited[fromFileIndex...toFileIndex].map { String($0) }
-        chunks = Self.extractChunks(from: splited).map { Chunk(raw: $0) }
+
+        self.status = FileDiff.calculateStatus(
+            header: header,
+            fromFilePath: fromFilePath,
+            toFilePath: toFilePath,
+            chunks: chunks,
+            extendedHeaderLines: extendedHeaderLines,
+            fromFileToFileLines: fromFileToFileLines
+        )
     }
 
     // Init from untracked file
@@ -228,6 +241,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = ["new file mode 100644"]
         self.fromFileToFileLines = []
         self.chunks = []
+        self.status = .untracked
     }
 
     // Init for added files
@@ -237,6 +251,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = ["new file mode 100644"]
         self.fromFileToFileLines = ["--- /dev/null", "+++ b/\(path)"]
         self.chunks = []
+        self.status = .added
     }
 
     // Init for removed files
@@ -246,6 +261,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = ["deleted file mode 100644"]
         self.fromFileToFileLines = ["--- a/\(path)", "+++ /dev/null"]
         self.chunks = []
+        self.status = .removed
     }
 
     // Init for binary files
@@ -255,6 +271,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = ["Binary files differ"]
         self.fromFileToFileLines = []
         self.chunks = []
+        self.status = .modified
     }
 
     // Init from fileDiffs and mappingLines - useful for constructing diffs programmatically
@@ -264,6 +281,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = []
         self.fromFileToFileLines = []
         self.chunks = fileDiffs
+        self.status = .modified // Default status, might need adjustment
     }
 
     // Full initializer for creating diffs with complete flexibility
@@ -273,6 +291,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = extendedHeaderLines
         self.fromFileToFileLines = fromFileToFileLines
         self.chunks = chunks
+        self.status = .modified // Default status, might need adjustment
     }
 
     func updateAll(stage: Bool) -> Self {

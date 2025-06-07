@@ -350,57 +350,41 @@ class GitViewModel {
         guard let url = repositoryURL else { return }
         do {
             // Save the currently selected file info before refreshing
-            let selectedFilePath = selectedFileDiff?.fromFilePath
-            let selectedToFilePath = selectedFileDiff?.toFilePath
-            let wasSelectedFileStaged = selectedFileDiff?.chunks.contains(where: { $0.stage == true }) ?? false
+            let selectedFileId = selectedFileDiff?.id
 
             let status = try await gitService.getStatus(in: url)
 
-            // Get staged changes
-            let stagedDiff = try await gitService.getDiff(in: url, cached: true)
-            self.stagedDiff = stagedDiff
+            // Get staged and unstaged changes
+            var stagedDiff = try await gitService.getDiff(in: url, cached: true)
+            var unstagedDiff = try await gitService.getDiff(in: url, cached: false)
 
-            // Get unstaged changes
-            let unstagedDiff = try await gitService.getDiff(in: url, cached: false)
-            self.unstagedDiff = unstagedDiff
+            // Correct the status for conflicted files
+            let conflictedPaths = Set(status.conflicted)
 
-            // Update untracked files
-            self.untrackedFiles = status.untrackedFiles
-
-            // Update selected file diff if needed - with improved matching logic
-            if let selectedPath = selectedFilePath, !selectedPath.isEmpty {
-                // First try exact path match
-                if let stagedFile = stagedDiff.fileDiffs.first(where: { $0.fromFilePath == selectedPath }) {
-                    selectedFileDiff = stagedFile
-                } else if let unstagedFile = unstagedDiff.fileDiffs.first(where: { $0.fromFilePath == selectedPath }) {
-                    selectedFileDiff = unstagedFile
-                }
-                // Try matching with toFilePath if fromFilePath not found (for newly added files)
-                else if let toPath = selectedToFilePath, !toPath.isEmpty {
-                    if let stagedFile = stagedDiff.fileDiffs.first(where: { $0.toFilePath == toPath }) {
-                        selectedFileDiff = stagedFile
-                    } else if let unstagedFile = unstagedDiff.fileDiffs.first(where: { $0.toFilePath == toPath }) {
-                        selectedFileDiff = unstagedFile
-                    }
-                }
-                // If still not found, check if the file might have moved between staged/unstaged
-                else if wasSelectedFileStaged {
-                    // Was staged, check if it's now unstaged
-                    if let unstagedFile = unstagedDiff.fileDiffs.first(where: {
-                        $0.fromFilePath.isEmpty ? $0.toFilePath == selectedToFilePath : $0.fromFilePath == selectedPath
-                    }) {
-                        selectedFileDiff = unstagedFile
-                    }
-                } else {
-                    // Was unstaged, check if it's now staged
-                    if let stagedFile = stagedDiff.fileDiffs.first(where: {
-                        $0.fromFilePath.isEmpty ? $0.toFilePath == selectedToFilePath : $0.fromFilePath == selectedPath
-                    }) {
-                        selectedFileDiff = stagedFile
-                    }
+            for i in 0..<stagedDiff.fileDiffs.count {
+                let file = stagedDiff.fileDiffs[i]
+                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                if conflictedPaths.contains(path) {
+                    stagedDiff.fileDiffs[i].status = .conflict
                 }
             }
 
+            for i in 0..<unstagedDiff.fileDiffs.count {
+                let file = unstagedDiff.fileDiffs[i]
+                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                if conflictedPaths.contains(path) {
+                    unstagedDiff.fileDiffs[i].status = .conflict
+                }
+            }
+
+            self.stagedDiff = stagedDiff
+            self.unstagedDiff = unstagedDiff
+            self.untrackedFiles = status.untrackedFiles
+
+            // Restore selection if a file was selected
+            if let selectedId = selectedFileId {
+                selectedFileDiff = (stagedDiff.fileDiffs + unstagedDiff.fileDiffs).first { $0.id == selectedId }
+            }
 
         } catch {
             errorMessage = "Error loading changes: \(error)"
