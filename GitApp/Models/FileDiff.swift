@@ -84,7 +84,7 @@ struct FileDiff: Identifiable, Hashable {
     var id: String { raw }
     var header: String
     var status: FileStatus  {
-        // Check for conflicts in chunks
+        // Check for conflicts in chunks first, as this is the most specific status
         if chunks.contains(where: { $0.hasConflict }) {
             return .conflict
         }

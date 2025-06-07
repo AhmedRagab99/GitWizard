@@ -2,7 +2,7 @@ import Foundation
 
 struct GitMergeAbort: Git {
     typealias OutputModel = Void
-    
+
     var directory: URL
 
     var command: String {
@@ -10,10 +10,10 @@ struct GitMergeAbort: Git {
     }
 
     var arguments: [String] {
-        ["merge", "--abort"]
+        ["git", "merge", "--abort"]
     }
-    
-    func parse(for output: String) throws -> Void {
-        
+
+    func parse(for output: String) throws -> OutputModel {
+
     }
 }
