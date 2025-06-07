@@ -33,19 +33,12 @@ final class GitStatus: Git {
             let statusCode = String(line.prefix(2))
             let filePath = line.count > 3 ? String(line.dropFirst(3)) : ""
 
+            // Correctly identify all conflict/unmerged statuses
+            let isConflict = statusCode.contains("U") || statusCode == "AA" || statusCode == "DD"
+
             if statusCode == "??" {
                 status.untrackedFiles.append(filePath)
-            } else if statusCode == "UU" || statusCode == "AA" || statusCode == "DD" {
-                // UU: both modified (conflict)
-                // AA: both added (conflict)
-                // DD: both deleted (conflict)
-                status.conflicted.append(filePath)
-            } else if statusCode.contains("U") || statusCode.contains("A") && statusCode.contains("D") {
-                // Other conflict scenarios:
-                // AU: added by us, modified by them
-                // UA: modified by us, added by them
-                // DU: deleted by us, modified by them
-                // UD: modified by us, deleted by them
+            } else if isConflict {
                 status.conflicted.append(filePath)
             }
         }
