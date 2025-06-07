@@ -24,31 +24,38 @@ final class GitStatus: Git {
     var directory: URL
 
     func parse(for stdOut: String) throws -> Status {
-        let lines = stdOut.components(separatedBy: .newlines)
         var status = Status()
+        let lines = stdOut.components(separatedBy: .newlines).filter { !$0.isEmpty }
 
         for line in lines {
-            if line.isEmpty { continue }
+            let index = line.index(line.startIndex, offsetBy: 2)
+            let statusCode = String(line[..<index])
+            // Drop the space after the status code
+            let path = String(line[line.index(index, offsetBy: 1)...])
 
-            let statusCode = String(line.prefix(2))
+            // Unquote paths, which can happen with files containing spaces
+            let finalPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
 
-            // Handle renamed files and their paths separately, e.g., "R  old -> new"
-            if statusCode.starts(with: "R") {
-                // This case can be enhanced if rename status needs to be tracked
+            let xy = statusCode.map { String($0) }
+            let x = xy[0]
+            let y = xy[1]
+
+            // For untracked files
+            if x == "?" && y == "?" {
+                status.untrackedFiles.append(finalPath)
                 continue
             }
 
-            // Robustly parse the file path, handling potential quotes
-            let pathComponent = String(line.dropFirst(3))
-            let filePath = pathComponent.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-
-            // Correctly identify all conflict/unmerged statuses
-            let isConflict = statusCode.contains("U") || statusCode == "AA" || statusCode == "DD"
-
-            if statusCode == "??" {
-                status.untrackedFiles.append(filePath)
-            } else if isConflict {
-                status.conflicted.append(filePath)
+            // For conflicted files.
+            // DD: Unmerged, both deleted
+            // AU: Unmerged, added by us
+            // UD: Unmerged, file deleted by them
+            // UA: Unmerged, file added by them
+            // DU: Unmerged, file deleted by us
+            // AA: Unmerged, both added
+            // UU: Unmerged, both modified
+            if (x == "D" && y == "D") || (x == "A" && y == "A") || x == "U" || y == "U" {
+                status.conflicted.append(finalPath)
             }
         }
 

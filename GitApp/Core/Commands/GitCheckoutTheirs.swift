@@ -16,7 +16,7 @@ struct GitCheckoutTheirs: Git {
     }
 
     var arguments: [String] {
-        ["checkout", "--theirs", filePath]
+        ["git", "checkout", "--theirs", filePath]
     }
 
     func parse(for output: String) throws -> String {
