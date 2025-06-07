@@ -76,6 +76,7 @@ class PullRequestViewModel  {
     var mergeCommitTitle: String = ""
     var mergeCommitMessage: String = ""
     var isMerging: Bool = false
+    var wasMergeSuccessful: Bool = false
 
     // MARK: - Dependencies
     private let gitProviderService: GitProviderService
@@ -399,6 +400,7 @@ class PullRequestViewModel  {
         mergeCommitTitle = pr.title
         mergeCommitMessage = pr.body ?? ""
         mergeError = nil
+        wasMergeSuccessful = false // Reset on preparing for a new merge
     }
 
     @MainActor
@@ -424,7 +426,7 @@ class PullRequestViewModel  {
             )
             // After successful merge, refresh the PR state
             await self.loadPullRequests(refresh: true)
-            // Optionally, close the detail view or show a success message
+            wasMergeSuccessful = true
         } catch let error as GitProviderServiceError {
             mergeError = error.localizedDescription
         } catch {

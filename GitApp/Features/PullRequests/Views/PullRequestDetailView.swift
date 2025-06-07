@@ -3,6 +3,7 @@ import SwiftUI
 struct PullRequestDetailView: View {
     let pullRequest: PullRequest
     @Bindable var viewModel: PullRequestViewModel
+    @Environment(\.dismiss) private var dismiss
 
     @State private var selectedTab: Int = 0 // 0: Description, 1: Comments, 2: Code Comments, 3: Files, 4: Reviews
     @State private var isShowingMergeSheet = false
@@ -68,6 +69,11 @@ struct PullRequestDetailView: View {
                  // This ensures that if the view is somehow presented with a PR but details weren't loaded,
                  // they get loaded. This is a safety net.
                 await viewModel.selectPullRequest(pullRequest) // Pass the local pullRequest
+            }
+        }
+        .onChange(of: viewModel.wasMergeSuccessful) { _, newValue in
+            if newValue {
+                dismiss()
             }
         }
         .sheet(isPresented: $isShowingMergeSheet) {
@@ -232,7 +238,7 @@ struct PullRequestDetailView: View {
         } else {
             List {
                 ForEach(viewModel.files) { file in
-                    PullRequestFileView(file: file, viewModel: viewModel, prCommitId: pullRequest.id.description)
+                    PullRequestFileView(file: file, viewModel: viewModel, prCommitId: pullRequest.head.sha)
                         .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
                         .onAppear {
                             if file.id == viewModel.files.last?.id && viewModel.canLoadMoreFiles && !viewModel.isLoadingMoreFiles {

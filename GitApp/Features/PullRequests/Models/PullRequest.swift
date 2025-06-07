@@ -18,12 +18,10 @@ struct PullRequest: Codable, Identifiable, Hashable {
     let diffUrl: String // URL to get the diff of the PR
     let patchUrl: String // URL to get the patch of the PR
     let commentsUrl: String // URL to fetch comments for the PR
-    // let reviewCommentsUrl: String // URL for review comments on the diff
-    // let commitsUrl: String // URL to fetch commits for the PR
+    let head: GitReference
+    let base: GitReference
 
     // Additional potentially useful fields (depending on provider)
-    // let head: GitReference? // Info about the source branch
-    // let base: GitReference? // Info about the target branch
     // let assignee: PullRequestAuthor?
     // let assignees: [PullRequestAuthor]?
     // let labels: [Label]?
@@ -43,9 +41,10 @@ struct PullRequest: Codable, Identifiable, Hashable {
         case diffUrl = "diff_url"
         case patchUrl = "patch_url"
         case commentsUrl = "comments_url"
+        case head, base
         // case reviewCommentsUrl = "review_comments_url"
         // case commitsUrl = "commits_url"
-        // case head, base, assignee, assignees, labels
+        // case labels
     }
 
     // Helper to map string state to PullRequestState enum
@@ -90,10 +89,15 @@ struct PullRequest: Codable, Identifiable, Hashable {
     }
 }
 
+struct GitReference: Codable, Hashable {
+    let label: String // e.g., "octocat:new-feature"
+    let ref: String // branch name, e.g., "new-feature"
+    let sha: String // commit SHA
+}
+
 /*
 // Example GitReference and Label structs if needed later
 struct GitReference: Codable, Hashable {
-    let label: String // e.g., "octocat:new-feature"
     let ref: String // branch name, e.g., "new-feature"
     let sha: String // commit SHA
     // let user: PullRequestAuthor? // User/Org that owns the repo
