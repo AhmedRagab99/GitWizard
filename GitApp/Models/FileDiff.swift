@@ -124,12 +124,12 @@ struct FileDiff: Identifiable, Hashable {
     }
 
     var fromFilePath: String {
-        let components = header.components(separatedBy: " ")
-        // Handle combined diff format for conflicts, e.g., "diff --cc path/to/file"
-        if components.count > 2 && components[1] == "--cc" {
-            return components.last ?? ""
+        if header.starts(with: "diff --cc") {
+            let pathPart = String(header.dropFirst("diff --cc".count)).trimmingCharacters(in: .whitespaces)
+            return pathPart.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
         }
 
+        let components = header.components(separatedBy: " ")
         // Handle regular diff format
         let quoteComponents = header.components(separatedBy: "\"")
         if quoteComponents.count >= 2 && quoteComponents[0].contains(" a/") {
@@ -143,12 +143,12 @@ struct FileDiff: Identifiable, Hashable {
     }
 
     var toFilePath: String {
-        let components = header.components(separatedBy: " ")
-        // Handle combined diff format for conflicts, e.g., "diff --cc path/to/file"
-        if components.count > 2 && components[1] == "--cc" {
-            return components.last ?? ""
+        if header.starts(with: "diff --cc") {
+            let pathPart = String(header.dropFirst("diff --cc".count)).trimmingCharacters(in: .whitespaces)
+            return pathPart.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
         }
 
+        let components = header.components(separatedBy: " ")
         // Handle regular diff format
         let quoteComponents = header.components(separatedBy: "\"")
         if quoteComponents.count >= 4 && quoteComponents[2].contains(" b/") {
