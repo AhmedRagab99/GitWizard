@@ -156,7 +156,7 @@ struct FileDiff: Identifiable, Hashable {
     var extendedHeaderLines: [String]
     var fromFileToFileLines: [String]
     var chunks: [Chunk]
-    var stage: Bool?
+    var stage: Bool? = nil
     var stageString: String {
         if let stage, stage {
             return "y"
@@ -224,13 +224,18 @@ struct FileDiff: Identifiable, Hashable {
             self.chunks = []
         }
 
+        // Manually calculate paths inside the initializer to avoid using `self` before all stored properties are set.
+        let headerComponents = self.header.components(separatedBy: " ")
+        let localFromFilePath = (headerComponents.count > 2) ? String(headerComponents[2].dropFirst(2)) : ""
+        let localToFilePath = (headerComponents.count > 3) ? String(headerComponents[3].dropFirst(2)) : ""
+
         self.status = FileDiff.calculateStatus(
-            header: header,
-            fromFilePath: fromFilePath,
-            toFilePath: toFilePath,
-            chunks: chunks,
-            extendedHeaderLines: extendedHeaderLines,
-            fromFileToFileLines: fromFileToFileLines
+            header: self.header,
+            fromFilePath: localFromFilePath,
+            toFilePath: localToFilePath,
+            chunks: self.chunks,
+            extendedHeaderLines: self.extendedHeaderLines,
+            fromFileToFileLines: self.fromFileToFileLines
         )
     }
 

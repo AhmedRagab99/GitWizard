@@ -49,7 +49,7 @@ struct Line: Identifiable, Hashable, Equatable {
     }
 }
 struct Chunk: Identifiable, Hashable {
-    
+
     var id: String { raw }
     var lines: [Line]
     var lineNumbers: [String]
