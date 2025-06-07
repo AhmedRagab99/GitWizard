@@ -60,7 +60,7 @@ enum FileStatus: String {
         case .removed: return .red
         case .copied: return .yellow
         case .unknown: return .purple
-        case .conflict: return .red
+        case .conflict: return .purple
         }
     }
 
@@ -83,11 +83,11 @@ enum FileStatus: String {
 struct FileDiff: Identifiable, Hashable {
     var id: String { raw }
     var header: String
-    var status: FileStatus  {
-        // Check for conflicts in chunks
-        if chunks.contains(where: { $0.hasConflict }) {
-            return .conflict
-        }
+    var status: FileStatus
+
+    private static func calculateStatus(header: String, fromFilePath: String, toFilePath: String, chunks: [Chunk], extendedHeaderLines: [String], fromFileToFileLines: [String]) -> FileStatus {
+        // NOTE: Conflict detection is now handled in the GitViewModel by checking the output
+        // of `git status`. This is more reliable than trying to infer conflicts from diff chunks.
 
         // Check if header contains file mode information that indicates file status
         if header.contains("new file mode") {
@@ -124,21 +124,41 @@ struct FileDiff: Identifiable, Hashable {
     }
 
     var fromFilePath: String {
-        let components = header.components(separatedBy: " ")
-        guard components.count > 2 else {
-            return ""
+        if header.starts(with: "diff --cc") {
+            let pathPart = String(header.dropFirst("diff --cc".count)).trimmingCharacters(in: .whitespaces)
+            return pathPart.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
         }
-        let filePath = components[2].dropFirst(2)
-        return String(filePath)
+
+        let components = header.components(separatedBy: " ")
+        // Handle regular diff format
+        let quoteComponents = header.components(separatedBy: "\"")
+        if quoteComponents.count >= 2 && quoteComponents[0].contains(" a/") {
+            return String(quoteComponents[1].dropFirst(2)) // "a/path" -> "path"
+        } else {
+            if components.count > 2 && components[2].hasPrefix("a/") {
+                return String(components[2].dropFirst(2))
+            }
+        }
+        return ""
     }
 
     var toFilePath: String {
-        let components = header.components(separatedBy: " ")
-        guard components.count > 3 else {
-            return ""
+        if header.starts(with: "diff --cc") {
+            let pathPart = String(header.dropFirst("diff --cc".count)).trimmingCharacters(in: .whitespaces)
+            return pathPart.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
         }
-        let filePath = components[3].dropFirst(2)
-        return String(filePath)
+
+        let components = header.components(separatedBy: " ")
+        // Handle regular diff format
+        let quoteComponents = header.components(separatedBy: "\"")
+        if quoteComponents.count >= 4 && quoteComponents[2].contains(" b/") {
+            return String(quoteComponents[3].dropFirst(2)) // "b/path" -> "path"
+        } else {
+            if components.count > 3 && components[3].hasPrefix("b/") {
+                return String(components[3].dropFirst(2))
+            }
+        }
+        return ""
     }
 
     var filePathDisplay: String {
@@ -154,7 +174,7 @@ struct FileDiff: Identifiable, Hashable {
     var extendedHeaderLines: [String]
     var fromFileToFileLines: [String]
     var chunks: [Chunk]
-    var stage: Bool?
+    var stage: Bool? = nil
     var stageString: String {
         if let stage, stage {
             return "y"
@@ -168,6 +188,12 @@ struct FileDiff: Identifiable, Hashable {
         return "n"
     }
     var raw: String
+
+    var lineStats: (added: Int, removed: Int) {
+        let added = chunks.flatMap { $0.lines }.filter { $0.kind == .added }.count
+        let removed = chunks.flatMap { $0.lines }.filter { $0.kind == .removed }.count
+        return (added, removed)
+    }
 
     private static func extractChunks(from lines: [String]) -> [String] {
         var chunks: [String] = []
@@ -198,21 +224,37 @@ struct FileDiff: Identifiable, Hashable {
         guard let firstLine else {
             throw GenericError(errorDescription: "Parse error for first line in FileDiff")
         }
-        header = firstLine
-        let fromFileIndex = splited.firstIndex { $0.hasPrefix("--- ") }
-        guard let fromFileIndex else {
-            extendedHeaderLines = splited[1..<splited.endIndex].map { String($0) }
-            fromFileToFileLines = []
-            chunks = []
-            return
+        self.header = firstLine
+
+        let fromFileIndexOptional = splited.firstIndex { $0.hasPrefix("--- ") }
+
+        if let fromFileIndex = fromFileIndexOptional {
+            self.extendedHeaderLines = splited[1..<fromFileIndex].map { String($0) }
+            let toFileIndex = splited.lastIndex { $0.hasPrefix("+++ ") }
+            guard let toFileIndex else {
+                throw GenericError(errorDescription: "Parse error for toFileIndex in FileDiff")
+            }
+            self.fromFileToFileLines = splited[fromFileIndex...toFileIndex].map { String($0) }
+            self.chunks = Self.extractChunks(from: splited).map { Chunk(raw: $0) }
+        } else {
+            self.extendedHeaderLines = splited.count > 1 ? splited[1...].map { String($0) } : []
+            self.fromFileToFileLines = []
+            self.chunks = []
         }
-        extendedHeaderLines = splited[1..<fromFileIndex].map { String($0) }
-        let toFileIndex = splited.lastIndex { $0.hasPrefix("+++ ") }
-        guard let toFileIndex else {
-            throw GenericError(errorDescription: "Parse error for toFileIndex in FileDiff")
-        }
-        fromFileToFileLines = splited[fromFileIndex...toFileIndex].map { String($0) }
-        chunks = Self.extractChunks(from: splited).map { Chunk(raw: $0) }
+
+        // Manually calculate paths inside the initializer to avoid using `self` before all stored properties are set.
+        let headerComponents = self.header.components(separatedBy: " ")
+        let localFromFilePath = (headerComponents.count > 2) ? String(headerComponents[2].dropFirst(2)) : ""
+        let localToFilePath = (headerComponents.count > 3) ? String(headerComponents[3].dropFirst(2)) : ""
+
+        self.status = FileDiff.calculateStatus(
+            header: self.header,
+            fromFilePath: localFromFilePath,
+            toFilePath: localToFilePath,
+            chunks: self.chunks,
+            extendedHeaderLines: self.extendedHeaderLines,
+            fromFileToFileLines: self.fromFileToFileLines
+        )
     }
 
     // Init from untracked file
@@ -222,6 +264,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = ["new file mode 100644"]
         self.fromFileToFileLines = []
         self.chunks = []
+        self.status = .untracked
     }
 
     // Init for added files
@@ -231,6 +274,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = ["new file mode 100644"]
         self.fromFileToFileLines = ["--- /dev/null", "+++ b/\(path)"]
         self.chunks = []
+        self.status = .added
     }
 
     // Init for removed files
@@ -240,6 +284,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = ["deleted file mode 100644"]
         self.fromFileToFileLines = ["--- a/\(path)", "+++ /dev/null"]
         self.chunks = []
+        self.status = .removed
     }
 
     // Init for binary files
@@ -249,6 +294,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = ["Binary files differ"]
         self.fromFileToFileLines = []
         self.chunks = []
+        self.status = .modified
     }
 
     // Init from fileDiffs and mappingLines - useful for constructing diffs programmatically
@@ -258,6 +304,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = []
         self.fromFileToFileLines = []
         self.chunks = fileDiffs
+        self.status = .modified // Default status, might need adjustment
     }
 
     // Full initializer for creating diffs with complete flexibility
@@ -267,6 +314,7 @@ struct FileDiff: Identifiable, Hashable {
         self.extendedHeaderLines = extendedHeaderLines
         self.fromFileToFileLines = fromFileToFileLines
         self.chunks = chunks
+        self.status = .modified // Default status, might need adjustment
     }
 
     func updateAll(stage: Bool) -> Self {

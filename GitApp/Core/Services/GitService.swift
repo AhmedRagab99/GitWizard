@@ -176,6 +176,17 @@ actor GitService {
 
     // MARK: - Conflict Resolution
 
+    func resolveConflict(in directory: URL, filePath: String, useOurs: Bool) async throws {
+        if useOurs {
+            _ = try await Process.output(GitCheckoutOurs(directory: directory, filePath: filePath))
+        } else {
+            _ = try await Process.output(GitCheckoutTheirs(directory: directory, filePath: filePath))
+        }
+        // After checking out 'ours' or 'theirs', the conflict is resolved for that file.
+        // We must then add the file to the index to mark it as resolved.
+        try await stage(files: [filePath], in: directory)
+    }
+
     func resolveConflictUsingOurs(filePath: String, in directory: URL) async throws {
         try await Process.output(GitCheckoutOurs(directory: directory, filePath: filePath))
     }
@@ -266,8 +277,8 @@ actor GitService {
         return output
     }
 
-    func createBranch(_ name: String, in url: URL) async throws {
-        _ = try await Process.output(GitBranchCreate(directory: url, name: name))
+    func createBranch(_ name: String, in directory: URL) async throws {
+        try await Process.output(GitBranchCreate(directory: directory, name: name))
     }
 
     func checkoutBranch(_ name: String, in url: URL) async throws {
@@ -398,5 +409,15 @@ actor GitService {
         gitLog.noMerges = true
 
         return try await Process.output(gitLog)
+    }
+
+    func abortMerge(in directory: URL) async throws {
+        try await Process.output(GitMergeAbort(directory: directory))
+    }
+
+    func stage(files: [String], in directory: URL) async throws {
+        for file in files {
+            try await Process.output(GitAddPathspec(directory: directory, pathspec: file))
+        }
     }
 }

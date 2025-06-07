@@ -54,6 +54,7 @@ class GitViewModel {
      var stagedDiff: Diff?
      var unstagedDiff: Diff?
      var untrackedFiles: [String] = []
+     var conflictedFileDiffs: [FileDiff] = []
 
     var syncState = SyncState()
     var commits = [Commit]()
@@ -349,58 +350,47 @@ class GitViewModel {
     func loadChanges() async {
         guard let url = repositoryURL else { return }
         do {
-            // Save the currently selected file info before refreshing
-            let selectedFilePath = selectedFileDiff?.fromFilePath
-            let selectedToFilePath = selectedFileDiff?.toFilePath
-            let wasSelectedFileStaged = selectedFileDiff?.chunks.contains(where: { $0.stage == true }) ?? false
+            let selectedFileId = selectedFileDiff?.id
 
+            // 1. Get status, the source of truth for conflicted paths
             let status = try await gitService.getStatus(in: url)
+            let conflictedPaths = Set(status.conflicted)
 
-            // Get staged changes
-            let stagedDiff = try await gitService.getDiff(in: url, cached: true)
-            self.stagedDiff = stagedDiff
+            // 2. Get all staged and unstaged diffs
+            var stagedChanges = try await gitService.getDiff(in: url, cached: true)
+            var unstagedChanges = try await gitService.getDiff(in: url, cached: false)
 
-            // Get unstaged changes
-            let unstagedDiff = try await gitService.getDiff(in: url, cached: false)
-            self.unstagedDiff = unstagedDiff
+            // 3. Create a combined list of all files to check for conflicts
+            let allFiles = stagedChanges.fileDiffs + unstagedChanges.fileDiffs
 
-            // Update untracked files
-            self.untrackedFiles = status.untrackedFiles
-
-            // Update selected file diff if needed - with improved matching logic
-            if let selectedPath = selectedFilePath, !selectedPath.isEmpty {
-                // First try exact path match
-                if let stagedFile = stagedDiff.fileDiffs.first(where: { $0.fromFilePath == selectedPath }) {
-                    selectedFileDiff = stagedFile
-                } else if let unstagedFile = unstagedDiff.fileDiffs.first(where: { $0.fromFilePath == selectedPath }) {
-                    selectedFileDiff = unstagedFile
-                }
-                // Try matching with toFilePath if fromFilePath not found (for newly added files)
-                else if let toPath = selectedToFilePath, !toPath.isEmpty {
-                    if let stagedFile = stagedDiff.fileDiffs.first(where: { $0.toFilePath == toPath }) {
-                        selectedFileDiff = stagedFile
-                    } else if let unstagedFile = unstagedDiff.fileDiffs.first(where: { $0.toFilePath == toPath }) {
-                        selectedFileDiff = unstagedFile
-                    }
-                }
-                // If still not found, check if the file might have moved between staged/unstaged
-                else if wasSelectedFileStaged {
-                    // Was staged, check if it's now unstaged
-                    if let unstagedFile = unstagedDiff.fileDiffs.first(where: {
-                        $0.fromFilePath.isEmpty ? $0.toFilePath == selectedToFilePath : $0.fromFilePath == selectedPath
-                    }) {
-                        selectedFileDiff = unstagedFile
-                    }
-                } else {
-                    // Was unstaged, check if it's now staged
-                    if let stagedFile = stagedDiff.fileDiffs.first(where: {
-                        $0.fromFilePath.isEmpty ? $0.toFilePath == selectedToFilePath : $0.fromFilePath == selectedPath
-                    }) {
-                        selectedFileDiff = stagedFile
-                    }
-                }
+            // 4. Identify the FileDiff objects that are in a conflict state
+            let conflictedFiles = allFiles.filter { file in
+                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                return conflictedPaths.contains(path)
             }
 
+            // Set the status for conflicted files and assign to the dedicated property
+            self.conflictedFileDiffs = conflictedFiles.map { file in
+                var mutableFile = file
+                mutableFile.status = .conflict
+                return mutableFile
+            }
+
+            // 5. Filter the original staged and unstaged diffs to remove conflicted files
+            let conflictedFileIds = Set(self.conflictedFileDiffs.map { $0.id })
+
+            stagedChanges.fileDiffs.removeAll { conflictedFileIds.contains($0.id) }
+            unstagedChanges.fileDiffs.removeAll { conflictedFileIds.contains($0.id) }
+
+            // 6. Update the view model's properties
+            self.stagedDiff = stagedChanges
+            self.unstagedDiff = unstagedChanges
+            self.untrackedFiles = status.untrackedFiles
+
+            // Restore selection if a file was selected
+            if let selectedId = selectedFileId {
+                selectedFileDiff = (self.conflictedFileDiffs + self.stagedDiff!.fileDiffs + self.unstagedDiff!.fileDiffs).first { $0.id == selectedId }
+            }
 
         } catch {
             errorMessage = "Error loading changes: \(error)"
@@ -1190,8 +1180,7 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.resolveConflictUsingOurs(filePath: filePath, in: url)
-            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            try await gitService.resolveConflict(in: url, filePath: filePath, useOurs: true)
             await loadChanges()
         } catch {
             errorMessage = "Error resolving conflict: \(error.localizedDescription)"
@@ -1206,8 +1195,7 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.resolveConflictUsingTheirs(filePath: filePath, in: url)
-            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            try await gitService.resolveConflict(in: url, filePath: filePath, useOurs: false)
             await loadChanges()
         } catch {
             errorMessage = "Error resolving conflict: \(error.localizedDescription)"
@@ -1222,7 +1210,7 @@ class GitViewModel {
         defer { isLoading = false }
 
         do {
-            try await gitService.markConflictResolved(filePath: filePath, in: url)
+            try await gitService.stage(files: [filePath], in: url)
             await loadChanges()
         } catch {
             errorMessage = "Error marking conflict resolved: \(error.localizedDescription)"
@@ -1287,6 +1275,40 @@ class GitViewModel {
                 isLoading = false
                 errorMessage = "Error resetting chunk: \(error.localizedDescription)"
             }
+        }
+    }
+
+    func abortMerge() async {
+        guard let url = repositoryURL else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await gitService.abortMerge(in: url)
+            await loadChanges()
+        } catch {
+            errorMessage = "Failed to abort merge: \(error.localizedDescription)"
+        }
+    }
+
+    // --- Branch Operations ---
+    func createBranch(from branchName: String, at startPoint: String? = nil, track: Bool, remoteName: String? = nil, remoteBranch: String? = nil) async {
+        guard let url = repositoryURL else {
+            errorMessage = "No repository selected"
+            return
+        }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            // Create the branch
+            try await gitService.createBranch(branchName, in: url)
+            // Optionally check out the new branch
+            if track {
+                try await gitService.switchBranch(to: branchName, in: url)
+            }
+            // Refresh branches and current branch state
+            await loadRepositoryData(from: url)
+        } catch {
+            errorMessage = "Error creating branch: \(error.localizedDescription)"
         }
     }
 }

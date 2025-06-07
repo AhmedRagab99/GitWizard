@@ -18,6 +18,8 @@ struct ModernFileListView: View {
     var onReset: ((FileDiff) -> Void)? = nil
     var onIgnore: ((FileDiff) -> Void)? = nil
     var onTrash: ((FileDiff) -> Void)? = nil
+    var onResolveWithMine: ((FileDiff) -> Void)? = nil
+    var onResolveWithTheirs: ((FileDiff) -> Void)? = nil
     var isStaged: Bool = false
     var showUntrackedFiles: Bool = true
 
@@ -59,6 +61,8 @@ struct ModernFileListView: View {
                                     onReset: onReset != nil ? { onReset?(file) } : nil,
                                     onIgnore: onIgnore != nil ? { onIgnore?(file) } : nil,
                                     onTrash: onTrash != nil ? { onTrash?(file) } : nil,
+                                    onResolveWithMine: onResolveWithMine != nil ? { onResolveWithMine?(file) } : nil,
+                                    onResolveWithTheirs: onResolveWithTheirs != nil ? { onResolveWithTheirs?(file) } : nil,
                                     isStaged: isStaged
                                 )
                                 .onTapGesture { selectedFile = file }

@@ -87,7 +87,6 @@ struct HistoryView: View {
             }
         }
         .loading(viewModel.isLoading)
-        .errorAlert(viewModel.errorMessage)
         // Cleanup resources when view disappears
         .onDisappear {
             selectedCommit = nil

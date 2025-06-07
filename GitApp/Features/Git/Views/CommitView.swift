@@ -15,6 +15,7 @@ struct CommitView: View {
     // Track visible files to optimize memory management
     @State private var visibleStagedFiles = Set<String>()
     @State private var visibleUnstagedFiles = Set<String>()
+    @State private var visibleConflictedFiles = Set<String>()
 
     // Lazily load diff content
     @State private var shouldLoadDiff = false
@@ -26,8 +27,16 @@ struct CommitView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if hasConflicts {
-                ConflictBanner(conflictedFiles: conflictedFiles)
+            if !viewModel.conflictedFileDiffs.isEmpty {
+                ConflictBanner(
+                    conflictedFilesCount: viewModel.conflictedFileDiffs.count,
+                    onAbortMerge: {
+                        Task {
+                            await viewModel.abortMerge()
+                        }
+                    }
+                )
+                .padding()
             }
 
             mainContent
@@ -35,7 +44,6 @@ struct CommitView: View {
         .onAppear {
             Task {
                 await viewModel.loadChanges()
-                await checkForConflicts()
                 // Delay loading diff content until after initial UI rendering
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     shouldLoadDiff = true
@@ -95,145 +103,86 @@ struct CommitView: View {
                 // Left pane - Staged, Modified, and Untracked changes
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
+                        // Conflicts Section
+                        if !viewModel.conflictedFileDiffs.isEmpty {
+                            ChangesSection(
+                                title: "Conflicts",
+                                icon: "exclamationmark.triangle.fill",
+                                iconColor: .red,
+                                files: viewModel.conflictedFileDiffs,
+                                selectedFile: $selectedFileItem,
+                                visibleFiles: $visibleConflictedFiles,
+                                isExpanded: .constant(true), // Always expanded
+                                actionIcon: "", // No primary action
+                                actionColor: .clear,
+                                action: { _ in },
+                                onResolveWithMine: { file in
+                                    let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                    Task { await viewModel.resolveConflictUsingOurs(filePath: path) }
+                                },
+                                onResolveWithTheirs: { file in
+                                    let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                    Task { await viewModel.resolveConflictUsingTheirs(filePath: path) }
+                                },
+                                onMarkAsResolved: { file in
+                                    let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                    Task { await viewModel.markConflictResolved(filePath: path) }
+                                }
+                            )
+                        }
+
                         // Staged changes section
-                        DisclosureGroup(
+                        ChangesSection(
+                            title: "Staged Changes",
+                            icon: "tray.full.fill",
+                            iconColor: .green,
+                            files: viewModel.stagedDiff?.fileDiffs ?? [],
+                            selectedFile: $selectedFileItem,
+                            visibleFiles: $visibleStagedFiles,
                             isExpanded: $isStagedExpanded,
-                            content: {
-                                if let stagedDiff = viewModel.stagedDiff, !stagedDiff.fileDiffs.isEmpty {
-                                    OptimizedFileListView(
-                                        files: stagedDiff.fileDiffs,
-                                        selectedFile: $selectedFileItem,
-                                        visibleFiles: $visibleStagedFiles,
-                                        actionIcon: "minus.circle.fill",
-                                        actionColor: .orange,
-                                        action: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
-                                        onUnstage: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
-                                        onReset: { file in
-                                            fileToReset = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                            showResetConfirm = true
-                                        },
-                                        onIgnore: { file in
-                                            let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                            Task { await viewModel.addToGitignore(path: path) }
-                                        },
-                                        onTrash: { file in
-                                            let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                            Task { await viewModel.moveToTrash(path: path) }
-                                        },
-                                        isStaged: true
-                                    )
-                                } else {
-                                    EmptyStateView(message: "No staged changes")
-                                        .padding()
-                                }
+                            actionIcon: "minus.circle.fill",
+                            actionColor: .orange,
+                            action: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
+                            onUnstage: { file in Task { await viewModel.unstageFile(path: file.fromFilePath) } },
+                            onReset: { file in
+                                fileToReset = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                showResetConfirm = true
                             },
-                            label: {
-                                HStack {
-                                    Image(systemName: "tray.full.fill")
-                                        .foregroundColor(.green)
-                                    Text("Staged Changes")
-                                        .fontWeight(.semibold)
-                                    Text("(\(viewModel.stagedDiff?.fileDiffs.count ?? 0))")
-                                        .font(.footnote)
-                                        .foregroundColor(.secondary)
-                                    Spacer()
-                                    if viewModel.stagedDiff?.fileDiffs.isEmpty == false {
-                                        Button("Unstage All") {
-                                            Task { await viewModel.unstageAllChanges() }
-                                        }
-                                        .buttonStyle(.borderless)
-                                        .controlSize(.small)
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
+                            onHeaderAction: { Task { await viewModel.unstageAllChanges() } },
+                            headerActionTitle: "Unstage All",
+                            isStaged: true
                         )
 
                         // Modified (Unstaged) changes section
-                        DisclosureGroup(
+                        ChangesSection(
+                            title: "Modified Files",
+                            icon: "pencil.circle.fill",
+                            iconColor: .orange,
+                            files: viewModel.unstagedDiff?.fileDiffs ?? [],
+                            selectedFile: $selectedFileItem,
+                            visibleFiles: $visibleUnstagedFiles,
                             isExpanded: $isModifiedExpanded,
-                            content: {
-                                if let unstagedDiff = viewModel.unstagedDiff, !unstagedDiff.fileDiffs.isEmpty {
-                                    OptimizedFileListView(
-                                        files: unstagedDiff.fileDiffs,
-                                        selectedFile: $selectedFileItem,
-                                        visibleFiles: $visibleUnstagedFiles,
-                                        actionIcon: "plus.circle.fill",
-                                        actionColor: .green,
-                                        action: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
-                                        onStage: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
-                                        onReset: { file in
-                                            fileToReset = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                            showResetConfirm = true
-                                        },
-                                        onIgnore: { file in
-                                            let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                            Task { await viewModel.addToGitignore(path: path) }
-                                        },
-                                        onTrash: { file in
-                                            let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                            Task { await viewModel.moveToTrash(path: path) }
-                                        }
-                                    )
-                                } else {
-                                    EmptyStateView(message: "No modified files")
-                                        .padding()
-                                }
+                            actionIcon: "plus.circle.fill",
+                            actionColor: .green,
+                            action: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
+                            onStage: { file in Task { await viewModel.stageFile(path: file.fromFilePath) } },
+                            onReset: { file in
+                                fileToReset = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                showResetConfirm = true
                             },
-                            label: {
-                                HStack {
-                                    Image(systemName: "pencil.circle.fill")
-                                        .foregroundColor(.orange)
-                                    Text("Modified Files")
-                                        .fontWeight(.semibold)
-                                    Text("(\(viewModel.unstagedDiff?.fileDiffs.count ?? 0))")
-                                        .font(.footnote)
-                                        .foregroundColor(.secondary)
-                                    Spacer()
-                                    if ((viewModel.unstagedDiff?.fileDiffs.isEmpty == false) || !viewModel.untrackedFiles.isEmpty) {
-                                        Button("Stage All") {
-                                            Task { await viewModel.stageAllChanges() }
-                                        }
-                                        .buttonStyle(.borderless)
-                                        .controlSize(.small)
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
+                            onHeaderAction: { Task { await viewModel.stageAllChanges() } },
+                            headerActionTitle: "Stage All",
+                            isStaged: false
                         )
 
                         // Untracked files section
                         if !viewModel.untrackedFiles.isEmpty {
-                            DisclosureGroup(
+                            UntrackedFilesSection(
+                                files: viewModel.untrackedFiles,
                                 isExpanded: $isUntrackedExpanded,
-                                content: {
-                                    ScrollView {
-                                        LazyVStack(spacing: 0) {
-                                            ForEach(viewModel.untrackedFiles, id: \.self) { path in
-                                                UntrackedFileRow(
-                                                    path: path,
-                                                    action: { Task { await viewModel.stageFile(path: path) } },
-                                                    onIgnore: { Task { await viewModel.addToGitignore(path: path) } },
-                                                    onTrash: { Task { await viewModel.moveToTrash(path: path) } }
-                                                )
-                                            }
-                                        }
-                                    }
-                                    .frame(maxHeight: 200)
-                                },
-                                label: {
-                                    HStack {
-                                        Image(systemName: FileStatus.untracked.icon)
-                                            .foregroundColor(FileStatus.untracked.color)
-                                        Text("Untracked Files")
-                                            .fontWeight(.semibold)
-                                        Text("(\(viewModel.untrackedFiles.count))")
-                                            .font(.footnote)
-                                            .foregroundColor(.secondary)
-                                        Spacer()
-                                    }
-                                    .padding(.vertical, 4)
-                                }
+                                onStage: { path in Task { await viewModel.stageFile(path: path) } },
+                                onIgnore: { path in Task { await viewModel.addToGitignore(path: path) } },
+                                onTrash: { path in Task { await viewModel.moveToTrash(path: path) } }
                             )
                         }
                     }
@@ -342,39 +291,6 @@ struct CommitView: View {
         }
     }
 
-    private func showConflictMenu(for path: String) {
-        let menu = NSMenu(title: "Resolve Conflicts")
-
-        let ourChangesItem = NSMenuItem(title: "Keep Our Changes", action: #selector(NSApp.sendAction(_:to:from:)), keyEquivalent: "")
-        ourChangesItem.target = nil
-        ourChangesItem.action = #selector(NSApplication.shared.sendAction(_:to:from:))
-        ourChangesItem.representedObject = {
-            Task { await viewModel.resolveConflictUsingOurs(filePath: path) }
-        }
-
-        let theirChangesItem = NSMenuItem(title: "Keep Their Changes", action: #selector(NSApp.sendAction(_:to:from:)), keyEquivalent: "")
-        theirChangesItem.target = nil
-        theirChangesItem.action = #selector(NSApplication.shared.sendAction(_:to:from:))
-        theirChangesItem.representedObject = {
-            Task { await viewModel.resolveConflictUsingTheirs(filePath: path) }
-        }
-
-        let markResolvedItem = NSMenuItem(title: "Mark as Resolved", action: #selector(NSApp.sendAction(_:to:from:)), keyEquivalent: "")
-        markResolvedItem.target = nil
-        markResolvedItem.action = #selector(NSApplication.shared.sendAction(_:to:from:))
-        markResolvedItem.representedObject = {
-            Task { await viewModel.markConflictResolved(filePath: path) }
-        }
-
-        menu.addItem(ourChangesItem)
-        menu.addItem(theirChangesItem)
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(markResolvedItem)
-
-        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-    }
-
-    // Summary row similar to SourceTree
     private var summaryRow: some View {
         HStack(spacing: 16) {
             Label("\(viewModel.stagedDiff?.fileDiffs.count ?? 0) staged", systemImage: "checkmark.seal.fill")
@@ -398,35 +314,118 @@ struct CommitView: View {
         }
     }
 
-    // Helper to update selectedFileItem after git operations
     private func updateSelectedFile() {
         if let selectedFileId = selectedFileItem?.id {
-            // Check if selected file is still available in staged or unstaged files
-            let stagedFiles = viewModel.stagedDiff?.fileDiffs ?? []
-            let unstagedFiles = viewModel.unstagedDiff?.fileDiffs ?? []
-
-            // Try to find file by ID first
-            if let stagedFile = stagedFiles.first(where: { $0.id == selectedFileId }) {
-                selectedFileItem = stagedFile
-            } else if let unstagedFile = unstagedFiles.first(where: { $0.id == selectedFileId }) {
-                selectedFileItem = unstagedFile
+            let allFiles = (viewModel.stagedDiff?.fileDiffs ?? []) + (viewModel.unstagedDiff?.fileDiffs ?? [])
+            if !allFiles.contains(where: { $0.id == selectedFileId }) {
+                selectedFileItem = nil
             }
-            // If not found by ID, try to find by path
-            else if let selectedPath = selectedFileItem?.fromFilePath {
-                if let stagedFile = stagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
-                    selectedFileItem = stagedFile
-                } else if let unstagedFile = unstagedFiles.first(where: { $0.fromFilePath == selectedPath }) {
-                    selectedFileItem = unstagedFile
+        }
+    }
+}
+
+// MARK: - Reusable Changes Section
+struct ChangesSection: View {
+    let title: String
+    let icon: String
+    let iconColor: Color
+    let files: [FileDiff]
+    @Binding var selectedFile: FileDiff?
+    @Binding var visibleFiles: Set<String>
+    @Binding var isExpanded: Bool
+    let actionIcon: String
+    let actionColor: Color
+    let action: (FileDiff) -> Void
+    var onStage: ((FileDiff) -> Void)? = nil
+    var onUnstage: ((FileDiff) -> Void)? = nil
+    var onReset: ((FileDiff) -> Void)? = nil
+    var onHeaderAction: (() -> Void)? = nil
+    var headerActionTitle: String? = nil
+    var isStaged: Bool = false
+    var onResolveWithMine: ((FileDiff) -> Void)? = nil
+    var onResolveWithTheirs: ((FileDiff) -> Void)? = nil
+    var onMarkAsResolved: ((FileDiff) -> Void)? = nil
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            if !files.isEmpty {
+                OptimizedFileListView(
+                    files: files,
+                    selectedFile: $selectedFile,
+                    visibleFiles: $visibleFiles,
+                    actionIcon: actionIcon,
+                    actionColor: actionColor,
+                    action: action,
+                    onStage: onStage,
+                    onUnstage: onUnstage,
+                    onReset: onReset,
+                    onResolveWithMine: onResolveWithMine,
+                    onResolveWithTheirs: onResolveWithTheirs,
+                    onMarkAsResolved: onMarkAsResolved,
+                    isStaged: isStaged
+                )
+            } else {
+                EmptyStateView(message: "No \(title.lowercased())")
+                    .padding()
+            }
+        } label: {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(iconColor)
+                Text(title)
+                    .fontWeight(.semibold)
+                Text("(\(files.count))")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                Spacer()
+                if let onHeaderAction = onHeaderAction, let headerActionTitle = headerActionTitle, !files.isEmpty {
+                    Button(headerActionTitle) {
+                        onHeaderAction()
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
                 }
-                // Use toFilePath as fallback for added files
-                else if let toPath = selectedFileItem?.toFilePath, !toPath.isEmpty {
-                    if let stagedFile = stagedFiles.first(where: { $0.toFilePath == toPath }) {
-                        selectedFileItem = stagedFile
-                    } else if let unstagedFile = unstagedFiles.first(where: { $0.toFilePath == toPath }) {
-                        selectedFileItem = unstagedFile
+            }
+            .padding(.vertical, 4)
+        }
+    }
+}
+
+// MARK: - Reusable Untracked Files Section
+struct UntrackedFilesSection: View {
+    let files: [String]
+    @Binding var isExpanded: Bool
+    let onStage: (String) -> Void
+    let onIgnore: (String) -> Void
+    let onTrash: (String) -> Void
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(files, id: \.self) { path in
+                        UntrackedFileRow(
+                            path: path,
+                            action: { onStage(path) },
+                            onIgnore: { onIgnore(path) },
+                            onTrash: { onTrash(path) }
+                        )
                     }
                 }
             }
+            .frame(maxHeight: 200)
+        } label: {
+            HStack {
+                Image(systemName: FileStatus.untracked.icon)
+                    .foregroundColor(FileStatus.untracked.color)
+                Text("Untracked Files")
+                    .fontWeight(.semibold)
+                Text("(\(files.count))")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.vertical, 4)
         }
     }
 }
@@ -444,6 +443,9 @@ struct OptimizedFileListView: View {
     var onReset: ((FileDiff) -> Void)? = nil
     var onIgnore: ((FileDiff) -> Void)? = nil
     var onTrash: ((FileDiff) -> Void)? = nil
+    var onResolveWithMine: ((FileDiff) -> Void)? = nil
+    var onResolveWithTheirs: ((FileDiff) -> Void)? = nil
+    var onMarkAsResolved: ((FileDiff) -> Void)? = nil
     var isStaged: Bool = false
 
     private var groupedFiles: [(status: FileStatus, files: [FileDiff])] {
@@ -468,59 +470,48 @@ struct OptimizedFileListView: View {
                     .fill(Color(.windowBackgroundColor).opacity(0.7))
             )
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(groupedFiles, id: \.status) { group in
-                        ForEach(group.files, id: \.fromFilePath) { file in
-                            ModernFileRow(
-                                fileDiff: file,
-                                isSelected: selectedFile?.fromFilePath == file.fromFilePath,
-                                actionIcon: actionIcon,
-                                actionColor: actionColor,
-                                action: { action(file) },
-                                onStage: onStage != nil ? { onStage?(file) } : nil,
-                                onUnstage: onUnstage != nil ? { onUnstage?(file) } : nil,
-                                onReset: onReset != nil ? { onReset?(file) } : nil,
-                                onIgnore: onIgnore != nil ? { onIgnore?(file) } : nil,
-                                onTrash: onTrash != nil ? { onTrash?(file) } : nil,
-                                isStaged: isStaged
-                            )
-                            .onTapGesture { selectedFile = file }
-                            .onAppear {
-                                // Track visible files
-                                visibleFiles.insert(file.fromFilePath)
-                            }
-                            .onDisappear {
-                                // Remove from tracking when not visible
-                                visibleFiles.remove(file.fromFilePath)
-                            }
-                        }
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(groupedFiles, id: \.status) { group in
+                    ForEach(group.files, id: \.fromFilePath) { file in
+                        ModernFileRow(
+                            fileDiff: file,
+                            isSelected: selectedFile?.id == file.id,
+                            actionIcon: actionIcon,
+                            actionColor: actionColor,
+                            action: { action(file) },
+                            onStage: onStage != nil ? { onStage?(file) } : nil,
+                            onUnstage: onUnstage != nil ? { onUnstage?(file) } : nil,
+                            onReset: onReset != nil ? { onReset?(file) } : nil,
+                            onIgnore: onIgnore != nil ? { onIgnore?(file) } : nil,
+                            onTrash: onTrash != nil ? { onTrash?(file) } : nil,
+                            onResolveWithMine: onResolveWithMine != nil ? { onResolveWithMine?(file) } : nil,
+                            onResolveWithTheirs: onResolveWithTheirs != nil ? { onResolveWithTheirs?(file) } : nil,
+                            onMarkAsResolved: onMarkAsResolved != nil ? { onMarkAsResolved?(file) } : nil,
+                            isStaged: isStaged
+                        )
+                        .onTapGesture { selectedFile = file }
+                        .onAppear { visibleFiles.insert(file.id) }
+                        .onDisappear { visibleFiles.remove(file.id) }
                     }
                 }
-                .padding(.vertical, 2)
             }
-            .frame(maxHeight: 300) // Limit height for better performance
         }
     }
 }
 
-// MARK: - Empty State
+// MARK: - Empty State View
 struct EmptyStateView: View {
     let message: String
     var body: some View {
-        Text(message)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(12)
-    }
-}
-
-// Utility for line stats
-extension FileDiff {
-    var lineStats: (added: Int, removed: Int) {
-        let added = chunks.flatMap { $0.lines }.filter { $0.kind == .added }.count
-        let removed = chunks.flatMap { $0.lines }.filter { $0.kind == .removed }.count
-        return (added, removed)
+        VStack {
+            Image(systemName: "tray.fill")
+                .font(.largeTitle)
+                .foregroundColor(.secondary.opacity(0.5))
+            Text(message)
+                .font(.headline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 100)
     }
 }
 

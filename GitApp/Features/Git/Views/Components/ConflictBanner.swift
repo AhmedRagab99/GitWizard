@@ -1,52 +1,45 @@
 import SwiftUI
 
 struct ConflictBanner: View {
-    let conflictedFiles: [String]
+    let conflictedFilesCount: Int
+    let onAbortMerge: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.red)
-                Text("Merge conflicts detected")
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title)
+                .foregroundColor(.orange)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Merge Conflicts Detected")
                     .font(.headline)
-                    .foregroundColor(.red)
-
-                Spacer()
-
-                Text("Resolve conflicts to continue")
+                    .fontWeight(.bold)
+                Text("\(conflictedFilesCount) file\(conflictedFilesCount > 1 ? "s" : "") with conflicts. Please resolve them to continue.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
-            Text(conflictedFilesDisplayText)
-                .font(.caption)
-                .foregroundColor(.secondary)
+            Spacer()
+
+            Button(role: .destructive) {
+                onAbortMerge()
+            } label: {
+                Label("Abort Merge", systemImage: "xmark.octagon.fill")
+            }
+            .controlSize(.large)
+
         }
         .padding()
-        .background(Color(.secondaryLabelColor).opacity(0.9))
-        .cornerRadius(8)
+        .background(Material.ultraThin)
+        .cornerRadius(12)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.red, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.5), lineWidth: 1)
         )
-        .padding(.horizontal)
-        .padding(.top)
-    }
-
-    // Break down complex expression into a computed property
-    private var conflictedFilesDisplayText: String {
-        let fileNames = conflictedFiles.map { path in
-            path.components(separatedBy: "/").last ?? path
-        }
-        return "Conflicted files: \(fileNames.joined(separator: ", "))"
     }
 }
 
 #Preview {
-    ConflictBanner(conflictedFiles: [
-        "path/to/file1.swift",
-        "another/path/file2.swift"
-    ])
-    .padding()
+    ConflictBanner(conflictedFilesCount: 3, onAbortMerge: {})
+        .padding()
 }
