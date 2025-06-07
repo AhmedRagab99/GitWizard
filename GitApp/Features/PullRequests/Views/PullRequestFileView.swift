@@ -2,6 +2,8 @@ import SwiftUI
 
 struct PullRequestFileView: View {
     let file: PullRequestFile
+    let viewModel: PullRequestViewModel
+    let prCommitId: String
     @State private var showDiff: Bool = false
     @State private var parsedChunks: [Chunk] = []
 
@@ -74,7 +76,7 @@ struct PullRequestFileView: View {
     @ViewBuilder
     private var diffContentView: some View {
         if parsedChunks.isEmpty && file.patch != nil && !file.patch!.isEmpty {
-            ProgressView("Loading diff...") // Keep progress view for parsing
+            ProgressView("Loading diff...")
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding()
         } else if parsedChunks.isEmpty && (file.patch == nil || file.patch!.isEmpty) {
@@ -84,31 +86,7 @@ struct PullRequestFileView: View {
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .center)
         } else if !parsedChunks.isEmpty {
-            // Using a Group to avoid re-applying modifiers if not needed
-            // The existing ScrollView and LazyVStack for diff lines seems reasonable.
-            // Enhancements here would primarily be within DiffLineView itself or its data.
-            ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(parsedChunks) { chunk in
-                        // Optional: Add chunk header display if desired (e.g., `Text(chunk.header)`)
-                        // styled appropriately, e.g., .font(.caption.monospaced()).foregroundColor(.gray)
-                        ForEach(chunk.lines) { line in
-                            DiffLineView(line: line) // Relies on DiffLineView for line styling
-                        }
-                        if chunk.id != parsedChunks.last?.id {
-                             Divider().padding(.vertical, 4) // Slightly more padding for chunk separator
-                        }
-                    }
-                }
-                .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)) // Adjusted padding
-                .background(Color(nsColor: .textBackgroundColor)) // System background for code
-                .cornerRadius(8) // Slightly larger radius
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.gray.opacity(0.4), lineWidth: 1) // Slightly more visible border
-                )
-            }
-            .frame(maxHeight: 400) // Increased max height slightly
+            DiffView(chunks: parsedChunks, file: file, prCommitId: prCommitId, viewModel: viewModel)
         }
     }
 
@@ -170,6 +148,37 @@ struct PullRequestFileView: View {
                 .foregroundColor(.gray)
                 .help("Status: \(file.status.capitalized)")
         }
+    }
+}
+
+// New, separated view for the complex diff content
+struct DiffView: View {
+    let chunks: [Chunk]
+    let file: PullRequestFile
+    let prCommitId: String
+    var viewModel: PullRequestViewModel
+
+    var body: some View {
+        ScrollView(.vertical) {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(chunks) { chunk in
+                    ForEach(chunk.lines) { line in
+                        DiffLineView(line: line, file: file, prCommitId: prCommitId,viewModel: viewModel)
+                    }
+                    if chunk.id != chunks.last?.id {
+                         Divider().padding(.vertical, 4)
+                    }
+                }
+            }
+            .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+            .background(Color(nsColor: .textBackgroundColor))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.4), lineWidth: 1)
+            )
+        }
+        .frame(maxHeight: 400)
     }
 }
 

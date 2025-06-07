@@ -4,7 +4,9 @@ struct PullRequestDetailView: View {
     let pullRequest: PullRequest
     @Bindable var viewModel: PullRequestViewModel
 
-    @State private var selectedTab: Int = 0 // 0: Description, 1: Comments, 2: Code Comments, 3: Files
+    @State private var selectedTab: Int = 0 // 0: Description, 1: Comments, 2: Code Comments, 3: Files, 4: Reviews
+    @State private var isShowingMergeSheet = false
+    @State private var isShowingRequestChangesSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -17,6 +19,7 @@ struct PullRequestDetailView: View {
                 Label("Comments (\(viewModel.comments.count))", systemImage: "bubble.left.and.bubble.right").tag(1)
                 Label("Code Comments (\(viewModel.reviewComments.count))", systemImage: "text.bubble").tag(2)
                 Label("Files (\(viewModel.files.count))", systemImage: "doc.on.doc").tag(3)
+                Label("Reviews (\(viewModel.reviews.count))", systemImage: "person.crop.circle.badge.checkmark").tag(4)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
@@ -41,11 +44,16 @@ struct PullRequestDetailView: View {
                 case 3:
                     filesView
                         .frame(maxWidth: .infinity, maxHeight: .infinity) // Ensure it expands
+                case 4:
+                    reviewsView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 default:
                     EmptyView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity) // Make ZStack expand
+
+            Divider()
 
             actionButtonsView
                 .padding()
@@ -61,6 +69,12 @@ struct PullRequestDetailView: View {
                  // they get loaded. This is a safety net.
                 await viewModel.selectPullRequest(pullRequest) // Pass the local pullRequest
             }
+        }
+        .sheet(isPresented: $isShowingMergeSheet) {
+            MergePullRequestView(viewModel: viewModel, isPresented: $isShowingMergeSheet)
+        }
+        .sheet(isPresented: $isShowingRequestChangesSheet) {
+            RequestChangesView(viewModel: viewModel, isPresented: $isShowingRequestChangesSheet)
         }
     }
 
@@ -120,150 +134,177 @@ struct PullRequestDetailView: View {
 
     @ViewBuilder
     private var descriptionView: some View {
-        Group {
-            if viewModel.isLoadingInitialDetails && (pullRequest.body == nil || pullRequest.body!.isEmpty) {
-                ProgressView("Loading Description...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let body = pullRequest.body, !body.isEmpty {
-                ScrollView {
-                    Text(body)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                }
-            } else {
-                CenteredContentMessage(systemImage: "text.alignleft", message: "No description provided.")
+        if viewModel.isLoadingInitialDetails && (pullRequest.body == nil || pullRequest.body!.isEmpty) {
+            ProgressView("Loading Description...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let body = pullRequest.body, !body.isEmpty {
+            ScrollView {
+                Text(body)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
             }
+        } else {
+            CenteredContentMessage(systemImage: "text.alignleft", message: "No description provided.")
         }
     }
 
     @ViewBuilder
     private var commentsView: some View {
-        Group {
-            if viewModel.isLoadingInitialDetails && viewModel.comments.isEmpty && viewModel.commentsError == nil {
-                ProgressView("Loading Comments...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage = viewModel.commentsError, viewModel.comments.isEmpty {
-                 CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Comments", message: errorMessage)
-            } else if viewModel.comments.isEmpty && !viewModel.isLoadingMoreComments && !viewModel.isLoadingInitialDetails {
-                CenteredContentMessage(systemImage: "bubble.middle.bottom.fill", message: "No discussion comments yet.")
-            } else {
-                List {
-                    ForEach(viewModel.comments) { comment in
-                        PullRequestCommentView(comment: comment)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                            .onAppear {
-                                if comment.id == viewModel.comments.last?.id && viewModel.canLoadMoreComments && !viewModel.isLoadingMoreComments {
-                                    Task {
-                                        await viewModel.loadComments(refresh: false)
-                                    }
+        if viewModel.isLoadingInitialDetails && viewModel.comments.isEmpty && viewModel.commentsError == nil {
+            ProgressView("Loading Comments...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let errorMessage = viewModel.commentsError, viewModel.comments.isEmpty {
+             CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Comments", message: errorMessage)
+        } else if viewModel.comments.isEmpty && !viewModel.isLoadingMoreComments && !viewModel.isLoadingInitialDetails {
+            CenteredContentMessage(systemImage: "bubble.middle.bottom.fill", message: "No discussion comments yet.")
+        } else {
+            List {
+                ForEach(viewModel.comments) { comment in
+                    PullRequestCommentView(comment: comment)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                        .onAppear {
+                            if comment.id == viewModel.comments.last?.id && viewModel.canLoadMoreComments && !viewModel.isLoadingMoreComments {
+                                Task {
+                                    await viewModel.loadComments(refresh: false)
                                 }
                             }
-                    }
-                    if viewModel.isLoadingMoreComments {
-                        ProgressView("Loading more comments...")
-                            .frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
-                    }
-                    if !viewModel.canLoadMoreComments && !viewModel.comments.isEmpty && viewModel.commentsError == nil {
-                        Text("No more comments.").font(.caption).foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
-                    }
+                        }
                 }
-                .listStyle(.plain)
-                 // Add pull to refresh if desired for this specific list
+                if viewModel.isLoadingMoreComments {
+                    ProgressView("Loading more comments...")
+                        .frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
+                }
+                if !viewModel.canLoadMoreComments && !viewModel.comments.isEmpty && viewModel.commentsError == nil {
+                    Text("No more comments.").font(.caption).foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
+                }
             }
+            .listStyle(.plain)
+             // Add pull to refresh if desired for this specific list
         }
     }
 
     @ViewBuilder
     private var reviewCommentsView: some View {
-        Group {
-            if viewModel.isLoadingInitialDetails && viewModel.reviewComments.isEmpty && viewModel.reviewCommentsError == nil {
-                ProgressView("Loading Code Comments...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage = viewModel.reviewCommentsError, viewModel.reviewComments.isEmpty {
-                 CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Code Comments", message: errorMessage)
-            } else if viewModel.reviewComments.isEmpty && !viewModel.isLoadingMoreReviewComments && !viewModel.isLoadingInitialDetails {
-                CenteredContentMessage(systemImage: "text.bubble.fill", message: "No code comments on this pull request.")
-            } else {
-                List {
-                    ForEach(viewModel.reviewComments) { comment in
-                        PullRequestCommentView(comment: comment)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                            .onAppear {
-                                if comment.id == viewModel.reviewComments.last?.id && viewModel.canLoadMoreReviewComments && !viewModel.isLoadingMoreReviewComments {
-                                    Task {
-                                        await viewModel.loadReviewComments(refresh: false)
-                                    }
+        if viewModel.isLoadingInitialDetails && viewModel.reviewComments.isEmpty && viewModel.reviewCommentsError == nil {
+            ProgressView("Loading Code Comments...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let errorMessage = viewModel.reviewCommentsError, viewModel.reviewComments.isEmpty {
+             CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Code Comments", message: errorMessage)
+        } else if viewModel.reviewComments.isEmpty && !viewModel.isLoadingMoreReviewComments && !viewModel.isLoadingInitialDetails {
+            CenteredContentMessage(systemImage: "text.bubble.fill", message: "No code comments on this pull request.")
+        } else {
+            List {
+                ForEach(viewModel.reviewComments) { comment in
+                    PullRequestCommentView(comment: comment)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                        .onAppear {
+                            if comment.id == viewModel.reviewComments.last?.id && viewModel.canLoadMoreReviewComments && !viewModel.isLoadingMoreReviewComments {
+                                Task {
+                                    await viewModel.loadReviewComments(refresh: false)
                                 }
                             }
-                    }
-                    if viewModel.isLoadingMoreReviewComments {
-                        ProgressView("Loading more code comments...")
-                            .frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
-                    }
-                     if !viewModel.canLoadMoreReviewComments && !viewModel.reviewComments.isEmpty && viewModel.reviewCommentsError == nil {
-                        Text("No more code comments.").font(.caption).foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
-                    }
+                        }
                 }
-                .listStyle(.plain)
+                if viewModel.isLoadingMoreReviewComments {
+                    ProgressView("Loading more code comments...")
+                        .frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
+                }
+                 if !viewModel.canLoadMoreReviewComments && !viewModel.reviewComments.isEmpty && viewModel.reviewCommentsError == nil {
+                    Text("No more code comments.").font(.caption).foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
+                }
             }
+            .listStyle(.plain)
         }
     }
 
     @ViewBuilder
     private var filesView: some View {
-        Group {
-            if viewModel.isLoadingInitialDetails && viewModel.files.isEmpty && viewModel.filesError == nil {
-                ProgressView("Loading Files...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage = viewModel.filesError, viewModel.files.isEmpty {
-                CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Files", message: errorMessage)
-            } else if viewModel.files.isEmpty && !viewModel.isLoadingMoreFiles && !viewModel.isLoadingInitialDetails {
-                CenteredContentMessage(systemImage: "doc.on.doc.fill", message: "No files changed in this pull request.")
-            } else {
-                List {
-                    ForEach(viewModel.files) { file in
-                        PullRequestFileView(file: file)
-                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                            .onAppear {
-                                if file.id == viewModel.files.last?.id && viewModel.canLoadMoreFiles && !viewModel.isLoadingMoreFiles {
-                                    Task {
-                                        await viewModel.loadFiles(refresh: false)
-                                    }
+        if viewModel.isLoadingInitialDetails && viewModel.files.isEmpty && viewModel.filesError == nil {
+            ProgressView("Loading Files...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let errorMessage = viewModel.filesError, viewModel.files.isEmpty {
+            CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Files", message: errorMessage)
+        } else if viewModel.files.isEmpty && !viewModel.isLoadingMoreFiles && !viewModel.isLoadingInitialDetails {
+            CenteredContentMessage(systemImage: "doc.on.doc.fill", message: "No files changed in this pull request.")
+        } else {
+            List {
+                ForEach(viewModel.files) { file in
+                    PullRequestFileView(file: file, viewModel: viewModel, prCommitId: pullRequest.id.description)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                        .onAppear {
+                            if file.id == viewModel.files.last?.id && viewModel.canLoadMoreFiles && !viewModel.isLoadingMoreFiles {
+                                Task {
+                                    await viewModel.loadFiles(refresh: false)
                                 }
                             }
-                    }
-                    if viewModel.isLoadingMoreFiles {
-                        ProgressView("Loading more files...")
-                            .frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
-                    }
-                    if !viewModel.canLoadMoreFiles && !viewModel.files.isEmpty && viewModel.filesError == nil {
-                        Text("No more files.").font(.caption).foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
-                    }
+                        }
                 }
-                .listStyle(.plain)
+                if viewModel.isLoadingMoreFiles {
+                    ProgressView("Loading more files...")
+                        .frame(maxWidth: .infinity).padding().listRowSeparator(.hidden)
+                }
+                if !viewModel.canLoadMoreFiles && !viewModel.files.isEmpty && viewModel.filesError == nil {
+                    Text("No more files.").font(.caption).foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center).padding().listRowSeparator(.hidden)
+                }
             }
+            .listStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private var reviewsView: some View {
+        if viewModel.isLoadingReviews && viewModel.reviews.isEmpty {
+            ProgressView("Loading Reviews...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let errorMessage = viewModel.reviewsError, viewModel.reviews.isEmpty {
+             CenteredContentMessage(systemImage: "exclamationmark.triangle.fill", title: "Error Loading Reviews", message: errorMessage)
+        } else if viewModel.reviews.isEmpty && !viewModel.isLoadingReviews {
+            CenteredContentMessage(systemImage: "person.crop.circle.badge.checkmark", message: "No reviews have been submitted.")
+        } else {
+            List {
+                ForEach(viewModel.reviews) { review in
+                    PullRequestReviewView(review: review)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                }
+            }
+            .listStyle(.plain)
         }
     }
 
     private var actionButtonsView: some View {
         HStack {
             Spacer()
-            if let url = URL(string: pullRequest.htmlUrl) {
-                Link(destination: url) {
-                    Label("Open on Browser", systemImage: "safari.fill")
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .font(.body.weight(.medium))
-                        .foregroundColor(.white)
-                        .background(Color.accentColor)
-                        .cornerRadius(8)
-                }
+
+            Button(action: {
+                isShowingRequestChangesSheet = true
+            }) {
+                Label("Request Changes", systemImage: "xmark.circle.fill")
             }
+            .disabled(pullRequest.prState != .open)
+
+            Button(action: {
+                Task {
+                    await viewModel.approvePullRequest()
+                }
+            }) {
+                Label("Approve", systemImage: "checkmark.circle.fill")
+            }
+            .disabled(pullRequest.prState != .open)
+
+            Button(action: {
+                viewModel.prepareMergeDetails()
+                isShowingMergeSheet = true
+            }) {
+                Label("Merge Pull Request", systemImage: "arrow.triangle.merge")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(pullRequest.prState != .open)
         }
+        .padding(.horizontal)
     }
 }
 
