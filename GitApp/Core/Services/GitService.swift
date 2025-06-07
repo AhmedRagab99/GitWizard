@@ -178,10 +178,13 @@ actor GitService {
 
     func resolveConflict(in directory: URL, filePath: String, useOurs: Bool) async throws {
         if useOurs {
-            try await Process.output(GitCheckoutOurs(directory: directory, filePath: filePath))
+            _ = try await Process.output(GitCheckoutOurs(directory: directory, filePath: filePath))
         } else {
-            try await Process.output(GitCheckoutTheirs(directory: directory, filePath: filePath))
+            _ = try await Process.output(GitCheckoutTheirs(directory: directory, filePath: filePath))
         }
+        // After checking out 'ours' or 'theirs', the conflict is resolved for that file.
+        // We must then add the file to the index to mark it as resolved.
+        try await stage(files: [filePath], in: directory)
     }
 
     func resolveConflictUsingOurs(filePath: String, in directory: URL) async throws {

@@ -18,7 +18,7 @@ final class GitStatus: Git {
         [
             "git",
             "status",
-            "--porcelain",
+            "--porcelain=v1",
         ]
     }
     var directory: URL

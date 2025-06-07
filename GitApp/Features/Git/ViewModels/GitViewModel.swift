@@ -1181,7 +1181,6 @@ class GitViewModel {
 
         do {
             try await gitService.resolveConflict(in: url, filePath: filePath, useOurs: true)
-            try await gitService.stage(files: [filePath], in: url)
             await loadChanges()
         } catch {
             errorMessage = "Error resolving conflict: \(error.localizedDescription)"
@@ -1197,7 +1196,6 @@ class GitViewModel {
 
         do {
             try await gitService.resolveConflict(in: url, filePath: filePath, useOurs: false)
-            try await gitService.stage(files: [filePath], in: url)
             await loadChanges()
         } catch {
             errorMessage = "Error resolving conflict: \(error.localizedDescription)"
