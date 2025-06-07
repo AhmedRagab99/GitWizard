@@ -123,7 +123,31 @@ struct CommitView: View {
                             },
                             onHeaderAction: { Task { await viewModel.unstageAllChanges() } },
                             headerActionTitle: "Unstage All",
-                            isStaged: true
+                            isStaged: true,
+                            onResolveWithMine: { file in
+                                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                Task {
+                                    await viewModel.resolveConflictUsingOurs(filePath: path)
+                                    await viewModel.loadChanges()
+                                    await checkForConflicts()
+                                }
+                            },
+                            onResolveWithTheirs: { file in
+                                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                Task {
+                                    await viewModel.resolveConflictUsingTheirs(filePath: path)
+                                    await viewModel.loadChanges()
+                                    await checkForConflicts()
+                                }
+                            },
+                            onMarkAsResolved: { file in
+                                let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
+                                Task {
+                                    await viewModel.markConflictResolved(filePath: path)
+                                    await viewModel.loadChanges()
+                                    await checkForConflicts()
+                                }
+                            }
                         )
 
                         // Modified (Unstaged) changes section

@@ -31,7 +31,16 @@ final class GitStatus: Git {
             if line.isEmpty { continue }
 
             let statusCode = String(line.prefix(2))
-            let filePath = line.count > 3 ? String(line.dropFirst(3)) : ""
+
+            // Handle renamed files and their paths separately, e.g., "R  old -> new"
+            if statusCode.starts(with: "R") {
+                // This case can be enhanced if rename status needs to be tracked
+                continue
+            }
+
+            // Robustly parse the file path, handling potential quotes
+            let pathComponent = String(line.dropFirst(3))
+            let filePath = pathComponent.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
 
             // Correctly identify all conflict/unmerged statuses
             let isConflict = statusCode.contains("U") || statusCode == "AA" || statusCode == "DD"

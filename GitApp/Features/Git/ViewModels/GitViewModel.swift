@@ -358,7 +358,7 @@ class GitViewModel {
             var stagedDiff = try await gitService.getDiff(in: url, cached: true)
             var unstagedDiff = try await gitService.getDiff(in: url, cached: false)
 
-            // Correct the status for conflicted files
+            // Correct the status for conflicted files by iterating with an index
             let conflictedPaths = Set(status.conflicted)
 
             for i in 0..<stagedDiff.fileDiffs.count {
