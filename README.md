@@ -1,4 +1,4 @@
-# 🚀 GitApp - Modern Git Client for macOS
+# 🚀 GitWizard - Modern Git Client for macOS
 
 <div align="center">
 
