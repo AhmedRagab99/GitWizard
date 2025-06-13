@@ -13,7 +13,6 @@ enum CommitSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-
 // MARK: - Create Branch Sheet
 struct CreateBranchSheet: View {
     @Binding var isPresented: Bool
@@ -26,84 +25,69 @@ struct CreateBranchSheet: View {
     @State private var showCommitPicker: Bool = false
     @State private var checkoutNewBranch: Bool = true
 
-   
-
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text("New Branch")
-                    .font(.title2.bold())
-                Spacer()
-                Button(action: { isPresented = false }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.bottom, 4)
+            SheetHeader(
+                title: "New Branch",
+                subtitle: "Create a new branch from the current state",
+                icon: "plus.square.on.square",
+                iconColor: .green
+            )
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Current branch")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text(currentBranch)
-                    .font(.body)
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(.secondaryLabelColor)))
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("New Branch:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                TextField("Branch name", text: $branchName)
-                    .textFieldStyle(.roundedBorder)
-                    .disableAutocorrection(true)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Commit:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Picker("Commit Source", selection: $commitSource) {
-                    ForEach(CommitSource.allCases) { source in
-                        Text(source.rawValue).tag(source)
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    FormSection(title: "Current Branch") {
+                        Text(currentBranch)
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(.secondaryLabelColor).opacity(0.2))
+                            .cornerRadius(6)
                     }
-                }
-                .pickerStyle(.radioGroup)
-                if commitSource == .specifiedCommit {
-                    HStack {
-                        TextField("Commit hash", text: $specifiedCommit)
+
+                    FormSection(title: "New Branch") {
+                        TextField("Branch name", text: $branchName)
                             .textFieldStyle(.roundedBorder)
-                        Button("Pick…") {
-                            // TODO: Show commit picker
+                            .disableAutocorrection(true)
+                    }
+
+                    FormSection(title: "Commit Source") {
+                        Picker("Commit Source", selection: $commitSource) {
+                            ForEach(CommitSource.allCases) { source in
+                                Text(source.rawValue).tag(source)
+                            }
                         }
-                        .disabled(true)
+                        .pickerStyle(.radioGroup)
+
+                        if commitSource == .specifiedCommit {
+                            HStack {
+                                TextField("Commit hash", text: $specifiedCommit)
+                                    .textFieldStyle(.roundedBorder)
+                                Button("Pick…") {
+                                    // TODO: Show commit picker
+                                }
+                                .disabled(true)
+                            }
+                        }
+                    }
+
+                    FormSection(title: "Options", showDivider: false) {
+                        Toggle(isOn: $checkoutNewBranch) {
+                            Text("Checkout new branch")
+                        }
+                        .toggleStyle(.switch)
                     }
                 }
             }
 
-            Toggle(isOn: $checkoutNewBranch) {
-                Text("Checkout new branch")
-            }
-            .toggleStyle(.switch)
-            .padding(.top, 8)
-
-            HStack {
-                Spacer()
-                Button("Cancel") {
-                    isPresented = false
-                }
-                .keyboardShortcut(.cancelAction)
-                Button("Create Branch") {
+            SheetFooter(
+                cancelAction: { isPresented = false },
+                confirmAction: {
                     onCreate(branchName.trimmingCharacters(in: .whitespacesAndNewlines), commitSource, specifiedCommit.isEmpty ? nil : specifiedCommit, checkoutNewBranch)
                     isPresented = false
-                }
-                .disabled(branchName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(.top, 8)
+                },
+                confirmText: "Create Branch",
+                isConfirmDisabled: branchName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
         }
         .padding(24)
         .frame(minWidth: 380)
@@ -111,6 +95,5 @@ struct CreateBranchSheet: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(.windowBackgroundColor))
         )
-        .shadow(radius: 20)
     }
 }

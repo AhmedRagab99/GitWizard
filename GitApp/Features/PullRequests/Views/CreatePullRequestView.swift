@@ -5,125 +5,116 @@ struct CreatePullRequestView: View {
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
-        VStack(spacing: 0) { // Use a VStack to manage overall layout, especially if removing NavigationView
-            // Custom Title Bar if needed, or rely on sheet presentation title
-            HStack {
-                Text("New Pull Request")
-                    .font(.title2).bold()
-                Spacer()
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
+        VStack(spacing: 16) {
+            SheetHeader(
+                title: "New Pull Request",
+                subtitle: "Create a request to merge your changes",
+                icon: "arrow.triangle.branch",
+                iconColor: .blue
+            )
+
+            Card {
+                VStack(alignment: .leading, spacing: 16) {
+                    FormSection(title: "Pull Request Details") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            TextField("Title", text: $viewModel.newPRTitle)
+                                .textFieldStyle(.roundedBorder)
+                                .padding(.vertical, 4)
+
+                            Text("Description")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                            TextEditorWithPlaceholder(text: $viewModel.newPRBody, placeholder: "Provide a detailed description of your changes...")
+                                .frame(height: 120)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                                )
+                        }
+                    }
+
+                    FormSection(title: "Branch Selection") {
+                        if viewModel.isLoadingBranches {
+                            HStack {
+                                ProgressView()
+                                Text("Loading branches...")
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 8)
+                        } else if !viewModel.availableBranches.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Image(systemName: "arrow.down.circle")
+                                        .foregroundStyle(.blue)
+                                        .frame(width: 24)
+
+                                    Text("Base Branch (target):")
+                                        .frame(width: 150, alignment: .leading)
+
+                                    Picker("Base Branch", selection: $viewModel.newPRBaseBranch) {
+                                        ForEach(viewModel.availableBranches, id: \.name) { branch in
+                                            Text(branch.name).tag(branch.name as String?)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                }
+
+                                HStack {
+                                    Image(systemName: "arrow.up.circle")
+                                        .foregroundStyle(.green)
+                                        .frame(width: 24)
+
+                                    Text("Compare Branch (source):")
+                                        .frame(width: 150, alignment: .leading)
+
+                                    Picker("Compare Branch", selection: $viewModel.newPRHeadBranch) {
+                                        ForEach(viewModel.availableBranches, id: \.name) { branch in
+                                            Text(branch.name).tag(branch.name as String?)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        } else {
+                            Label("No branches found or failed to load.", systemImage: "exclamationmark.triangle")
+                                .foregroundColor(.orange)
+                                .padding(.vertical)
+                        }
+                    }
+
+                    if let errorMessage = viewModel.prCreationError {
+                        HStack {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundColor(.red)
+                            Text(errorMessage)
+                                .font(.callout)
+                                .foregroundColor(.red)
+                        }
+                        .padding(.vertical, 5)
+                    }
                 }
             }
-            .padding()
-            .background(.bar) // Gives a slight background like a toolbar
 
-            Divider()
-
-            Form {
-                Section(header: Text("Details").font(.headline)) {
-                    TextField("Title", text: $viewModel.newPRTitle)
-                        .textFieldStyle(.roundedBorder)
-                        .padding(.vertical, 4)
-
-                    Text("Description") // Label for TextEditor
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    TextEditorWithPlaceholder(text: $viewModel.newPRBody, placeholder: "Provide a detailed description of your changes...")
-                        .frame(height: 120)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                        )
-                }
-                .padding(.bottom, 10)
-
-                Section(header: Text("Branches").font(.headline)) {
-                    if viewModel.isLoadingBranches {
-                        HStack {
-                            ProgressView()
-                            Text("Loading branches...")
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical)
-                    } else if !viewModel.availableBranches.isEmpty {
-                        Picker(selection: $viewModel.newPRBaseBranch) {
-                            ForEach(viewModel.availableBranches, id: \.name) { branch in
-                                Text(branch.name).tag(branch.name as String?)
-                            }
-                        } label: {
-                            Label("Base Branch (target)", systemImage: "arrow.triangle.branch")
-                        }
-                        .pickerStyle(.menu)
-                        .padding(.vertical, 4)
-
-                        Picker(selection: $viewModel.newPRHeadBranch) {
-                            ForEach(viewModel.availableBranches, id: \.name) { branch in
-                                Text(branch.name).tag(branch.name as String?)
-                            }
-                        } label: {
-                            Label("Compare Branch (source)", systemImage: "arrow.triangle.branch")
-                        }
-                        .pickerStyle(.menu)
-                        .padding(.vertical, 4)
-                    } else {
-                        Label("No branches found or failed to load.", systemImage: "exclamationmark.triangle")
-                            .foregroundColor(.orange)
-                            .padding(.vertical)
-                    }
-                }
-                .padding(.bottom, 10)
-
-                if let errorMessage = viewModel.prCreationError {
-                    HStack {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .foregroundColor(.red)
-                        Text(errorMessage)
-                            .font(.callout)
-                            .foregroundColor(.red)
-                    }
-                    .padding(.vertical, 5)
-                }
-
-                Button(action: {
+            SheetFooter(
+                cancelAction: { dismiss() },
+                confirmAction: {
                     Task {
                         await viewModel.createPullRequest()
                         if viewModel.prCreationError == nil && !viewModel.isCreatingPR {
                             dismiss()
                         }
                     }
-                }) {
-                    HStack {
-                        Spacer()
-                        if viewModel.isCreatingPR {
-                            ProgressView()
-                                .padding(.trailing, 4)
-                                .tint(.white) // Ensure progress view is visible on colored button
-                            Text("Creating Pull Request...")
-                        } else {
-                            Image(systemName: "plus.rectangle.on.rectangle")
-                            Text("Create Pull Request")
-                        }
-                        Spacer()
-                    }
-                    .padding(.vertical, 8)
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .background(viewModel.canCreatePR ? Color.accentColor : Color.gray) // Use accent color, gray if disabled
-                    .cornerRadius(10)
-                }
-                .disabled(!viewModel.canCreatePR || viewModel.isCreatingPR)
-                .padding(.top) // Add some space before the button
-
-            }
-            // .formStyle(.grouped) // Or .insetGrouped, explore for best macOS feel if default isn't clean
-            .padding(.horizontal)
+                },
+                cancelText: "Cancel",
+                confirmText: "Create Pull Request",
+                isConfirmDisabled: !viewModel.canCreatePR,
+                isLoading: viewModel.isCreatingPR
+            )
         }
-        .background(Color(nsColor: .controlBackgroundColor)) // Match system background
+        .padding(24)
+        .background(Color(nsColor: .controlBackgroundColor))
         .task {
             if viewModel.availableBranches.isEmpty {
                 await viewModel.fetchBranchesForCurrentRepository()
@@ -137,8 +128,7 @@ struct CreatePullRequestView: View {
                 viewModel.newPRHeadBranch = viewModel.availableBranches.first(where: { $0.name != viewModel.newPRBaseBranch })?.name
             }
         }
-        // Consider removing the explicit frame if the sheet handles sizing well.
-        // .frame(minWidth: 450, idealWidth: 550, minHeight: 500, idealHeight: 600)
+        .frame(width: 550)
     }
 }
 

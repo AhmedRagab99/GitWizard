@@ -80,70 +80,77 @@ struct PullRequestDetailView: View {
     }
 
     private var prInfoHeader: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("#\(pullRequest.number) \(pullRequest.title)")
-                .font(.title2)
-                .fontWeight(.bold)
-                .lineLimit(2)
-                .textSelection(.enabled)
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("#\(pullRequest.number) \(pullRequest.title)")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
 
-            HStack(spacing: 8) {
-                Text(pullRequest.head.ref)
-                    .font(.subheadline.monospaced())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.blue.opacity(0.2))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                HStack(spacing: 8) {
+                    Text(pullRequest.head.ref)
+                        .font(.subheadline.monospaced())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
 
-                Image(systemName: "arrow.right")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    Image(systemName: "arrow.right")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
 
-                Text(pullRequest.base.ref)
-                    .font(.subheadline.monospaced())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.gray.opacity(0.2))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-            }
-
-            HStack(spacing: 10) {
-                statusBadge(for: pullRequest.prState, merged: pullRequest.mergedAt != nil)
-                Label {
-                    Text("by \(pullRequest.user.login)")
-                } icon: {
-                     Image(systemName: "person.fill")
+                    Text(pullRequest.base.ref)
+                        .font(.subheadline.monospaced())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.gray.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
-                Label {
-                    Text("Opened \(pullRequest.createdAt, style: .relative) ago")
-                } icon: {
-                     Image(systemName: "clock.arrow.circlepath")
-                }
-            }
-            .font(.subheadline)
-            .foregroundColor(.secondary)
 
-            if let mergedAt = pullRequest.mergedAt {
-                Label {
-                    Text("Merged \(mergedAt, style: .date) at \(mergedAt, style: .time)")
-                } icon: {
-                    Image(systemName: "arrow.triangle.merge")
-                }
-                .font(.caption).foregroundColor(.purple)
-            } else if let closedAt = pullRequest.closedAt {
-                Label {
-                    Text("Closed \(closedAt, style: .date) at \(closedAt, style: .time)")
-                } icon: {
-                     Image(systemName: "xmark.octagon.fill")
-                }
-                .font(.caption).foregroundColor(.red)
-            }
+                HStack(spacing: 10) {
+                    TagView(
+                        text: pullRequest.statusInfo.displayName,
+                        color: pullRequest.statusInfo.color,
+                        systemImage: pullRequest.statusInfo.systemImage
+                    )
 
-            if !viewModel.reviewerStates.isEmpty {
-                Divider()
-                Text("Reviewers")
-                    .font(.headline)
-                PullRequestHeaderReviewersView(reviewers: viewModel.reviewerStates)
+                    Label {
+                        Text("by \(pullRequest.user.login)")
+                    } icon: {
+                         Image(systemName: "person.fill")
+                    }
+                    Label {
+                        Text("Opened \(pullRequest.createdAt, style: .relative) ago")
+                    } icon: {
+                         Image(systemName: "clock.arrow.circlepath")
+                    }
+                }
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+                if let mergedAt = pullRequest.mergedAt {
+                    Label {
+                        Text("Merged \(mergedAt, style: .date) at \(mergedAt, style: .time)")
+                    } icon: {
+                        Image(systemName: "arrow.triangle.merge")
+                    }
+                    .font(.caption).foregroundColor(.purple)
+                } else if let closedAt = pullRequest.closedAt {
+                    Label {
+                        Text("Closed \(closedAt, style: .date) at \(closedAt, style: .time)")
+                    } icon: {
+                         Image(systemName: "xmark.octagon.fill")
+                    }
+                    .font(.caption).foregroundColor(.red)
+                }
+
+                if !viewModel.reviewerStates.isEmpty {
+                    Divider()
+                    Text("Reviewers")
+                        .font(.headline)
+                    PullRequestHeaderReviewersView(reviewers: viewModel.reviewerStates)
+                }
             }
         }
     }
@@ -283,25 +290,5 @@ struct PullRequestDetailView: View {
             .disabled(pullRequest.prState != .open)
         }
         .padding(.horizontal)
-    }
-}
-
-
-// Extension to PullRequest to get status display info (should be in PullRequest.swift)
-extension PullRequest {
-    struct StatusDisplayInfo {
-        let displayName: String
-        let color: Color
-        let systemImage: String
-    }
-
-    var statusInfo: StatusDisplayInfo {
-        if mergedAt != nil {
-            return StatusDisplayInfo(displayName: "Merged", color: .purple, systemImage: "arrow.triangle.merge")
-        } else if state == "closed" {
-            return StatusDisplayInfo(displayName: "Closed", color: .red, systemImage: "xmark.octagon.fill")
-        } else {
-            return StatusDisplayInfo(displayName: "Open", color: .green, systemImage: "checkmark.circle.fill")
-        }
     }
 }

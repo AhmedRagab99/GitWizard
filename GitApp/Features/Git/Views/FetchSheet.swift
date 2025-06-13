@@ -27,12 +27,18 @@ struct FetchSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                // Fetch options
-                Form {
-                    Section(header: Text("Fetch Options")) {
-                        if !fetchAllRemotes {
+        VStack(alignment: .leading, spacing: 16) {
+            SheetHeader(
+                title: "Fetch from Remote",
+                subtitle: "Download objects and refs from remote repositories",
+                icon: "arrow.down.circle",
+                iconColor: .blue
+            )
+
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    if !fetchAllRemotes {
+                        FormSection(title: "Remote Repository") {
                             Picker("Remote", selection: $selectedRemote) {
                                 ForEach(remotes, id: \.self) { remote in
                                     Text(remote).tag(remote)
@@ -40,51 +46,39 @@ struct FetchSheet: View {
                             }
                             .pickerStyle(.menu)
                         }
-
-                        Toggle("Fetch from all remotes", isOn: $fetchAllRemotes)
-                            .tint(.blue)
-
-                        Toggle("Prune tracking branches no longer present on remote(s)", isOn: $prune)
-                            .tint(.blue)
-
-                        Toggle("Fetch and store all tags locally", isOn: $fetchTags)
-                            .tint(.blue)
                     }
-                }
 
-                HStack {
-                    Button("Cancel") {
-                        isPresented = false
-                    }
-                    .buttonStyle(.bordered)
+                    FormSection(title: "Fetch Options", showDivider: false) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Toggle("Fetch from all remotes", isOn: $fetchAllRemotes)
 
-                    Spacer()
+                            Toggle("Prune tracking branches no longer present on remote(s)", isOn: $prune)
 
-                    Button {
-                        isFetching = true
-                        onFetch(
-                            selectedRemote,
-                            fetchAllRemotes,
-                            prune,
-                            fetchTags
-                        )
-                        isFetching = false
-                        isPresented = false
-                    } label: {
-                        if isFetching {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Text("OK")
+                            Toggle("Fetch and store all tags locally", isOn: $fetchTags)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isFetching)
                 }
-                .padding()
             }
-            .padding()
-            .frame(maxWidth: 500)
+
+            SheetFooter(
+                cancelAction: { isPresented = false },
+                confirmAction: {
+                    isFetching = true
+                    onFetch(
+                        selectedRemote,
+                        fetchAllRemotes,
+                        prune,
+                        fetchTags
+                    )
+                    isFetching = false
+                    isPresented = false
+                },
+                confirmText: "Fetch",
+                isLoading: isFetching
+            )
         }
+        .padding(24)
+        .frame(width: 450)
+        .background(Color(.windowBackgroundColor))
     }
 }

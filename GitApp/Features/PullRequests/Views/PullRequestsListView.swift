@@ -5,14 +5,43 @@ struct PullRequestsListView: View {
     @State private var isShowingCreatePRView = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // New unified header
-            newHeaderView
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(.bar) // A slight background to distinguish the header area
+        VStack(alignment: .leading, spacing: 16) {
+            // New unified header using Card
+            Card {
+                HStack(spacing: 12) {
+                    Picker("Filter", selection: $viewModel.currentFilterState) {
+                        ForEach(PullRequestState.allCases) { state in
+                            Text(state.displayName).tag(state)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(minWidth: 200, idealWidth: 250)
 
-            Divider() // Visually separate header from list content
+                    Spacer()
+
+                    Button {
+                        Task {
+                            await viewModel.loadPullRequests(refresh: true)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .help("Refresh Pull Requests")
+                    .disabled(viewModel.isLoadingPullRequests && viewModel.pullRequests.isEmpty)
+                    .buttonStyle(.borderless)
+                    .padding(.leading)
+
+                    Button {
+                        isShowingCreatePRView = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                        Text("New Pull Request")
+                    }
+                    .help("Create New Pull Request")
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(.horizontal)
 
             // Content Area (Progress, Error, or List)
             if viewModel.isLoadingPullRequests && viewModel.pullRequests.isEmpty {
@@ -37,9 +66,13 @@ struct PullRequestsListView: View {
                     systemImage: "doc.text.magnifyingglass"
                 )
             } else {
-                listContentView
+                Card {
+                    listContentView
+                }
+                .padding(.horizontal)
             }
         }
+        .padding(.vertical)
         .onChange(of: viewModel.selectedPullRequest) { oldValue, newValue in
             guard let selectedPR = newValue else { return }
                     Task {
@@ -64,43 +97,6 @@ struct PullRequestsListView: View {
             }
         }
         .background(Color(nsColor: .controlBackgroundColor))
-    }
-
-    // Redesigned headerView
-    private var newHeaderView: some View {
-        HStack(spacing: 12) {
-            Picker("Filter", selection: $viewModel.currentFilterState) {
-                ForEach(PullRequestState.allCases) { state in
-                    Text(state.displayName).tag(state)
-                }
-            }
-            .pickerStyle(.segmented)
-            // .labelsHidden() // Keep labels for clarity or style as preferred
-            .frame(minWidth: 200, idealWidth: 250) // Give picker some defined space
-
-            Spacer()
-
-            Button {
-                Task {
-                    await viewModel.loadPullRequests(refresh: true)
-                }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .help("Refresh Pull Requests")
-            .disabled(viewModel.isLoadingPullRequests && viewModel.pullRequests.isEmpty) // Disable only if initial load is happening
-            .buttonStyle(.borderless) // More subtle button style for header icons
-            .padding(.leading)
-
-            Button {
-                isShowingCreatePRView = true
-            } label: {
-                Image(systemName: "plus.circle.fill")
-                Text("New") // Shortened text for header button
-            }
-            .help("Create New Pull Request")
-            // .buttonStyle(.bordered) // or .borderless, choose based on desired emphasis
-        }
     }
 
     private var listContentView: some View {

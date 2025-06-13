@@ -6,38 +6,45 @@ struct RequestChangesView: View {
     @State private var comment: String = ""
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Request Changes")
-                .font(.title2)
-                .fontWeight(.bold)
+        VStack(spacing: 16) {
+            SheetHeader(
+                title: "Request Changes",
+                subtitle: "Submit feedback requiring modifications",
+                icon: "exclamationmark.circle",
+                iconColor: .orange
+            )
 
-            VStack(alignment: .leading) {
-                Text("Comment (Required)")
-                    .font(.headline)
-                TextEditor(text: $comment)
-                    .frame(height: 150)
-                    .border(Color.gray.opacity(0.5), width: 1)
-                    .cornerRadius(5)
+            Card {
+                FormSection(title: "Review Details") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Comment (Required)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        TextEditor(text: $comment)
+                            .frame(height: 150)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                            )
+                    }
+                }
             }
 
-            HStack {
-                Button("Cancel") {
-                    isPresented = false
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Button("Submit Review") {
+            SheetFooter(
+                cancelAction: { isPresented = false },
+                confirmAction: {
                     Task {
                         await viewModel.requestChanges(comment: comment)
                         isPresented = false
                     }
-                }
-                .disabled(comment.isEmpty)
-                .keyboardShortcut(.defaultAction)
-            }
-            .buttonStyle(.bordered)
+                },
+                cancelText: "Cancel",
+                confirmText: "Submit Review",
+                isConfirmDisabled: comment.isEmpty
+            )
         }
-        .padding()
-        .frame(width: 400)
+        .padding(24)
+        .frame(width: 450)
     }
 }
