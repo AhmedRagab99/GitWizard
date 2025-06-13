@@ -100,19 +100,66 @@ class PullRequestViewModel  {
     }
 
     // MARK: - Dependencies
-    private let gitProviderService: GitProviderService
-    private let account: Account
-    let repository: GitHubRepository
+    private let gitProviderService: GitProviderService = GitProviderService()
+    private var account: Account?
+    private var accountManager: AccountManager?
+    var repository: GitHubRepository?
 
-    init(gitProviderService: GitProviderService, account: Account, repository: GitHubRepository) {
-        self.gitProviderService = gitProviderService
-        self.account = account
-        self.repository = repository
+    func initData(repository: GitHubRepository, accountManager: AccountManager) {
+        self.accountManager = accountManager
         self.newPRBaseBranch = repository.defaultBranch
+
+        // Find and set the matching account for this repository
+        Task {
+            if let cloneUrl = repository.cloneUrl,
+               let parsedURL = try? GitURLParser.parse(remoteURL: cloneUrl) {
+                self.account = await findMatchingAccount(for: parsedURL)
+            }
+        }
+    }
+
+    private func findMatchingAccount(for parsedRemote: GitURLParser.ParsedURL) async -> Account? {
+        guard let accountManager else { return nil }
+        for account in accountManager.accounts {
+            var accountHost: String?
+            switch account.type {
+            case .githubCom:
+                accountHost = "github.com"
+            case .githubEnterprise:
+                if let serverURL = account.serverURL, let enterpriseHost = URL(string: serverURL)?.host {
+                    accountHost = enterpriseHost
+                }
+            }
+
+            if let accHost = accountHost, accHost.lowercased() == parsedRemote.hostname.lowercased() {
+                if var potentialMatch = accountManager.accounts.first(where: { $0.id == account.id }) {
+                    if let token = accountManager.getToken(for: potentialMatch) {
+                        potentialMatch.token = token
+                        print("Found matching account: \(potentialMatch.username) for host \(parsedRemote.hostname)")
+                        return potentialMatch
+                    } else {
+                        print("Error: Token not found for potentially matched account \(account.username) on host \(parsedRemote.hostname)")
+                    }
+                }
+            }
+        }
+        print("Warning: No matching account found for remote host: \(parsedRemote.hostname)")
+        return nil
+    }
+
+    @MainActor
+    func refreshAccount() async {
+        guard let repository = repository, let cloneUrl = repository.cloneUrl else { return }
+
+        do {
+            let parsedURL = try GitURLParser.parse(remoteURL: cloneUrl)
+            self.account = await findMatchingAccount(for: parsedURL)
+        } catch {
+            print("Failed to parse repository URL: \(error)")
+        }
     }
 
     // MARK: - Data Loading Methods for PR List
-    @MainActor
     func loadPullRequests(refresh: Bool = false) async {
         if refresh {
             currentPRListPage = 1
@@ -121,7 +168,18 @@ class PullRequestViewModel  {
             pullRequestListError = nil
         }
 
-        guard canLoadMorePullRequests, !isLoadingPullRequests else { return }
+        guard canLoadMorePullRequests, !isLoadingPullRequests, let repository = repository else { return }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            pullRequestListError = "No account found for this repository"
+            return
+        }
 
         isLoadingPullRequests = true
         // if currentPRListPage == 1 { pullRequestListError = nil } // Clear error only on first page load/refresh
@@ -154,9 +212,8 @@ class PullRequestViewModel  {
 
     // MARK: - Data Loading Methods for PR Details (Comments, Review Comments, Files)
 
-    @MainActor
     func loadComments(refresh: Bool = false) async {
-        guard let selectedPR = selectedPullRequest else { return }
+        guard let selectedPR = selectedPullRequest, let repository = repository else { return }
 
         if refresh {
             currentCommentsPage = 1
@@ -166,6 +223,18 @@ class PullRequestViewModel  {
         }
 
         guard canLoadMoreComments, !isLoadingMoreComments else { return }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            commentsError = "No account found for this repository"
+            return
+        }
+
         // isLoadingInitialDetails is managed by selectPullRequest
         isLoadingMoreComments = true
         // if currentCommentsPage == 1 { commentsError = nil } // Error is reset on refresh
@@ -196,9 +265,8 @@ class PullRequestViewModel  {
         isLoadingMoreComments = false
     }
 
-    @MainActor
     func loadReviewComments(refresh: Bool = false) async {
-        guard let selectedPR = selectedPullRequest else { return }
+        guard let selectedPR = selectedPullRequest, let repository = repository else { return }
 
         if refresh {
             currentReviewCommentsPage = 1
@@ -211,6 +279,18 @@ class PullRequestViewModel  {
         // This function will now fetch ALL review comments for the PR to build the lookup dictionary.
         // The old pagination logic is removed in favor of a comprehensive fetch.
         guard !isLoadingMoreReviewComments else { return }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            reviewCommentsError = "No account found for this repository"
+            return
+        }
+
         isLoadingMoreReviewComments = true
         defer { isLoadingMoreReviewComments = false }
 
@@ -247,9 +327,8 @@ class PullRequestViewModel  {
         }
     }
 
-    @MainActor
     func loadFiles(refresh: Bool = false) async {
-         guard let selectedPR = selectedPullRequest else { return }
+         guard let selectedPR = selectedPullRequest, let repository = repository else { return }
 
         if refresh {
             currentFilesPage = 1
@@ -259,6 +338,18 @@ class PullRequestViewModel  {
         }
 
         guard canLoadMoreFiles, !isLoadingMoreFiles else { return }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            filesError = "No account found for this repository"
+            return
+        }
+
         isLoadingMoreFiles = true
 
         do {
@@ -289,7 +380,7 @@ class PullRequestViewModel  {
 
     @MainActor
     func loadReviews(refresh: Bool = false) async {
-        guard let selectedPR = selectedPullRequest else { return }
+        guard let selectedPR = selectedPullRequest, let repository = repository else { return }
 
         // For reviews, we usually load all of them, but pagination is possible.
         // Here, we'll just load the first page for simplicity unless refresh is true.
@@ -300,6 +391,17 @@ class PullRequestViewModel  {
 
         // Avoid re-loading if we already have reviews, unless refreshing.
         guard reviews.isEmpty || refresh else { return }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            reviewsError = "No account found for this repository"
+            return
+        }
 
         isLoadingReviews = true
         defer { isLoadingReviews = false }
@@ -320,7 +422,6 @@ class PullRequestViewModel  {
     }
 
     // MARK: - Selection and Filtering
-    @MainActor
     func selectPullRequest(_ pr: PullRequest) async {
         // Always clear state before loading new PR
         selectedPullRequest = pr
@@ -345,7 +446,6 @@ class PullRequestViewModel  {
         isLoadingInitialDetails = false
     }
 
-    @MainActor
     func clearSelection() {
         selectedPullRequest = nil
         pullRequestListError = nil
@@ -370,8 +470,20 @@ class PullRequestViewModel  {
     }
 
     // MARK: - Data Loading and Actions for Creating PRs (Implementation mostly unchanged)
-    @MainActor
     func fetchBranchesForCurrentRepository() async {
+        guard let repository = repository else { return }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            prCreationError = "No account found for this repository"
+            return
+        }
+
         isLoadingBranches = true
         prCreationError = nil
         do {
@@ -399,16 +511,28 @@ class PullRequestViewModel  {
         isLoadingBranches = false
     }
 
-    @MainActor
     func createPullRequest() async {
-        guard let base = newPRBaseBranch, let head = newPRHeadBranch, !newPRTitle.isEmpty else {
+        guard let base = newPRBaseBranch, let head = newPRHeadBranch, !newPRTitle.isEmpty, let repository = repository else {
             prCreationError = "Title, base branch, and head branch are required."
             return
         }
+
         guard base != head else {
             prCreationError = "Base and head branches cannot be the same."
             return
         }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            prCreationError = "No account found for this repository"
+            return
+        }
+
         isCreatingPR = true
         prCreationError = nil
         do {
@@ -437,7 +561,6 @@ class PullRequestViewModel  {
 
     // MARK: - PR Actions
 
-    @MainActor
     func prepareMergeDetails() {
         guard let pr = selectedPullRequest else { return }
         mergeCommitTitle = pr.title
@@ -446,10 +569,20 @@ class PullRequestViewModel  {
         wasMergeSuccessful = false // Reset on preparing for a new merge
     }
 
-    @MainActor
     func mergePullRequest() async {
-        guard let pr = selectedPullRequest else {
+        guard let pr = selectedPullRequest, let repository = repository else {
             mergeError = "No pull request selected."
+            return
+        }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            mergeError = "No account found for this repository"
             return
         }
 
@@ -477,19 +610,28 @@ class PullRequestViewModel  {
         }
     }
 
-    @MainActor
     func approvePullRequest() async {
         await submitReview(event: .approve, body: "Approved")
     }
 
-    @MainActor
     func requestChanges(comment: String) async {
         await submitReview(event: .requestChanges, body: comment)
     }
 
-    @MainActor
     func addLineComment(body: String, commitId: String, path: String, line: Int) async {
-        guard let pr = selectedPullRequest else { return }
+        guard let pr = selectedPullRequest, let repository = repository else { return }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            // Handle error, e.g., show an alert to the user
+            print("Failed to add line comment: No account found for this repository")
+            return
+        }
 
         // This is a simplified approach. A full implementation might involve creating a pending review,
         // adding comments to it, and then submitting the review.
@@ -514,7 +656,19 @@ class PullRequestViewModel  {
     }
 
     private func submitReview(event: GitProviderService.PullRequestReviewEvent, body: String?) async {
-        guard let pr = selectedPullRequest else { return }
+        guard let pr = selectedPullRequest, let repository = repository else { return }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            // Handle error, e.g., show an alert
+            print("Failed to submit review: No account found for this repository")
+            return
+        }
 
         // You might want to handle loading/error states for this action
         do {
@@ -531,6 +685,70 @@ class PullRequestViewModel  {
         } catch {
             // Handle error, e.g., show an alert
             print("Failed to submit review: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Close/Reopen PR
+    func closePullRequest() async {
+        guard let pr = selectedPullRequest, let repository = repository else { return }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            print("Failed to close PR: No account found for this repository")
+            return
+        }
+
+        do {
+            try await gitProviderService.updatePullRequestState(
+                owner: repository.owner?.login ?? "",
+                repoName: repository.name,
+                prNumber: pr.number,
+                account: account,
+                state: PullRequestState.closed.rawValue
+            )
+            // Clear the selected PR to close the detail window
+            selectedPullRequest = nil
+            // Refresh the PR list to show updated state
+            await loadPullRequests(refresh: true)
+        
+        } catch {
+            print("Failed to close PR: \(error.localizedDescription)")
+        }
+    }
+
+    func reopenPullRequest() async {
+        guard let pr = selectedPullRequest, let repository = repository else { return }
+
+        // Ensure account is set
+        if account == nil {
+            await refreshAccount()
+        }
+
+        // Return early if still no account
+        guard let account = account else {
+            print("Failed to reopen PR: No account found for this repository")
+            return
+        }
+
+        do {
+            try await gitProviderService.updatePullRequestState(
+                owner: repository.owner?.login ?? "",
+                repoName: repository.name,
+                prNumber: pr.number,
+                account: account,
+                state: PullRequestState.open.rawValue
+            )
+            // Refresh the PR list to show updated state
+            await loadPullRequests(refresh: true)
+            // Clear the selected PR to close the detail window
+            selectedPullRequest = nil
+        } catch {
+            print("Failed to reopen PR: \(error.localizedDescription)")
         }
     }
 }

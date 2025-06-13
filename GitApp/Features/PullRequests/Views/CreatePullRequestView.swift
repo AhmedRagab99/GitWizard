@@ -89,7 +89,6 @@ struct CreatePullRequestView: View {
                             Image(systemName: "exclamationmark.circle.fill")
                                 .foregroundColor(.red)
                             Text(errorMessage)
-                                .font(.callout)
                                 .foregroundColor(.red)
                         }
                         .padding(.vertical, 5)
@@ -119,7 +118,7 @@ struct CreatePullRequestView: View {
             if viewModel.availableBranches.isEmpty {
                 await viewModel.fetchBranchesForCurrentRepository()
             }
-            if viewModel.newPRBaseBranch == nil, let defaultBranch = viewModel.repository.defaultBranch {
+            if viewModel.newPRBaseBranch == nil, let defaultBranch = viewModel.repository?.defaultBranch {
                 viewModel.newPRBaseBranch = defaultBranch
             }
             if viewModel.newPRHeadBranch == nil, let currentBranch = viewModel.currentBranchNameFromGitService {
@@ -128,7 +127,6 @@ struct CreatePullRequestView: View {
                 viewModel.newPRHeadBranch = viewModel.availableBranches.first(where: { $0.name != viewModel.newPRBaseBranch })?.name
             }
         }
-        .frame(width: 550)
     }
 }
 

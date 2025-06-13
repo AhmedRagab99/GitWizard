@@ -5,7 +5,7 @@ import Combine
 private let userDefaultsAccountsKey = "gitapp_accounts_metadata"
 
 @Observable
-@MainActor
+
 class AccountManager {
     var accounts: [Account] = []
     var isLoading: Bool = false

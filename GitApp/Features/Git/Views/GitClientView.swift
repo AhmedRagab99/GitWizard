@@ -4,11 +4,33 @@ import AppKit
 
 // Import ThemeManager
 
+public extension View {
+    func onFirstAppear(_ action: @escaping () -> ()) -> some View {
+        modifier(FirstAppear(action: action))
+    }
+}
+
+private struct FirstAppear: ViewModifier {
+    let action: () -> ()
+
+    // Use this to only fire your block one time
+    @State private var hasAppeared = false
+
+    func body(content: Content) -> some View {
+        // And then, track it here
+        content.onAppear {
+            guard !hasAppeared else { return }
+            hasAppeared = true
+            action()
+        }
+    }
+}
+
+
 struct GitClientView: View {
     @Bindable var viewModel: GitViewModel
     var themeManager : ThemeManager
-    var url: URL
-    var accountManager: AccountManager
+    @Bindable var accountManager: AccountManager
     var repoViewModel : RepositoryViewModel // Add view model
     var pullRequestViewModel: PullRequestViewModel?
     @State private var selectedWorkspaceItem: WorkspaceSidebarItem = .history
@@ -69,9 +91,12 @@ struct GitClientView: View {
                 branches: viewModel.branches + viewModel.remotebranches,
                 onDelete: handleDeleteBranches
             )
-            .onAppear {
-                viewModel.selectRepository(url)
+            .onFirstAppear {
+                Task {
+                    await viewModel.selectRepository()
+                }
             }
+
     }
 
     // Split the main content into a computed property
@@ -103,15 +128,60 @@ struct GitClientView: View {
             } else if selectedWorkspaceItem == .history {
                 HistoryView(viewModel: viewModel)
             } else if selectedWorkspaceItem == .pullRequests {
-                if let pullRequestViewModel = pullRequestViewModel {
-                    PullRequestsListView(viewModel: pullRequestViewModel)
-                }
+
+                PullRequestsListView(viewModel: getVM(), accountManager: accountManager)
             } else {
                 Text("Coming soon...")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+
+    func getVM() -> PullRequestViewModel {
+        let pullRequestVM = PullRequestViewModel()
+        let remoteURL = viewModel.repoInfo.remoteURL
+
+        // Create a GitHubRepository from the remoteURL
+        let repoOwner = remoteURL.components(separatedBy: "/").dropLast().last ?? ""
+        let repoName = remoteURL.components(separatedBy: "/").last?.replacingOccurrences(of: ".git", with: "") ?? ""
+
+        let repository = GitHubRepository(
+            id: 0,
+            name: repoName,
+            fullName: "\(repoOwner)/\(repoName)",
+            owner: GitHubUser(
+                id: 0,
+                login: repoOwner,
+                avatarUrl: nil,
+                htmlUrl: nil,
+                name: nil,
+                company: nil,
+                blog: nil,
+                location: nil,
+                email: nil,
+                bio: nil,
+                publicRepos: 0,
+                followers: 0,
+                following: 0
+            ),
+            htmlUrl: remoteURL ?? "",
+            description: nil,
+            sshUrl: nil,
+            cloneUrl: remoteURL,
+            stargazersCount: nil,
+            watchersCount: nil,
+            language: nil,
+            forksCount: nil,
+            openIssuesCount: nil,
+            license: nil,
+            isPrivate: false,
+            defaultBranch: viewModel.currentBranch?.name
+        )
+
+        pullRequestVM.repository = repository
+        pullRequestVM.initData(repository: repository, accountManager: accountManager)
+        return pullRequestVM
     }
 
     // Handle search text changes
@@ -452,18 +522,6 @@ enum ModernUI {
         }
     }
 }
-//
-//extension View {
-//    func modernShadow(_ style: ModernUI.shadow) -> some View {
-//        self.shadow(
-//            color: .black.opacity(0.1),
-//            radius: style.radius,
-//            x: 0,
-//            y: style.offset
-//        )
-//    }
-//}
-
 
 
 

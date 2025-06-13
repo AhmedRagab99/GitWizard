@@ -657,4 +657,62 @@ class GitProviderService {
             throw GitProviderServiceError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
         }
     }
+
+    /// Updates the state of a pull request (open/closed).
+    /// - Parameters:
+    ///   - owner: The owner of the repository
+    ///   - repoName: The name of the repository
+    ///   - prNumber: The pull request number
+    ///   - account: The account to use for authentication
+    ///   - state: The new state for the pull request ("open" or "closed")
+    /// - Returns: The updated PullRequest object
+    /// - Throws: GitProviderServiceError if the request fails
+    func updatePullRequestState(
+        owner: String,
+        repoName: String,
+        prNumber: Int,
+        account: Account,
+        state: String
+    ) async throws -> PullRequest {
+        guard let baseURLString = account.apiEndpoint?.absoluteString else {
+            throw GitProviderServiceError.invalidURL
+        }
+        guard account.provider.lowercased().contains("github") else {
+            throw GitProviderServiceError.unsupportedProvider(account.provider)
+        }
+
+        let urlString = "\(baseURLString)/repos/\(owner)/\(repoName)/pulls/\(prNumber)"
+        guard let url = URL(string: urlString) else {
+            throw GitProviderServiceError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(account.token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Create the request body
+        let requestBody = ["state": state]
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw GitProviderServiceError.malformedResponse
+            }
+            guard (200..<300).contains(httpResponse.statusCode) else {
+                let errorMessage = String(data: data, encoding: .utf8)
+                throw GitProviderServiceError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
+            }
+            let updatedPullRequest = try decoder.decode(PullRequest.self, from: data)
+            return updatedPullRequest
+        } catch let error as GitProviderServiceError {
+            throw error
+        } catch let decodingError as DecodingError {
+            throw GitProviderServiceError.decodingError(decodingError)
+        } catch {
+            throw GitProviderServiceError.networkError(error)
+        }
+    }
 }

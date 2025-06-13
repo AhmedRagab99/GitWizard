@@ -132,10 +132,3 @@ struct MergeSheet: View {
         )
     }
 }
-
-#Preview {
-    MergeSheet(
-        viewModel: GitViewModel(),
-        isPresented: .constant(true)
-    )
-}
