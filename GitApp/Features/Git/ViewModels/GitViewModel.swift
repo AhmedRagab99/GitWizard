@@ -25,15 +25,7 @@ class GitViewModel {
      var selectedMergeCommit: Commit?
      var isMergeDetailsVisible: Bool = false
 
-     var repositoryURL: URL? {
-        didSet {
-            if let url = repositoryURL {
-                Task {
-                    await loadRepositoryData(from: url)
-                }
-            }
-        }
-    }
+     var repositoryURL: URL? 
 
     // Search related properties
     var searchText: String = ""
@@ -72,11 +64,23 @@ class GitViewModel {
     private var cancellables = Set<AnyCancellable>()
     private let gitService = GitService()
 
-    init() {
-
+    init(url: URL) {
+        self.repositoryURL = url
         loadWorkspaceCommands()
 
     }
+    
+    func selectRepository() async {
+        guard let url = repositoryURL else {
+            errorMessage = "No repository selected"
+            return
+        }
+        
+        await loadRepositoryData(from: url)
+        // Cache the URL for future operations
+    }
+
+
 
     func isGitRepository(at: URL) async -> Bool {
             return  await gitService.isGitRepository(at: at)
@@ -721,14 +725,6 @@ class GitViewModel {
                 await logStore.refresh()
 //            }
 
-    }
-
-
-    func selectRepository(_ url: URL) {
-        repositoryURL = url
-        Task {
-            await loadRepositoryData(from: url)
-        }
     }
 
 

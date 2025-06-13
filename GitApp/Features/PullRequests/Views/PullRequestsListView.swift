@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct PullRequestsListView: View {
-    @Bindable var viewModel: PullRequestViewModel
+
     @State private var isShowingCreatePRView = false
+    @Bindable var viewModel: PullRequestViewModel
+    @Bindable var accountManager: AccountManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -92,7 +94,8 @@ struct PullRequestsListView: View {
             CreatePullRequestView(viewModel: viewModel)
         }
         .task {
-            if viewModel.pullRequests.isEmpty && viewModel.pullRequestListError == nil {
+            // Only load pull requests if the repository is available and we haven't loaded any yet
+            if viewModel.repository != nil && viewModel.pullRequests.isEmpty && viewModel.pullRequestListError == nil {
                 await viewModel.loadPullRequests(refresh: true) // Initial load
             }
         }

@@ -262,33 +262,67 @@ struct PullRequestDetailView: View {
 
     private var actionButtonsView: some View {
         HStack {
+            if pullRequest.prState == .open {
+                Button {
+                    Task {
+                        await viewModel.closePullRequest()
+                    }
+                } label: {
+                    Label("Close PR", systemImage: "xmark.circle.fill")
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .disabled(viewModel.isLoadingInitialDetails)
+            } else if pullRequest.prState == .closed {
+                Button {
+                    Task {
+                        await viewModel.reopenPullRequest()
+                    }
+                } label: {
+                    Label("Reopen PR", systemImage: "arrow.clockwise.circle.fill")
+                }
+                .buttonStyle(.bordered)
+                .tint(.green)
+                .disabled(viewModel.isLoadingInitialDetails)
+            }
+
             Spacer()
 
-            Button(action: {
-                isShowingRequestChangesSheet = true
-            }) {
-                Label("Request Changes", systemImage: "xmark.circle.fill")
-            }
-            .disabled(pullRequest.prState != .open)
-
-            Button(action: {
-                Task {
-                    await viewModel.approvePullRequest()
+            if pullRequest.prState == .open {
+                Button {
+                    isShowingRequestChangesSheet = true
+                } label: {
+                    Label("Request Changes", systemImage: "exclamationmark.circle.fill")
                 }
-            }) {
-                Label("Approve", systemImage: "checkmark.circle.fill")
-            }
-            .disabled(pullRequest.prState != .open)
+                .buttonStyle(.bordered)
+                .tint(.orange)
+                .disabled(viewModel.isLoadingInitialDetails)
 
-            Button(action: {
-                viewModel.prepareMergeDetails()
-                isShowingMergeSheet = true
-            }) {
-                Label("Merge Pull Request", systemImage: "arrow.triangle.merge")
+                Button {
+                    Task {
+                        await viewModel.approvePullRequest()
+                    }
+                } label: {
+                    Label("Approve", systemImage: "checkmark.circle.fill")
+                }
+                .buttonStyle(.bordered)
+                .tint(.green)
+                .disabled(viewModel.isLoadingInitialDetails)
+
+                Button {
+                    isShowingMergeSheet = true
+                } label: {
+                    Label("Merge", systemImage: "arrow.triangle.merge")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(pullRequest.prState == .merged || viewModel.isLoadingInitialDetails)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(pullRequest.prState != .open)
         }
-        .padding(.horizontal)
+        .overlay {
+            if viewModel.isLoadingInitialDetails {
+                ProgressView()
+                    .scaleEffect(0.8)
+            }
+        }
     }
 }

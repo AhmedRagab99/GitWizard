@@ -514,8 +514,3 @@ struct EmptyStateView: View {
         .frame(maxWidth: .infinity, minHeight: 100)
     }
 }
-
-#Preview {
-    CommitView(viewModel: GitViewModel())
-}
-
