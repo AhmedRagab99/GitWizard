@@ -111,3 +111,22 @@ struct Label: Codable, Identifiable, Hashable {
     let description: String?
 }
 */
+
+// MARK: - Status Display Extension
+extension PullRequest {
+    struct StatusDisplayInfo {
+        let displayName: String
+        let color: Color
+        let systemImage: String
+    }
+
+    var statusInfo: StatusDisplayInfo {
+        if mergedAt != nil {
+            return StatusDisplayInfo(displayName: "Merged", color: .purple, systemImage: "arrow.triangle.merge")
+        } else if state == "closed" {
+            return StatusDisplayInfo(displayName: "Closed", color: .red, systemImage: "xmark.octagon.fill")
+        } else {
+            return StatusDisplayInfo(displayName: "Open", color: .green, systemImage: "arrow.triangle.pull")
+        }
+    }
+}

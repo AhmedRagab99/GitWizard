@@ -2,46 +2,86 @@ import SwiftUI
 
 struct PullRequestRow: View {
     let pullRequest: PullRequest
+    var onView: (() -> Void)? = nil
+    var onClose: (() -> Void)? = nil
+    var onReopen: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(pullRequest.title)
-                    .font(.headline)
-                    .lineLimit(2)
-                Spacer()
-                Text("#\(pullRequest.number)")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
+        ListRow(
+            padding: EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14),
+            onTap: onView,
+            cornerRadius: 8,
+            shadowRadius: 1
+        ) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Image(systemName: pullRequest.prStatusIconName)
+                        .font(.system(size: 18))
+                        .foregroundColor(pullRequest.prStatusColor)
 
-            HStack(spacing: 4) {
-                Image(systemName: pullRequest.prStatusIconName)
-                    .foregroundColor(pullRequest.prStatusColor)
-                Text(pullRequest.prState.displayName)
-                    .font(.caption)
-                    .padding(.vertical, 2)
-                    .padding(.horizontal, 6)
-                    .background(pullRequest.prStatusColor.opacity(0.2))
-                    .cornerRadius(4)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(pullRequest.title)
+                            .font(.headline)
+                            .lineLimit(2)
 
-                Text("by \(pullRequest.user.login) · \(pullRequest.createdAt, style: .relative) ago")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+                        HStack(spacing: 8) {
+                            TagView(
+                                text: pullRequest.prState.displayName,
+                                color: pullRequest.prStatusColor,
+                                systemImage: pullRequest.prStatusIconName
+                            )
 
-            if let body = pullRequest.body, !body.isEmpty {
-                 Text(body)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
+                            Text("#\(pullRequest.number)")
+                                .font(.caption.bold())
+                                .foregroundColor(.secondary)
+
+                            Text("by \(pullRequest.user.login) · \(pullRequest.createdAt, style: .relative) ago")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    // Comment count badge is removed since the PullRequest model doesn't have a comments property
+                }
+
+                if let body = pullRequest.body, !body.isEmpty {
+                     Text(body)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                        .padding(.leading, 26) // Align with the title for better visual hierarchy
+                }
             }
         }
-        .padding(.vertical, 6)
+        .withContextMenu(type: createContextMenuType())
     }
 
+    private func createContextMenuType() -> ContextMenuItems.MenuType {
+        if let onView = onView {
+            let canClose = pullRequest.prState == .open && onClose != nil
+            let canReopen = pullRequest.prState == .closed && pullRequest.mergedAt == nil && onReopen != nil
 
+            return .pullRequest(
+                onView: onView,
+                onClose: canClose ? onClose : nil,
+                onReopen: canReopen ? onReopen : nil
+            )
+        } else {
+            // If no actions are available, provide at least a copy option
+            return .custom(items: [
+                ContextMenuItems.MenuItem(label: "Copy PR Number", icon: "doc.on.clipboard", action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("#\(pullRequest.number)", forType: .string)
+                }),
+                ContextMenuItems.MenuItem(label: "Copy PR URL", icon: "link", action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(pullRequest.htmlUrl, forType: .string)
+                })
+            ])
+        }
+    }
 }
 
 #if DEBUG

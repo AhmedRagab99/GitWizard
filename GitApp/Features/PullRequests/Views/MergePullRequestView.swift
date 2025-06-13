@@ -5,58 +5,63 @@ struct MergePullRequestView: View {
     @Binding var isPresented: Bool
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Merge Pull Request")
-                .font(.title2)
-                .fontWeight(.bold)
+        VStack(spacing: 16) {
+            SheetHeader(
+                title: "Merge Pull Request",
+                subtitle: "Combine changes from this pull request",
+                icon: "arrow.triangle.merge",
+                iconColor: .purple
+            )
 
-            Picker("Merge Strategy", selection: $viewModel.mergeMethod) {
-                Text("Merge Commit").tag("merge")
-                Text("Squash and Merge").tag("squash")
-                Text("Rebase and Merge").tag("rebase")
-            }
-            .pickerStyle(SegmentedPickerStyle())
+            Card {
+                VStack(alignment: .leading, spacing: 16) {
+                    FormSection(title: "Merge Strategy") {
+                        Picker("Merge Strategy", selection: $viewModel.mergeMethod) {
+                            Text("Merge Commit").tag("merge")
+                            Text("Squash and Merge").tag("squash")
+                            Text("Rebase and Merge").tag("rebase")
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                        .padding(.vertical, 4)
+                    }
 
-            VStack(alignment: .leading) {
-                Text("Commit Title")
-                    .font(.headline)
-                TextField("Title", text: $viewModel.mergeCommitTitle)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-            }
+                    FormSection(title: "Commit Details") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Commit Title")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            TextField("Title", text: $viewModel.mergeCommitTitle)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
 
-            VStack(alignment: .leading) {
-                Text("Commit Message (Optional)")
-                    .font(.headline)
-                TextEditor(text: $viewModel.mergeCommitMessage)
-                    .frame(height: 150)
-                    .border(Color.gray.opacity(0.5), width: 1)
-                    .cornerRadius(5)
-            }
-
-            HStack {
-                Button(action: { isPresented = false }) {
-                    Text("Cancel")
-                        .frame(maxWidth: .infinity)
+                            Text("Commit Message (Optional)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.top, 4)
+                            TextEditor(text: $viewModel.mergeCommitMessage)
+                                .frame(height: 150)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                                )
+                        }
+                    }
                 }
-                .keyboardShortcut(.cancelAction)
+            }
 
-                Button(action: {
+            SheetFooter(
+                cancelAction: { isPresented = false },
+                confirmAction: {
                     Task {
                         await viewModel.mergePullRequest()
                         isPresented = false
                     }
-                }) {
-                    Text("Confirm Merge")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(viewModel.mergeCommitTitle.isEmpty)
-            }
-            .buttonStyle(.bordered)
-
+                },
+                cancelText: "Cancel",
+                confirmText: "Confirm Merge",
+                isConfirmDisabled: viewModel.mergeCommitTitle.isEmpty
+            )
         }
-        .padding()
-        .frame(width: 400)
+        .padding(24)
+        .frame(width: 450)
     }
 }

@@ -48,65 +48,80 @@ struct PullSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Pull from repository:")
-                    .font(.headline)
-                Spacer()
-                Picker("Remote", selection: $selectedRemote) {
-                    ForEach(remotes, id: \.self) { remote in
-                        Text(remote).tag(remote)
+            SheetHeader(
+                title: "Pull Changes",
+                subtitle: "Download and integrate remote changes into your local branch",
+                icon: "arrow.down.circle.fill",
+                iconColor: .blue
+            )
+
+            Card {
+                VStack(alignment: .leading, spacing: 14) {
+                    FormSection(title: "Remote Source") {
+                        HStack {
+                            Text("Remote:")
+                                .frame(width: 80, alignment: .leading)
+                            Picker("Remote", selection: $selectedRemote) {
+                                ForEach(remotes, id: \.self) { remote in
+                                    Text(remote).tag(remote)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(minWidth: 150)
+                        }
+                    }
+
+                    FormSection(title: "Branches") {
+                        VStack(spacing: 12) {
+                            HStack {
+                                Text("Remote Branch:")
+                                    .frame(width: 120, alignment: .leading)
+                                Picker("Remote Branch", selection: $selectedRemoteBranch) {
+                                    ForEach(remoteBranches, id: \.self) { branch in
+                                        Text(branch).tag(branch)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(minWidth: 200)
+
+                                Button("Refresh") {
+                                    // TODO: Refresh remote branches
+                                }
+                                .buttonStyle(.bordered)
+                            }
+
+                            HStack {
+                                Text("Local Branch:")
+                                    .frame(width: 120, alignment: .leading)
+                                Picker("Local Branch", selection: $selectedLocalBranch) {
+                                    ForEach(localBranches, id: \.self) { branch in
+                                        Text(branch).tag(branch)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(minWidth: 200)
+                            }
+                        }
+                    }
+
+                    FormSection(title: "Pull Options", showDivider: false) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Toggle("Commit merged changes immediately", isOn: $commitMerged)
+                            Toggle("Include messages from commits being merged", isOn: $includeMessages)
+                            Toggle("Create new commit even if fast-forward merge", isOn: $createNewCommit)
+                            Toggle("Rebase instead of merge", isOn: $rebaseInsteadOfMerge)
+                                .help("WARNING: make sure you haven't pushed your changes")
+                        }
+                        .padding(8)
+                        .background(Color(.secondaryLabelColor).opacity(0.1))
+                        .cornerRadius(8)
                     }
                 }
-                .labelsHidden()
-                .frame(width: 120)
-            }
-            .padding(.bottom, 4)
-
-            HStack {
-                Text("Remote branch to pull:")
-                    .font(.subheadline)
-                Picker("Remote Branch", selection: $selectedRemoteBranch) {
-                    ForEach(remoteBranches, id: \.self) { branch in
-                        Text(branch).tag(branch)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 200)
-                Button("Refresh") {
-                    // TODO: Refresh remote branches
-                }
             }
 
-            HStack {
-                Text("Pull into local branch:")
-                    .font(.subheadline)
-                Picker("Local Branch", selection: $selectedLocalBranch) {
-                    ForEach(localBranches, id: \.self) { branch in
-                        Text(branch).tag(branch)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 200)
-            }
-
-            Text("Options")
-                .font(.subheadline)
-                .padding(.top, 8)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Commit merged changes immediately", isOn: $commitMerged)
-                Toggle("Include messages from commits being merged in merge commit", isOn: $includeMessages)
-                Toggle("Create new commit even if fast-forward merge", isOn: $createNewCommit)
-                Toggle("Rebase instead of merge (WARNING: make sure you haven't pushed your changes)", isOn: $rebaseInsteadOfMerge)
-            }
-            .padding(8)
-            .background(Color(.secondaryLabelColor))
-            .cornerRadius(8)
-
-            HStack {
-                Spacer()
-                Button("Cancel") { isPresented = false }
-                Button("OK") {
+            SheetFooter(
+                cancelAction: { isPresented = false },
+                confirmAction: {
                     let options = PullOptions(
                         commitMerged: commitMerged,
                         includeMessages: includeMessages,
@@ -115,8 +130,9 @@ struct PullSheet: View {
                     )
                     onPull(selectedRemote, selectedRemoteBranch, selectedLocalBranch, options)
                     isPresented = false
-                }
-            }
+                },
+                confirmText: "Pull"
+            )
         }
         .padding(24)
         .frame(minWidth: 500)
@@ -124,6 +140,5 @@ struct PullSheet: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(.windowBackgroundColor))
         )
-        .shadow(radius: 20)
     }
 }

@@ -4,37 +4,47 @@ struct PullRequestCommentView: View {
     let comment: PullRequestComment
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                // Consider using AsyncImage for avatars if targeting iOS 15+
-                // AsyncImage(url: URL(string: comment.user.avatarUrl ?? "")) {
-                //     $0.resizable().aspectRatio(contentMode: .fill)
-                // } placeholder: {
-                //     Image(systemName: "person.circle.fill")
-                // }
-                // .frame(width: 30, height: 30)
-                // .clipShape(Circle())
+        Card(cornerRadius: 8, shadowRadius: 1) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    // User avatar icon
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.2))
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Text(comment.user.login.prefix(1).uppercased())
+                                .font(.caption.bold())
+                                .foregroundColor(.accentColor)
+                        )
 
-                Text(comment.user.login)
-                    .fontWeight(.semibold)
-                Text("commented \(comment.createdAt, style: .relative) ago")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-                if let url = URL(string: comment.htmlUrl ?? "") {
-                    Link(destination: url) {
-                        Image(systemName: "arrow.up.right.square")
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(comment.user.login)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+
+                        Text("commented \(comment.createdAt, style: .relative) ago")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
-                    .font(.caption)
-                }
-            }
 
-            // TODO: Add Markdown rendering for the comment body if desired
-            // For now, simple Text view
-            Text(comment.body)
-                .font(.body)
+                    Spacer()
+
+                    if let url = URL(string: comment.htmlUrl ?? "") {
+                        Link(destination: url) {
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundColor(.secondary)
+                        }
+                        .font(.caption)
+                    }
+                }
+
+                // Comment content
+                Text(comment.body)
+                    .font(.body)
+                    .textSelection(.enabled)
+            }
+            .padding(.vertical, 2)
         }
-        .padding(.vertical, 8)
     }
 }
 

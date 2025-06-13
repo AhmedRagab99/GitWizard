@@ -28,10 +28,13 @@ struct MergeSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Merge")
-                .font(.title)
-                .padding(.bottom, 10)
+        VStack(alignment: .leading, spacing: 0) {
+            SheetHeader(
+                title: "Merge",
+                subtitle: "Merge changes from another branch",
+                icon: "arrow.triangle.merge",
+                iconColor: .blue
+            )
 
             // Branch type selector
             Picker("Branch Type", selection: $branchType) {
@@ -50,11 +53,9 @@ struct MergeSheet: View {
                     selectedBranch = firstRemote.name
                 }
             }
+            .padding(.bottom, 12)
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Merge from \(branchType == .local ? "local" : "remote") branch:")
-                    .font(.headline)
-
+            FormSection(title: "Merge from \(branchType == .local ? "local" : "remote") branch:") {
                 if branchType == .local {
                     Picker("Select Branch", selection: $selectedBranch) {
                         ForEach(viewModel.branches) { branch in
@@ -74,10 +75,9 @@ struct MergeSheet: View {
                 }
             }
 
+            FormSection(title: "Options", showDivider: false) {
+                Card {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Options")
-                    .font(.headline)
-
                 Toggle("Commit merge immediately (if no conflicts)", isOn: $options.commitMerged)
 
                 Toggle("Include messages from commits being merged in merge commit", isOn: $options.includeMessages)
@@ -86,35 +86,25 @@ struct MergeSheet: View {
 
                 Toggle("Rebase instead of merge (WARNING: make sure you haven't pushed changes)", isOn: $options.rebaseInsteadOfMerge)
             }
-
-            Spacer()
-
-            HStack {
-                Button("Cancel") {
-                    isPresented = false
                 }
-                .buttonStyle(.bordered)
+                }
 
                 Spacer()
 
-                Button {
+            SheetFooter(
+                cancelAction: { isPresented = false },
+                confirmAction: {
                     Task {
                         mergingInProgress = true
                         await performMerge()
                         mergingInProgress = false
                         isPresented = false
                     }
-                } label: {
-                    if mergingInProgress {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                    } else {
-                        Text("OK")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(selectedBranch.isEmpty || mergingInProgress)
-            }
+                },
+                confirmText: "Merge",
+                isConfirmDisabled: selectedBranch.isEmpty,
+                isLoading: mergingInProgress
+            )
         }
         .frame(width: 500)
         .padding()

@@ -78,7 +78,17 @@ struct AccountsListView: View {
                         .background(Color(.controlBackgroundColor))
                 } else {
                     ForEach(accountManager.accounts) { account in
-                        AccountRow(account: account, selectedAccountID: $selectedAccountID)
+                        AccountRow(
+                            account: account,
+                            selectedAccountID: $selectedAccountID,
+                            onEditToken: {
+                                accountToEdit = account
+                            },
+                            onDelete: {
+                                accountToDelete = account
+                                showDeleteConfirmation = true
+                            }
+                        )
                             .tag(account.id)
                     }
                 }

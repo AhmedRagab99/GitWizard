@@ -16,14 +16,15 @@ struct PullRequestFileView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            fileHeaderView
+        Card(cornerRadius: 8, shadowRadius: 1) {
+            VStack(alignment: .leading, spacing: 8) {
+                fileHeaderView
 
-            if showDiff {
-                diffContentView
+                if showDiff {
+                    diffContentView
+                }
             }
         }
-        .padding(.vertical, 8)
         .task(id: file.patch) {
             // This task runs when the view appears or the patch content changes.
             if showDiff && parsedChunks.isEmpty && parseState == .idle {
@@ -34,8 +35,14 @@ struct PullRequestFileView: View {
 
     private var fileHeaderView: some View {
         HStack(alignment: .center, spacing: 10) {
-            statusIcon(for: file.fileStatus)
-                .font(.title3)
+            ZStack {
+                Circle()
+                    .fill(fileStatusColor(for: file.fileStatus).opacity(0.15))
+                    .frame(width: 28, height: 28)
+                statusIcon(for: file.fileStatus)
+                    .font(.system(size: 14))
+                    .foregroundColor(fileStatusColor(for: file.fileStatus))
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.filename)
@@ -57,14 +64,18 @@ struct PullRequestFileView: View {
             Spacer()
 
             HStack(spacing: 8) {
-                Label("\(file.additions)", systemImage: "plus.circle.fill")
-                    .font(.callout)
-                    .foregroundColor(.green)
-                    .help("Additions")
-                Label("\(file.deletions)", systemImage: "minus.circle.fill")
-                    .font(.callout)
-                    .foregroundColor(.red)
-                    .help("Deletions")
+                CountBadge(
+                    count: file.additions,
+                    prefix: "+",
+                    textColor: .green,
+                    backgroundColor: Color.green.opacity(0.1)
+                )
+                CountBadge(
+                    count: file.deletions,
+                    prefix: "-",
+                    textColor: .red,
+                    backgroundColor: Color.red.opacity(0.1)
+                )
             }
             .padding(.trailing, file.patch != nil ? 0 : 8)
 
@@ -85,6 +96,8 @@ struct PullRequestFileView: View {
                 .help(showDiff ? "Hide Diff" : "Show Diff")
             }
         }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
     }
 
     @ViewBuilder
@@ -182,6 +195,21 @@ struct PullRequestFileView: View {
             Image(systemName: "arrow.right.circle.fill").foregroundColor(.blue).help("Renamed")
         default:
             Image(systemName: "doc.circle.fill").foregroundColor(.gray).help("Status: \(file.status.capitalized)")
+        }
+    }
+
+    private func fileStatusColor(for status: PullRequestFile.FileStatus) -> Color {
+        switch status {
+        case .added:
+            return .green
+        case .modified:
+            return .orange
+        case .removed:
+            return .red
+        case .renamed:
+            return .blue
+        default:
+            return .gray
         }
     }
 }

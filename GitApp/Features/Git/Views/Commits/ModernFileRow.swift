@@ -25,21 +25,32 @@ struct ModernFileRow: View {
     var isStaged: Bool = false
 
     var body: some View {
-        HStack(spacing: 14) {
-            statusIcon
-            fileInfo
-            Spacer()
-            rightSideContent
+        ListRow(
+            isSelected: isSelected,
+            padding: EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10),
+            onTap: nil, // We're handling tap with the outer view
+            backgroundColor: isHovered ? Color.accentColor.opacity(0.08) : Color(.windowBackgroundColor).opacity(0.7),
+            selectedBackgroundColor: Color.accentColor.opacity(0.18),
+            cornerRadius: 10,
+            shadowRadius: 0
+        ) {
+            HStack(spacing: 14) {
+                statusIcon
+                fileInfo
+                Spacer()
+                rightSideContent
+            }
         }
-        .padding(10)
-        .background(background)
-        .overlay(border)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isSelected ? Color.accentColor : Color(.systemGray).opacity(0.18), lineWidth: isSelected ? 1.5 : 1)
+        )
         .animation(.easeInOut(duration: 0.15), value: isSelected)
         .onHover { hovering in isHovered = hovering }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(fileDiff.fromFilePath), status: \(fileDiff.status.rawValue)")
         .help(helpText)
-        .contextMenu{ menu}
+        .withContextMenu(type: createContextMenuType())
     }
 
     private var statusIcon: some View {
@@ -99,16 +110,20 @@ struct ModernFileRow: View {
     private var lineStatsView: some View {
         HStack {
             if fileDiff.lineStats.added > 0 {
-                Text("+\(fileDiff.lineStats.added)")
-                    .font(.caption2.bold())
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 4)
+                CountBadge(
+                    count: fileDiff.lineStats.added,
+                    prefix: "+",
+                    textColor: .green,
+                    backgroundColor: Color.green.opacity(0.12)
+                )
             }
             if fileDiff.lineStats.removed > 0 {
-                Text("-\(fileDiff.lineStats.removed)")
-                    .font(.caption2.bold())
-                    .foregroundStyle(.red)
-                    .padding(.horizontal, 4)
+                CountBadge(
+                    count: fileDiff.lineStats.removed,
+                    prefix: "-",
+                    textColor: .red,
+                    backgroundColor: Color.red.opacity(0.12)
+                )
             }
         }
     }
@@ -123,17 +138,6 @@ struct ModernFileRow: View {
         .opacity(isHovered ? 1 : 0.7)
     }
 
-    private var background: some View {
-        RoundedRectangle(cornerRadius: 10)
-            .fill(isSelected ? Color.accentColor.opacity(0.18) : (isHovered ? Color.accentColor.opacity(0.08) : Color(.windowBackgroundColor).opacity(0.7)))
-            .shadow(color: isSelected ? Color.accentColor.opacity(0.10) : .clear, radius: 2, x: 0, y: 1)
-    }
-
-    private var border: some View {
-        RoundedRectangle(cornerRadius: 10)
-            .stroke(isSelected ? Color.accentColor : Color(.systemGray).opacity(0.18), lineWidth: isSelected ? 1.5 : 1)
-    }
-
     private var helpText: String {
         """
         Status: \(fileDiff.status.rawValue) (\(fileDiff.status.shortDescription))
@@ -145,73 +149,55 @@ struct ModernFileRow: View {
         """
     }
 
-    @ViewBuilder
-    private var menu: some View {
-        if let onStage = onStage {
-            Button {
-                onStage()
-            } label: {
-                Label("Stage File", systemImage: "plus.circle")
-            }
+    private func createContextMenuType() -> ContextMenuItems.MenuType {
+        // If this is a conflict file, create a custom menu with conflict resolution options
+        if fileDiff.status == .conflict, let onResolveWithMine = onResolveWithMine,
+           let onResolveWithTheirs = onResolveWithTheirs,
+           let onMarkAsResolved = onMarkAsResolved {
+
+            return .custom(items: [
+                // Standard file operations
+                ContextMenuItems.MenuItem(label: "Stage File", icon: "plus.circle", action: { onStage?() }),
+                ContextMenuItems.MenuItem(label: "Reset File (Discard Changes)", icon: "arrow.counterclockwise", action: { onReset?() }, role: .destructive, dividerAfter: true),
+
+                // Conflict resolution options
+                ContextMenuItems.MenuItem(label: "Resolve: Keep My Version", icon: "person.circle", action: onResolveWithMine),
+                ContextMenuItems.MenuItem(label: "Resolve: Take Their Version", icon: "person.2.circle", action: onResolveWithTheirs),
+                ContextMenuItems.MenuItem(label: "Mark as Resolved", icon: "checkmark.circle", action: onMarkAsResolved, dividerAfter: true),
+
+                // Additional file operations
+                ContextMenuItems.MenuItem(label: "Add to .gitignore", icon: "eye.slash", action: { onIgnore?() }),
+                ContextMenuItems.MenuItem(label: "Move to Trash", icon: "trash", action: { onTrash?() }, role: .destructive),
+                ContextMenuItems.MenuItem(label: "Copy Path", icon: "doc.on.clipboard", action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath, forType: .string)
+                })
+            ])
         }
-
-        if let onUnstage = onUnstage {
-            Button {
-                onUnstage()
-            } label: {
-                Label("Unstage File", systemImage: "minus.circle")
-            }
+        // For staging area files
+        else if isStaged, let onUnstage = onUnstage {
+            return .unstageFile(
+                onUnstage: onUnstage,
+                filePath: fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+            )
         }
-
-        if let onReset = onReset {
-            Button {
-                onReset()
-            } label: {
-                Label("Reset File (Discard Changes)", systemImage: "arrow.counterclockwise")
-            }
-            .foregroundColor(.red)
+        // For working copy files
+        else if let onStage = onStage {
+            return .file(
+                onStage: onStage,
+                onIgnore: onIgnore,
+                onRemove: onTrash,
+                filePath: fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+            )
         }
-
-        if fileDiff.status == .conflict, let onResolveWithMine = onResolveWithMine, let onResolveWithTheirs = onResolveWithTheirs, let onMarkAsResolved = onMarkAsResolved {
-            Divider()
-            Button { onResolveWithMine() } label: {
-                Label("Resolve: Keep My Version", systemImage: "person.circle")
-            }
-            Button { onResolveWithTheirs() } label: {
-                Label("Resolve: Take Their Version", systemImage: "person.2.circle")
-            }
-            Divider()
-            Button { onMarkAsResolved() } label: {
-                Label("Mark as Resolved", systemImage: "checkmark.circle")
-            }
-        }
-
-        Divider()
-
-        if let onIgnore = onIgnore {
-            Button {
-                onIgnore()
-            } label: {
-                Label("Add to .gitignore", systemImage: "eye.slash")
-            }
-        }
-
-        if let onTrash = onTrash {
-            Button(role: .destructive) {
-                onTrash()
-            } label: {
-                Label("Move to Trash", systemImage: "trash")
-            }
-        }
-
-        Divider()
-
-        Button {
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath, forType: .string)
-        } label: {
-            Label("Copy Path", systemImage: "doc.on.clipboard")
+        // Fallback - shouldn't happen but providing just in case
+        else {
+            return .custom(items: [
+                ContextMenuItems.MenuItem(label: "Copy Path", icon: "doc.on.clipboard", action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath, forType: .string)
+                })
+            ])
         }
     }
 }

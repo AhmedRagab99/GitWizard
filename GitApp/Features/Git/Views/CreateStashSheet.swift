@@ -14,29 +14,41 @@ struct CreateStashSheet: View {
     @State private var keepStaged: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("This will stash all the changes in your working copy and return it to a clean state.")
-                .font(.body)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Message:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                TextField("Optional", text: $message)
-                    .textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: 16) {
+            SheetHeader(
+                title: "Create Stash",
+                subtitle: "Save your changes temporarily without committing",
+                icon: "archivebox",
+                iconColor: .orange
+            )
+
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("This will stash all the changes in your working copy and return it to a clean state.")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .padding(.bottom, 4)
+
+                    FormSection(title: "Stash Message") {
+                        TextField("Optional message", text: $message)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    FormSection(title: "Options", showDivider: false) {
+                        Toggle("Keep staged changes", isOn: $keepStaged)
+                            .toggleStyle(.checkbox)
+                    }
+                }
             }
-            Toggle(isOn: $keepStaged) {
-                Text("Keep staged changes")
-            }
-            .toggleStyle(.checkbox)
-            HStack {
-                Spacer()
-                Button("Cancel") { isPresented = false }
-                Button("Stash") {
+
+            SheetFooter(
+                cancelAction: { isPresented = false },
+                confirmAction: {
                     onStash(message, keepStaged)
                     isPresented = false
-                }
-                .keyboardShortcut(.defaultAction)
-            }
+                },
+                confirmText: "Create Stash"
+            )
         }
         .padding(24)
         .frame(minWidth: 380)
@@ -44,6 +56,5 @@ struct CreateStashSheet: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(.windowBackgroundColor))
         )
-        .shadow(radius: 20)        
     }
 }
