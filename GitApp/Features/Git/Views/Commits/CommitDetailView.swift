@@ -26,7 +26,7 @@ struct CommitDetailView: View {
             }
         }
         .frame(height: detailHeight)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(Color(.windowBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 2)
         .animation(.easeOut(duration: 0.25), value: detailHeight)
@@ -41,15 +41,11 @@ struct CommitDetailView: View {
     }
 
     private var loadingView: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.5)
-                .padding()
-            Text("Loading commit details...")
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
+        CenteredContentMessage(
+            systemImage: "hourglass",
+            title: "",
+            message: "Loading commit details..."
+        )
     }
 
     private var contentView: some View {
@@ -61,19 +57,12 @@ struct CommitDetailView: View {
                 viewModel: viewModel,
                 onClose: onClose
             )
-            .padding(.horizontal)
-            .padding(.top)
-            .padding(.bottom, 8)
-            .background(
-                Color(NSColor.windowBackgroundColor)
-                    .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 2)
-            )
             .zIndex(10)
 
             // Content
             ZStack {
                 // Background
-                Color(NSColor.textBackgroundColor)
+                Color(.textBackgroundColor)
                     .ignoresSafeArea()
 
                 // Content based on commit type
@@ -84,11 +73,11 @@ struct CommitDetailView: View {
                     fileChangesView(details: details)
                         .transition(.opacity)
                 } else {
-                    Text("No changes to display")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(NSColor.textBackgroundColor))
+                    CenteredContentMessage(
+                        systemImage: "doc.text.magnifyingglass",
+                        title: "No Changes",
+                        message: "No changes to display for this commit"
+                    )
                 }
             }
         }
@@ -100,33 +89,33 @@ struct CommitDetailView: View {
                 // Show selected merge commit changes with a header for navigation
                 VStack(spacing: 0) {
                     // Back to merge commits header
-                    HStack {
-                        Button(action: {
-                            withAnimation(.spring()) {
-                                viewModel.selectedMergeCommit = nil
+                    Card(cornerRadius: 8, shadowRadius: 1) {
+                        HStack {
+                            Button(action: {
+                                withAnimation(.spring()) {
+                                    viewModel.selectedMergeCommit = nil
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.left")
+                                        .font(.caption.bold())
+                                    Text("Back to Merged Commits")
+                                        .font(.headline)
+                                }
                             }
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                    .font(.caption.bold())
-                                Text("Back to Merged Commits")
-                                    .font(.headline)
-                            }
+                            .buttonStyle(.plain)
+
+                            Spacer()
+
+                            Text(selectedMergeCommit.shortHash)
+                                .font(.caption.monospaced())
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(4)
                         }
-                        .buttonStyle(.plain)
-
-                        Spacer()
-
-                        Text(selectedMergeCommit.shortHash)
-                            .font(.caption.monospaced())
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(4)
                     }
-                    .padding()
-                    .background(Color(NSColor.windowBackgroundColor))
 
                     Divider()
 
@@ -135,56 +124,53 @@ struct CommitDetailView: View {
                 }
             } else {
                 // Show list of commits in the merge
-                VStack(alignment: .leading, spacing: 0) {
-                    // Header
-                    HStack {
-                        Image(systemName: "arrow.triangle.merge")
-                            .foregroundColor(.blue)
-                        Text("Commits included in this merge")
-                            .font(.headline)
+                Card(padding: .init(top: 0, leading: 0, bottom: 0, trailing: 0)) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Header
+                        HStack {
+                            Image(systemName: "arrow.triangle.merge")
+                                .foregroundColor(.blue)
+                            Text("Commits included in this merge")
+                                .font(.headline)
 
-                        Spacer()
+                            Spacer()
 
-                        Text("\(viewModel.mergeCommits.count) commits")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(4)
-                    }
-                    .padding()
-                    .background(Color(NSColor.windowBackgroundColor))
+                            CountBadge(
+                                count: viewModel.mergeCommits.count,
+                                textColor: .secondary,
+                                backgroundColor: Color.secondary.opacity(0.1)
+                            )
+                        }
+                        .padding()
+                        .background(Color(.windowBackgroundColor))
 
-                    Divider()
+                        Divider()
 
-                    // List of commits
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(viewModel.mergeCommits) { mergeCommit in
-                                MergeCommitRow(
-                                    commit: mergeCommit,
-                                    onSelect: {
-                                        Task {
-                                            await viewModel.selectMergeCommit(mergeCommit)
+                        // List of commits
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(viewModel.mergeCommits) { mergeCommit in
+                                    MergeCommitRow(
+                                        commit: mergeCommit,
+                                        onSelect: {
+                                            Task {
+                                                await viewModel.selectMergeCommit(mergeCommit)
+                                            }
                                         }
-                                    }
-                                )
-                                .padding(.horizontal)
-                                .padding(.vertical, 8)
-                                .contentShape(Rectangle())
-                                .background(Color(NSColor.textBackgroundColor))
+                                    )
+                                    .padding(.horizontal)
+                                    .padding(.vertical, 8)
+                                    .contentShape(Rectangle())
+                                    .background(Color(.textBackgroundColor))
 
-                                if mergeCommit.id != viewModel.mergeCommits.last?.id {
-                                    Divider()
+                                    if mergeCommit.id != viewModel.mergeCommits.last?.id {
+                                        Divider()
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                .background(Color(NSColor.textBackgroundColor))
-                .cornerRadius(8)
-                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
                 .padding()
             }
         }
@@ -242,60 +228,66 @@ struct MergeCommitRow: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: 12) {
-                // Commit icon
-                Image(systemName: commit.commitType.commitIcon.name)
-                    .foregroundColor(commit.commitType.commitIcon.color)
-                    .font(.system(size: 24))
-                    .frame(width: 24)
+            ListRow(
+                padding: EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8),
+                cornerRadius: 8,
+                shadowRadius: 0
+            ) {
+                HStack(spacing: 12) {
+                    // Commit icon
+                    Image(systemName: commit.commitType.commitIcon.name)
+                        .foregroundColor(commit.commitType.commitIcon.color)
+                        .font(.system(size: 24))
+                        .frame(width: 24)
 
-                // Commit info
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(commit.message)
-                        .font(.headline)
-                        .lineLimit(1)
+                    // Commit info
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(commit.message)
+                            .font(.headline)
+                            .lineLimit(1)
 
-                    HStack(spacing: 8) {
-                        // Author with avatar
-                        if let avatarURL = URL(string: commit.authorAvatar) {
-                            AsyncImage(url: avatarURL) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Image(systemName: "person.crop.circle.fill")
-                                    .foregroundColor(.secondary)
+                        HStack(spacing: 8) {
+                            // Author with avatar
+                            if let avatarURL = URL(string: commit.authorAvatar) {
+                                AsyncImage(url: avatarURL) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(width: 16, height: 16)
+                                .clipShape(Circle())
                             }
-                            .frame(width: 16, height: 16)
-                            .clipShape(Circle())
+
+                            Text(commit.author)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                            // Date
+                            Text(commit.authorDateRelative)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
+                    }
 
-                        Text(commit.author)
-                            .font(.caption)
+                    Spacer()
+
+                    // Hash and navigate icon
+                    HStack {
+                        Text(commit.shortHash)
+                            .font(.caption.monospaced())
                             .foregroundColor(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.secondary.opacity(0.1))
+                            .cornerRadius(4)
 
-                        // Date
-                        Text(commit.authorDateRelative)
+                        Image(systemName: "chevron.right")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                }
-
-                Spacer()
-
-                // Hash and navigate icon
-                HStack {
-                    Text(commit.shortHash)
-                        .font(.caption.monospaced())
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(4)
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
             }
         }
@@ -307,24 +299,30 @@ struct LineRow: View {
     let line: LineChange
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Line number
-            Text("\(line.lineNumber)")
-                .font(.caption)
-                .frame(width: 40, alignment: .trailing)
-                .padding(.horizontal, 4)
-                .foregroundColor(.secondary)
-                .background(Color(NSColor.headerColor))
+        ListRow(
+            padding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0),
+            backgroundColor: backgroundColorForLine(line),
+            cornerRadius: 0,
+            shadowRadius: 0
+        ) {
+            HStack(spacing: 0) {
+                // Line number
+                Text("\(line.lineNumber)")
+                    .font(.caption)
+                    .frame(width: 40, alignment: .trailing)
+                    .padding(.horizontal, 4)
+                    .foregroundColor(.secondary)
+                    .background(Color(.headerColor))
 
-            // Line content with appropriate color based on change type
-            Text(line.content)
-                .font(.system(.body, design: .monospaced))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(backgroundColorForLine(line))
+                // Line content with appropriate color based on change type
+                Text(line.content)
+                    .font(.system(.body, design: .monospaced))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func backgroundColorForLine(_ line: LineChange) -> Color {

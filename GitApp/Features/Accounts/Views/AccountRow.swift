@@ -21,7 +21,9 @@ struct AccountRow: View {
         ListRow(
             isSelected: isSelected,
             padding: EdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8),
-            onTap: { selectedAccountID = account.id }
+            onTap: { selectedAccountID = account.id },
+            cornerRadius: 8,
+            shadowRadius: 1
         ) {
             HStack(spacing: 10) {
                 if let avatarURLString = account.avatarURL, let avatarURL = URL(string: avatarURLString) {

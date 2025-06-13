@@ -18,7 +18,9 @@ struct RepositoryRowView: View {
         ListRow(
             isSelected: isSelected,
             padding: EdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8),
-            onTap: onOpen
+            onTap: onOpen,
+            cornerRadius: 8,
+            shadowRadius: 1
         ) {
             HStack(spacing: 12) {
                 Image(systemName: "folder.fill")

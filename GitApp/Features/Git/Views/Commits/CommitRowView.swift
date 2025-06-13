@@ -23,7 +23,9 @@ struct CommitRowView: View {
         ListRow(
             isSelected: isSelected,
             padding: EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12),
-            onTap: onSelect
+            onTap: onSelect,
+            cornerRadius: 0,
+            shadowRadius: 1
         ) {
             HStack(spacing: 12) {
                 // Commit icon based on type

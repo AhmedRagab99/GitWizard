@@ -30,7 +30,9 @@ struct ModernFileRow: View {
             padding: EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10),
             onTap: nil, // We're handling tap with the outer view
             backgroundColor: isHovered ? Color.accentColor.opacity(0.08) : Color(.windowBackgroundColor).opacity(0.7),
-            selectedBackgroundColor: Color.accentColor.opacity(0.18)
+            selectedBackgroundColor: Color.accentColor.opacity(0.18),
+            cornerRadius: 10,
+            shadowRadius: 0
         ) {
             HStack(spacing: 14) {
                 statusIcon
@@ -39,7 +41,10 @@ struct ModernFileRow: View {
                 rightSideContent
             }
         }
-        .overlay(border)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isSelected ? Color.accentColor : Color(.systemGray).opacity(0.18), lineWidth: isSelected ? 1.5 : 1)
+        )
         .animation(.easeInOut(duration: 0.15), value: isSelected)
         .onHover { hovering in isHovered = hovering }
         .accessibilityElement(children: .combine)
@@ -131,11 +136,6 @@ struct ModernFileRow: View {
         }
         .buttonStyle(.plain)
         .opacity(isHovered ? 1 : 0.7)
-    }
-
-    private var border: some View {
-        RoundedRectangle(cornerRadius: 10)
-            .stroke(isSelected ? Color.accentColor : Color(.systemGray).opacity(0.18), lineWidth: isSelected ? 1.5 : 1)
     }
 
     private var helpText: String {

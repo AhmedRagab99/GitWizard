@@ -1,24 +1,5 @@
 import SwiftUI
 
-
-func conflictBackground(_ line: Line) -> Color {
-   switch line.kind {
-   case .conflictOurs: return Color.blue.opacity(0.1)
-   case .conflictTheirs: return Color.green.opacity(0.1)
-   case .conflictStart, .conflictMiddle, .conflictEnd: return Color.red.opacity(0.1)
-   default: return .clear
-   }
-}
-
-private func conflictTextColor(_ line: Line) -> Color {
-    switch line.kind {
-    case .conflictOurs: return .blue
-    case .conflictTheirs: return .green
-    case .conflictStart, .conflictMiddle, .conflictEnd: return .red
-    default: return .primary
-    }
-}
-
 struct FileDiffView: View {
     let fileDiff: FileDiff
     var onStage: ((Chunk) -> Void)?
@@ -28,22 +9,28 @@ struct FileDiffView: View {
     var onResolveTheirs: ((Chunk) -> Void)?
     var onMarkResolved: ((Chunk) -> Void)?
     var isStaged: Bool = false
+    var title: String? = nil
 
     @State private var expandedChunks: Set<String> = []
     @State private var fontSize: CGFloat = 13
     @State private var showLineNumbers = true
 
+
     var body: some View {
         ScrollView(.vertical) {
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
+              
+
+                // Chunks
                 ForEach(fileDiff.chunks) { chunk in
                     Card(
+                        backgroundColor: chunk.hasConflict ? Color.red.opacity(0.05) : Color(.controlBackgroundColor).opacity(0.8),
                         cornerRadius: 8,
+                        shadowRadius: 1,
                         padding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
                     ) {
                         VStack(spacing: 0) {
                             chunkHeader(chunk)
-                                .background(Color(.controlBackgroundColor))
                                 .onTapGesture {
                                     withAnimation(.easeInOut(duration: 0.18)) {
                                         if expandedChunks.contains(chunk.id) {
@@ -54,24 +41,43 @@ struct FileDiffView: View {
                                     }
                                 }
                             if expandedChunks.contains(chunk.id) {
-                                ForEach(chunk.lines) { line in
-                                    if line.kind == .conflictStart || line.kind == .conflictMiddle || line.kind == .conflictEnd ||
-                                       line.kind == .conflictOurs || line.kind == .conflictTheirs {
-                                        ConflictLineView(line: line)
-                                    } else {
-                                        diffLineView(line: line)
+                                VStack(spacing: 0) {
+                                    ForEach(chunk.lines) { line in
+                                        if line.kind == .conflictStart || line.kind == .conflictMiddle || line.kind == .conflictEnd ||
+                                           line.kind == .conflictOurs || line.kind == .conflictTheirs {
+                                            ConflictLineView(line: line)
+                                        } else {
+                                            diffLineView(line: line)
+                                        }
                                     }
                                 }
                             }
                         }
+//                        .background(RoundedRectangle(cornerRadius: 8))
                     }
-                    .padding(.vertical, 2)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, 8)
+                }
+
+                // No changes indicator
+                if fileDiff.chunks.isEmpty {
+                    CenteredContentMessage(
+                        systemImage: "doc.text",
+                        title: fileDiff.displayFileName.isEmpty ? "No File Selected" : fileDiff.displayFileName,
+                        message: fileDiff.status == .added ? "New file" : "No changes to display",
+                        color: fileDiff.status == .added ? .green : .secondary
+                    )
+                    .padding(.top, 30)
                 }
             }
             .padding(.vertical, 6)
         }
         .background(Color(.windowBackgroundColor))
+        .onAppear {
+            // Expand the first chunk by default if there's only one
+            if fileDiff.chunks.count == 1, let chunkId = fileDiff.chunks.first?.id {
+                expandedChunks.insert(chunkId)
+            }
+        }
     }
 
     private func chunkHeader(_ chunk: Chunk) -> some View {
@@ -79,10 +85,20 @@ struct FileDiffView: View {
             Image(systemName: expandedChunks.contains(chunk.id) ? "chevron.down" : "chevron.right")
                 .foregroundColor(.secondary)
                 .frame(width: 20, height: 20)
+
+            if chunk.hasConflict {
+                TagView(
+                    text: "Conflict",
+                    color: .red,
+                    systemImage: "exclamationmark.triangle"
+                )
+            }
+
             Text(chunk.lines.first?.raw ?? "")
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundColor(.blue)
+                .foregroundColor(chunk.hasConflict ? .red : .blue)
                 .lineLimit(1)
+
             Spacer()
 
             if chunk.hasConflict {
@@ -91,10 +107,9 @@ struct FileDiffView: View {
                 normalButtons(for: chunk)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(chunk.hasConflict ? Color.red.opacity(0.1) : Color(.controlBackgroundColor))
-        .cornerRadius(6)
+        
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
     }
 
     @ViewBuilder
@@ -106,7 +121,7 @@ struct FileDiffView: View {
                         .font(.caption)
                         .foregroundColor(.blue)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
             }
 
             if let onResolveTheirs = onResolveTheirs {
@@ -115,7 +130,7 @@ struct FileDiffView: View {
                         .font(.caption)
                         .foregroundColor(.green)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
             }
 
             if let onMarkResolved = onMarkResolved {
@@ -124,7 +139,7 @@ struct FileDiffView: View {
                         .font(.caption)
                         .foregroundColor(.orange)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
             }
         }
     }
@@ -134,26 +149,29 @@ struct FileDiffView: View {
         HStack(spacing: 8) {
             if !isStaged, let onStage = onStage {
                 Button(action: { onStage(chunk) }) {
-                    Image(systemName: "plus.circle")
+                    Label("Stage", systemImage: "plus.circle")
+                        .font(.caption)
                         .foregroundColor(.green)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
             }
 
             if isStaged, let onUnstage = onUnstage {
                 Button(action: { onUnstage(chunk) }) {
-                    Image(systemName: "minus.circle")
+                    Label("Unstage", systemImage: "minus.circle")
+                        .font(.caption)
                         .foregroundColor(.orange)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
             }
 
             if let onReset = onReset {
                 Button(action: { onReset(chunk) }) {
-                    Image(systemName: "arrow.uturn.backward.circle")
+                    Label("Reset", systemImage: "arrow.uturn.backward.circle")
+                        .font(.caption)
                         .foregroundColor(.gray)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
             }
         }
     }
@@ -161,7 +179,9 @@ struct FileDiffView: View {
     private func diffLineView(line: Line) -> some View {
         ListRow(
             padding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0),
-            backgroundColor: lineBackground(line)
+            backgroundColor: .clear,
+            cornerRadius: 0,
+            shadowRadius: 0
         ) {
             HStack(alignment: .top, spacing: 0) {
                 if showLineNumbers {
@@ -199,3 +219,75 @@ struct FileDiffView: View {
         }
     }
 }
+
+#if DEBUG
+// Preview for FileDiffView
+struct FileDiffView_Previews: PreviewProvider {
+    static var previews: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                // Example 1: A file with chunks
+                FileDiffView(
+                    fileDiff: exampleFileDiffWithChunks,
+                    onStage: { _ in },
+                    onReset: { _ in }
+                )
+                .frame(height: 300)
+
+                // Example 2: A conflict file
+                FileDiffView(
+                    fileDiff: exampleConflictFileDiff,
+                    onResolveOurs: { _ in },
+                    onResolveTheirs: { _ in },
+                    onMarkResolved: { _ in }
+                )
+                .frame(height: 300)
+
+                // Example 3: An empty file
+                FileDiffView(
+                    fileDiff: exampleEmptyFileDiff
+                )
+                .frame(height: 200)
+            }
+            .padding()
+        }
+        .background(Color(.windowBackgroundColor))
+    }
+
+    // Sample file diff with changes
+    static var exampleFileDiffWithChunks: FileDiff {
+        let rawDiff = """
+        diff --git a/Example.swift b/Example.swift
+        index 1234567..7654321 100644
+        --- a/Example.swift
+        +++ b/Example.swift
+        @@ -1,5 +1,6 @@
+        import SwiftUI
+
+        -func oldFunction() {
+        -    print("Old implementation")
+        +func newFunction() {
+        +    // New implementation
+        +    print("Better implementation")
+        }
+        """
+        do {
+            return try FileDiff(raw: rawDiff)
+        } catch {
+            return FileDiff(untrackedFile: "Example.swift")
+        }
+    }
+
+    // Sample file diff with conflict
+    static var exampleConflictFileDiff: FileDiff {
+        var diff = FileDiff(untrackedFile: "ConflictExample.swift")
+        diff.status = .conflict
+        return diff
+    }
+
+    // Empty file diff
+    static var exampleEmptyFileDiff: FileDiff {
+        FileDiff(untrackedFile: "")
+    }
+}
+#endif

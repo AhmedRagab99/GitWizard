@@ -54,7 +54,9 @@ struct PushSheet: View {
                                     ForEach(branches, id: \.name) { branch in
                                         ListRow(
                                             isSelected: currentBranch?.name == branch.name,
-                                            padding: EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)
+                                            padding: EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4),
+                                            cornerRadius: 6,
+                                            shadowRadius: 0
                                         ) {
                                             HStack {
                                                 Toggle(isOn: Binding(

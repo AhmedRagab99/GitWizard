@@ -18,7 +18,9 @@ struct UntrackedFileRow: View {
     var body: some View {
         ListRow(
             padding: EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10),
-            backgroundColor: isHovered ? Color.accentColor.opacity(0.08) : Color(.windowBackgroundColor).opacity(0.7)
+            backgroundColor: isHovered ? Color.accentColor.opacity(0.08) : Color(.windowBackgroundColor).opacity(0.7),
+            cornerRadius: 10,
+            shadowRadius: 0
         ) {
             HStack(spacing: 14) {
                 ZStack {
@@ -53,7 +55,7 @@ struct UntrackedFileRow: View {
                 .opacity(isHovered ? 1 : 0.7)
             }
         }
-        .overlay(
+        .background(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color(.systemGray).opacity(0.18), lineWidth: 1)
         )

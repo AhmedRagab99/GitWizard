@@ -9,7 +9,9 @@ struct PullRequestRow: View {
     var body: some View {
         ListRow(
             padding: EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14),
-            onTap: onView
+            onTap: onView,
+            cornerRadius: 8,
+            shadowRadius: 1
         ) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {

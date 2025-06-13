@@ -85,7 +85,9 @@ struct DeleteBranchesView: View {
                                             } else {
                                                 selectedBranches.insert(branch)
                                             }
-                                        }
+                                        },
+                                        cornerRadius: 8,
+                                        shadowRadius: 1
                                     ) {
                                         HStack {
                                             Image(systemName: selectedBranches.contains(branch) ? "checkmark.circle.fill" : "circle")

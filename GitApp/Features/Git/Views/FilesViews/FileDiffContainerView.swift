@@ -35,30 +35,33 @@ struct FileDiffContainerView: View {
                         ConflictResolutionButtons(fileDiff: fileDiff, viewModel: viewModel)
                     } else {
                         // Stats for non-conflict files
-                        if fileDiff.lineStats.added > 0 {
-                            CountBadge(
-                                count: fileDiff.lineStats.added,
-                                prefix: "+",
-                                textColor: .green,
-                                backgroundColor: Color.green.opacity(0.12)
-                            )
-                        }
-                        if fileDiff.lineStats.removed > 0 {
-                            CountBadge(
-                                count: fileDiff.lineStats.removed,
-                                prefix: "-",
-                                textColor: .red,
-                                backgroundColor: Color.red.opacity(0.12)
-                            )
+                        HStack(spacing: 8) {
+                            if fileDiff.lineStats.added > 0 {
+                                CountBadge(
+                                    count: fileDiff.lineStats.added,
+                                    prefix: "+",
+                                    textColor: .green,
+                                    backgroundColor: Color.green.opacity(0.12)
+                                )
+                            }
+                            if fileDiff.lineStats.removed > 0 {
+                                CountBadge(
+                                    count: fileDiff.lineStats.removed,
+                                    prefix: "-",
+                                    textColor: .red,
+                                    backgroundColor: Color.red.opacity(0.12)
+                                )
+                            }
+
+                            StatusBadge(status: fileDiff.status)
                         }
                     }
-                    StatusBadge(status: fileDiff.status)
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.vertical, 12)
                 .background(Color(.controlBackgroundColor))
-                .cornerRadius(12)
-                Divider()
+                
+
                 // Diff content
                 FileDiffView(
                     fileDiff: fileDiff,
@@ -86,9 +89,9 @@ struct FileDiffContainerView: View {
                         let path = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
                         Task { await viewModel.markConflictResolved(filePath: path) }
                     } : nil,
-                    isStaged: isFileStaged
+                    isStaged: isFileStaged,
+                    title: "File Changes"
                 )
-                .background(Color(.windowBackgroundColor))
             }
         }
         .padding(8)
@@ -101,6 +104,8 @@ struct ConflictResolutionButtons: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            StatusBadge(status: .conflict)
+
             Menu {
                 Button("Keep Our Changes") {
                     let path = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath

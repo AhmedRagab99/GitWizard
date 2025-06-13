@@ -45,6 +45,8 @@ struct ListRow<Content: View>: View {
     var onTap: (() -> Void)?
     var backgroundColor: Color = Color(.windowBackgroundColor)
     var selectedBackgroundColor: Color = Color(.selectedContentBackgroundColor).opacity(0.5)
+    var cornerRadius: CGFloat = 8
+    var shadowRadius: CGFloat = 1
 
     init(
         isSelected: Bool = false,
@@ -52,6 +54,8 @@ struct ListRow<Content: View>: View {
         onTap: (() -> Void)? = nil,
         backgroundColor: Color = Color(.windowBackgroundColor),
         selectedBackgroundColor: Color = Color(.selectedContentBackgroundColor).opacity(0.5),
+        cornerRadius: CGFloat = 8,
+        shadowRadius: CGFloat = 1,
         @ViewBuilder content: () -> Content
     ) {
         self.isSelected = isSelected
@@ -59,19 +63,27 @@ struct ListRow<Content: View>: View {
         self.onTap = onTap
         self.backgroundColor = backgroundColor
         self.selectedBackgroundColor = selectedBackgroundColor
+        self.cornerRadius = cornerRadius
+        self.shadowRadius = shadowRadius
         self.content = content()
     }
 
     var body: some View {
-        content
-            .padding(padding)
-            .background(isSelected ? selectedBackgroundColor : backgroundColor)
-            .contentShape(Rectangle())
-            .if(onTap != nil) { view in
-                view.onTapGesture {
-                    onTap?()
-                }
+        Card(
+            backgroundColor: isSelected ? selectedBackgroundColor : backgroundColor,
+            cornerRadius: cornerRadius,
+            shadowRadius: shadowRadius,
+            padding: .init(top: 0, leading: 0, bottom: 0, trailing: 0)
+        ) {
+            content
+                .padding(padding)
+                .contentShape(Rectangle())
+        }
+        .if(onTap != nil) { view in
+            view.onTapGesture {
+                onTap?()
             }
+        }
     }
 }
 

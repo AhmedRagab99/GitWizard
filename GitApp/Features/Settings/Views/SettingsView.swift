@@ -91,7 +91,9 @@ struct SettingsNavigationRow: View {
         ListRow(
             isSelected: isSelected,
             padding: EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12),
-            onTap: action
+            onTap: action,
+            cornerRadius: 8,
+            shadowRadius: 0
         ) {
             Label(label, systemImage: icon)
                 .font(.body)

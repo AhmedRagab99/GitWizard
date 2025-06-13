@@ -90,6 +90,11 @@ struct FileDiff: Identifiable, Hashable {
         return ""
     }
 
+    var displayFileName: String {
+        let path = fromFilePath.isEmpty ? toFilePath : fromFilePath
+        return path.components(separatedBy: "/").last ?? path
+    }
+
     var filePathDisplay: String {
         if fromFilePath == toFilePath {
             return fromFilePath
