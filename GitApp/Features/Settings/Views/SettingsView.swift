@@ -15,35 +15,87 @@ struct SettingsView: View {
     // For now, assuming it's passed in or available in the environment.
     @Bindable var repoViewModel: RepositoryViewModel
 
+    @State private var selectedSetting: String? = nil
+
     var body: some View {
         NavigationView {
-            List {
-                NavigationLink(destination: AccountSettingsHostView(accountManager: accountManager, repoViewModel: repoViewModel)) {
-                    Label("Accounts", systemImage: "person.crop.circle.fill")
-                }
-                NavigationLink(destination: ThemeSettingsView(themeManager: themeManager)) {
-                    Label("Appearance", systemImage: "paintbrush.fill")
-                }
+            VStack(spacing: 4) {
+                // Settings navigation list
+                VStack(spacing: 0) {
+                    SettingsNavigationRow(
+                        label: "Accounts",
+                        icon: "person.crop.circle.fill",
+                        isSelected: selectedSetting == "accounts",
+                        action: { selectedSetting = "accounts" }
+                    )
 
-                NavigationLink(destination: AboutSettingsView(themeManager: themeManager)) {
-                    Label("About", systemImage: "info.circle.fill")
+                    SettingsNavigationRow(
+                        label: "Appearance",
+                        icon: "paintbrush.fill",
+                        isSelected: selectedSetting == "appearance",
+                        action: { selectedSetting = "appearance" }
+                    )
+
+                    SettingsNavigationRow(
+                        label: "About",
+                        icon: "info.circle.fill",
+                        isSelected: selectedSetting == "about",
+                        action: { selectedSetting = "about" }
+                    )
                 }
+                .background(Color(.windowBackgroundColor))
+                .cornerRadius(8)
+                .padding(.horizontal)
+
+                Spacer()
             }
-            .listStyle(SidebarListStyle()) // More appropriate for macOS settings
+            .frame(minWidth: 220, idealWidth: 250)
+            .padding(.top)
             .navigationTitle("Settings")
-//            .frame(minWidth: 220, idealWidth: 250) // Adjusted for a typical sidebar width
+            .background(Color(.windowBackgroundColor))
 
-            // Default view when no selection is made in the sidebar
-            VStack {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 50))
-                    .foregroundColor(.secondary)
-                    .padding()
-                Text("Select a settings category from the sidebar.")
-                    .font(.title2)
-                    .foregroundColor(.secondary)
+            // Content view based on selection
+            Group {
+                if selectedSetting == "accounts" {
+                    AccountSettingsHostView(accountManager: accountManager, repoViewModel: repoViewModel)
+                } else if selectedSetting == "appearance" {
+                    ThemeSettingsView(themeManager: themeManager)
+                } else if selectedSetting == "about" {
+                    AboutSettingsView(themeManager: themeManager)
+                } else {
+                    // Default view when no selection is made
+                    VStack {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.secondary)
+                            .padding()
+                        Text("Select a settings category from the sidebar.")
+                            .font(.title2)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+// Custom settings navigation row component
+struct SettingsNavigationRow: View {
+    let label: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        ListRow(
+            isSelected: isSelected,
+            padding: EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12),
+            onTap: action
+        ) {
+            Label(label, systemImage: icon)
+                .font(.body)
+                .foregroundColor(isSelected ? .primary : .secondary)
         }
     }
 }
@@ -65,55 +117,63 @@ struct AboutSettingsView: View {
     @Bindable var themeManager: ThemeManager // Access theme for consistent styling
 
     var body: some View {
-        VStack(spacing: 15) {
-            Image("GitAppIcon") // Assuming you have an app icon in your assets
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 80, height: 80)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(radius: 3)
-                .padding(.top, 20)
+        ScrollView {
+            VStack(spacing: 24) {
+                // App icon and version info
+                Card {
+                    VStack(spacing: 15) {
+                        Image("GitAppIcon") // Assuming you have an app icon in your assets
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 80, height: 80)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .shadow(radius: 3)
+                            .padding(.top, 10)
 
-            Text("GitApp")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+                        Text("GitApp")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
 
-            if let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
-               let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
-                Text("Version \(appVersion) (Build \(buildNumber))")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-            } else {
-                Text("Version 1.0.0")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-            }
+                        if let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+                        let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
+                            Text("Version \(appVersion) (Build \(buildNumber))")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Version 1.0.0")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
 
-            Text("© \(Calendar.current.component(.year, from: Date())) Your Company Name.")
-                .font(.caption)
-                .foregroundColor(.gray)
-                .padding(.bottom)
-
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
+                // App description
+                FormSection(title: "About GitApp") {
                     Text("GitApp is a modern Git client designed to streamline your workflow and enhance your productivity.")
                         .font(.body)
+                        .padding(.vertical, 4)
 
                     Text("Built with SwiftUI, leveraging the latest Apple technologies for a seamless experience across platforms.")
                         .font(.callout)
+                        .padding(.vertical, 4)
                 }
-                .padding(5)
+
+                // Copyright info
+                FormSection(title: "Legal", showDivider: false) {
+                    Text("© \(Calendar.current.component(.year, from: Date())) Your Company Name.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .padding(.vertical, 4)
+
+                    Text("Powered by Swift & SwiftUI")
+                        .font(.footnote)
+                        .foregroundColor(.gray)
+                        .padding(.vertical, 4)
+                }
             }
-            .padding(.horizontal)
-
-            Spacer()
-
-            Text("Powered by Swift & SwiftUI")
-                .font(.footnote)
-                .foregroundColor(.gray)
-                .padding(.bottom, 20)
+            .padding()
+            .frame(maxWidth: 600)
         }
-        .padding()
         .navigationTitle("About GitApp")
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }

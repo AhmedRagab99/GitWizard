@@ -24,250 +24,28 @@ struct GitClientView: View {
     @State private var showMergeSheet = false
     @State private var showFetchSheet = false
     @State private var showSearchFilters = false
-    
-    
-
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(viewModel: viewModel, selectedWorkspaceItem: $selectedWorkspaceItem)
-        } detail: {
-            VStack(spacing: 0) {
-                // Main content area
-                if selectedWorkspaceItem == .workingCopy {
-                    CommitView(viewModel: viewModel)
-                } else if selectedWorkspaceItem == .history {
-                    HistoryView(viewModel: viewModel)
-                } else if selectedWorkspaceItem == .pullRequests {
-                    if let pullRequestViewModel = pullRequestViewModel {
-                        PullRequestsListView(viewModel: pullRequestViewModel)
-                    }
-                } else {
-                    // Optionally, add a search view or placeholder
-                    Text(" coming soon...")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-        }
-        .searchable(text: $viewModel.searchText, prompt: "Search commits...")
-        .searchScopes($showSearchFilters) {
-            SearchFilterView(viewModel: viewModel)
-        }
-        .onChange(of: viewModel.searchText) { oldValue, newValue in
-            // Debounce search to avoid too many updates
-            Task {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                if viewModel.searchText == newValue { // Only proceed if the text hasn't changed
-                    await viewModel.handleSearch(newValue)
-                }
-            }
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                // Primary Actions Group
-                Group {
-                    // Theme Toggle
-                    Button(action: {
-                        themeManager.isDarkMode.toggle()
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName:"sun.max.fill")
-                                .font(.system(size: 20))
-                            Text("Switch Theme")
-                                .font(.caption)
-                        }
-                        .frame(width: 60)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Switch Theme")
-
-                    Button(action: {
-                        showFetchSheet = true
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 20))
-                            Text("Fetch")
-                                .font(.caption)
-                        }
-                        .frame(width: 60)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Fetch from Remote")
-
-                    Button(action: {
-                            showPullSheet = true
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "arrow.down.circle.fill")
-                                .font(.system(size: 20))
-                            Text("Pull")
-                                .font(.caption)
-                        }
-                        .frame(width: 60)
-                        .overlay(alignment: .topTrailing) {
-                            if viewModel.syncState.shouldPull {
-                                Circle()
-                                    .fill(.blue)
-                                    .frame(width: 8, height: 8)
-                                    .offset(x: 2, y: -2)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: {
-                        showMergeSheet = true
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "arrow.triangle.merge")
-                                .font(.system(size: 20))
-                            Text("Merge")
-                                .font(.caption)
-                        }
-                        .frame(width: 60)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: {
-                        showPushSheet = true
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 20))
-                            Text("Push")
-                                .font(.caption)
-                        }
-                        .frame(width: 60)
-                        .overlay(alignment: .topTrailing) {
-                            if  viewModel.pendingPushCount > 0 {
-                                let count = viewModel.pendingPushCount
-                                Text("\(count)")
-                                    .font(.caption2)
-                                    .foregroundColor(.white)
-                                    .padding(4)
-                                    .background(Circle().fill(.blue))
-                                    .offset(x: 2, y: -2)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: {
-                        // Show commit sheet
-                        selectedWorkspaceItem = .workingCopy
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 20))
-                            Text("Commit")
-                                .font(.caption)
-                        }
-                        .frame(width: 60)
-                        .overlay(alignment: .topTrailing) {
-                            if viewModel.pendingCommitsCount > 0 {
-                                Text("\(viewModel.pendingCommitsCount)")
-                                    .font(.caption2)
-                                    .foregroundColor(.white)
-                                    .padding(4)
-                                    .background(Circle().fill(.blue))
-                                    .offset(x: 2, y: -2)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: {
-                        showCreateBranchSheet = true
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "plus.square.on.square")
-                                .font(.system(size: 20))
-                            Text("New Branch")
-                                .font(.caption)
-                        }
-                        .frame(width: 80)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: { showStashSheet = true }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "archivebox")
-                                .font(.system(size: 20))
-                            Text("Stash")
-                                .font(.caption)
-                        }
-                        .frame(width: 60)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Divider()
-                    .padding(.horizontal, 8)
-
-                // Secondary Actions Group
-
-
-                    Button(action: {
-                        showDeleteAlert = true
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "trash")
-                                .font(.system(size: 20))
-                            Text("Delete")
-                                .font(.caption)
-                        }
-                        .frame(width: 60)
-                    }
-                    .buttonStyle(.plain)
-            }
-        }
-        .loading(viewModel.isLoading)
-        .errorAlert(viewModel.errorMessage)
-        .sheet(isPresented: $showFetchSheet) {
-            FetchSheet(
+        mainContent
+            .loading(viewModel.isLoading)
+            .errorAlert(viewModel.errorMessage)
+            .presentFetchSheet(
                 isPresented: $showFetchSheet,
                 remotes: viewModel.remoteNames,
                 currentRemote: viewModel.remoteNames.first ?? "origin",
-                onFetch: { remote, fetchAllRemotes, prune, fetchTags in
-                    Task {
-                        await viewModel.performFetch(
-                            remote: remote,
-                            fetchAllRemotes: fetchAllRemotes,
-                            prune: prune,
-                            fetchTags: fetchTags
-                        )
-                    }
-                }
+                onFetch: handleFetch
             )
-        }
-        .sheet(isPresented: $showPushSheet) {
-            PushSheet(
+            .presentPushSheet(
                 isPresented: $showPushSheet,
                 branches: viewModel.branches,
                 currentBranch: viewModel.currentBranch,
-                onPush: { selectedBranches, pushTags in
-                    Task {
-                        for branch in selectedBranches {
-                            await viewModel.push(branch: branch, pushTags: pushTags)
-                        }
-                    }
-                }
+                onPush: handlePush
             )
-        }
-        .sheet(isPresented: $showStashSheet) {
-            CreateStashSheet(
+            .presentCreateStashSheet(
                 isPresented: $showStashSheet,
-                onStash: { message, keepStaged in
-                    Task {
-                        await viewModel.createStash(message: message, keepStaged: keepStaged)
-                    }
-                }
+                onStash: handleStash
             )
-        }
-        .sheet(isPresented: $showPullSheet) {
-            PullSheet(
+            .presentPullSheet(
                 isPresented: $showPullSheet,
                 remotes: ["origin"],
                 remoteBranches: viewModel.remotebranches.map { $0.name },
@@ -275,45 +53,298 @@ struct GitClientView: View {
                 currentRemote: "origin",
                 currentRemoteBranch: viewModel.currentBranch?.name ?? "",
                 currentLocalBranch: viewModel.currentBranch?.name ?? "",
-                onPull: { remote, remoteBranch, localBranch, options in
-                    Task {
-                        await viewModel.pull(remote: remote, remoteBranch: remoteBranch, localBranch: localBranch, options: options)
-                    }
-                }
+                onPull: handlePull
             )
-        }
-        .sheet(isPresented: $showMergeSheet) {
-            MergeSheet(
-                viewModel: viewModel,
-                isPresented: $showMergeSheet
+            .presentMergeSheet(
+                isPresented: $showMergeSheet,
+                viewModel: viewModel
             )
-        }
-        .sheet(isPresented: $showCreateBranchSheet) {
-            CreateBranchSheet(
+            .presentCreateBranchSheet(
                 isPresented: $showCreateBranchSheet,
                 currentBranch: viewModel.currentBranch?.name ?? "",
-                onCreate: { branchName, commitSource, specifiedCommit, checkout in
-                    Task {
-                        await viewModel.createBranch(named: branchName, checkout: checkout)
-                    }
-                }
+                onCreate: handleCreateBranch
             )
-        }
-        .sheet(isPresented: $showDeleteAlert) {
-            DeleteBranchesView(
+            .presentDeleteBranchesSheet(
                 isPresented: $showDeleteAlert,
                 branches: viewModel.branches + viewModel.remotebranches,
-                onDelete: { branches, deleteRemote, isRemote, forceDelete in
-                    await viewModel.deleteBranches(branches, deleteRemote: deleteRemote, isRemote: isRemote, forceDelete: forceDelete)
-                }
+                onDelete: handleDeleteBranches
             )
+            .onAppear {
+                viewModel.selectRepository(url)
+            }
+    }
+
+    // Split the main content into a computed property
+    private var mainContent: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            SidebarView(viewModel: viewModel, selectedWorkspaceItem: $selectedWorkspaceItem)
+        } detail: {
+            detailContent
         }
-        .onAppear {
-            viewModel.selectRepository(url)
-            
+        .searchable(text: $viewModel.searchText, prompt: "Search commits...")
+        .searchScopes($showSearchFilters) {
+            SearchFilterView(viewModel: viewModel)
+        }
+        .onChange(of: viewModel.searchText) { oldValue, newValue in
+            handleSearchTextChange(newValue)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                toolbarButtonsContent
+            }
         }
     }
 
+    // Split detail content into its own view
+    private var detailContent: some View {
+        VStack(spacing: 0) {
+            if selectedWorkspaceItem == .workingCopy {
+                CommitView(viewModel: viewModel)
+            } else if selectedWorkspaceItem == .history {
+                HistoryView(viewModel: viewModel)
+            } else if selectedWorkspaceItem == .pullRequests {
+                if let pullRequestViewModel = pullRequestViewModel {
+                    PullRequestsListView(viewModel: pullRequestViewModel)
+                }
+            } else {
+                Text("Coming soon...")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    // Handle search text changes
+    private func handleSearchTextChange(_ newValue: String) {
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            if viewModel.searchText == newValue { // Only proceed if the text hasn't changed
+                await viewModel.handleSearch(newValue)
+            }
+        }
+    }
+
+    // Toolbar buttons content
+    private var toolbarButtonsContent: some View {
+        Group {
+            themeToggleButton
+            fetchButton
+            pullButton
+            mergeButton
+            pushButton
+            commitButton
+            newBranchButton
+            stashButton
+
+            Divider()
+                .padding(.horizontal, 8)
+
+            deleteButton
+        }
+    }
+
+    private var themeToggleButton: some View {
+        Button(action: {
+            themeManager.isDarkMode.toggle()
+        }) {
+            VStack(spacing: 4) {
+                Image(systemName:"sun.max.fill")
+                    .font(.system(size: 20))
+                Text("Switch Theme")
+                    .font(.caption)
+            }
+            .frame(width: 60)
+        }
+        .buttonStyle(.plain)
+        .help("Switch Theme")
+    }
+
+    private var fetchButton: some View {
+        Button(action: {
+            showFetchSheet = true
+        }) {
+            VStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 20))
+                Text("Fetch")
+                    .font(.caption)
+            }
+            .frame(width: 60)
+        }
+        .buttonStyle(.plain)
+        .help("Fetch from Remote")
+    }
+
+    private var pullButton: some View {
+        Button(action: {
+            showPullSheet = true
+        }) {
+            VStack(spacing: 4) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 20))
+                Text("Pull")
+                    .font(.caption)
+            }
+            .frame(width: 60)
+            .overlay(alignment: .topTrailing) {
+                if viewModel.syncState.shouldPull {
+                    Circle()
+                        .fill(.blue)
+                        .frame(width: 8, height: 8)
+                        .offset(x: 2, y: -2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var mergeButton: some View {
+        Button(action: {
+            showMergeSheet = true
+        }) {
+            VStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.merge")
+                    .font(.system(size: 20))
+                Text("Merge")
+                    .font(.caption)
+            }
+            .frame(width: 60)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var pushButton: some View {
+        Button(action: {
+            showPushSheet = true
+        }) {
+            VStack(spacing: 4) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 20))
+                Text("Push")
+                    .font(.caption)
+            }
+            .frame(width: 60)
+            .overlay(alignment: .topTrailing) {
+                if viewModel.pendingPushCount > 0 {
+                    CountBadge(count: viewModel.pendingPushCount)
+                        .offset(x: 2, y: -2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var commitButton: some View {
+        Button(action: {
+            selectedWorkspaceItem = .workingCopy
+        }) {
+            VStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 20))
+                Text("Commit")
+                    .font(.caption)
+            }
+            .frame(width: 60)
+            .overlay(alignment: .topTrailing) {
+                if viewModel.pendingCommitsCount > 0 {
+                    CountBadge(count: viewModel.pendingCommitsCount)
+                        .offset(x: 2, y: -2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var newBranchButton: some View {
+        Button(action: {
+            showCreateBranchSheet = true
+        }) {
+            VStack(spacing: 4) {
+                Image(systemName: "plus.square.on.square")
+                    .font(.system(size: 20))
+                Text("New Branch")
+                    .font(.caption)
+            }
+            .frame(width: 80)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var stashButton: some View {
+        Button(action: { showStashSheet = true }) {
+            VStack(spacing: 4) {
+                Image(systemName: "archivebox")
+                    .font(.system(size: 20))
+                Text("Stash")
+                    .font(.caption)
+            }
+            .frame(width: 60)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var deleteButton: some View {
+        Button(action: {
+            showDeleteAlert = true
+        }) {
+            VStack(spacing: 4) {
+                Image(systemName: "trash")
+                    .font(.system(size: 20))
+                Text("Delete")
+                    .font(.caption)
+            }
+            .frame(width: 60)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// Extension to apply all sheet presenters cleanly
+extension GitClientView {
+
+    private func handleFetch(remote: String, fetchAllRemotes: Bool, prune: Bool, fetchTags: Bool) {
+        Task {
+            await viewModel.performFetch(
+                remote: remote,
+                fetchAllRemotes: fetchAllRemotes,
+                prune: prune,
+                fetchTags: fetchTags
+            )
+        }
+    }
+
+    private func handlePush(selectedBranches: [Branch], pushTags: Bool) {
+        Task {
+            for branch in selectedBranches {
+                await viewModel.push(branch: branch, pushTags: pushTags)
+            }
+        }
+    }
+
+    private func handleStash(message: String, keepStaged: Bool) {
+        Task {
+            await viewModel.createStash(message: message, keepStaged: keepStaged)
+        }
+    }
+
+    private func handlePull(remote: String, remoteBranch: String, localBranch: String, options: PullSheet.PullOptions) {
+        Task {
+            await viewModel.pull(remote: remote, remoteBranch: remoteBranch, localBranch: localBranch, options: options)
+        }
+    }
+
+    private func handleCreateBranch(branchName: String, commitSource: CommitSource, specifiedCommit: String?, checkout: Bool) {
+        Task {
+            await viewModel.createBranch(named: branchName, checkout: checkout)
+        }
+    }
+
+    // Modified to return a non-async function wrapper that calls the async method inside a Task
+    private func handleDeleteBranches(branches: [Branch], deleteRemote: Bool, isRemote: Bool, forceDelete: Bool) {
+        Task {
+            await viewModel.deleteBranches(branches, deleteRemote: deleteRemote, isRemote: isRemote, forceDelete: forceDelete)
+        }
+    }
 }
 
 struct SearchFilterView: View {

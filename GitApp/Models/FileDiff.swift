@@ -7,78 +7,7 @@
 
 import Foundation
 import SwiftUI
-enum FileStatus: String {
-    case modified = "Modified"
-    case added = "Added"
-    case removed = "Removed"
-    case renamed = "Renamed"
-    case copied = "Copied"
-    case unknown = "Unknown"
-    case untracked = "Untracked"
-    case ignored = "Ignored"
-    case deleted = "Deleted"
-    case conflict = "Conflict"
 
-    // File status codes from git
-    static func fromGitStatus(_ status: String) -> FileStatus {
-        switch status {
-        case "M": return .modified
-        case "A": return .added
-        case "D": return .deleted
-        case "R": return .renamed
-        case "C": return .copied
-        case "?": return .untracked
-        case "!": return .ignored
-        case "U": return .conflict
-        default: return .unknown
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .added: return "plus.circle.fill"
-        case .modified: return "pencil.circle.fill"
-        case .deleted: return "minus.circle.fill"
-        case .renamed: return "arrow.right.circle.fill"
-        case .untracked: return "questionmark.circle.fill"
-        case .ignored: return "questionmark.circle.fill"
-        case .copied: return "doc.on.doc.fill"
-        case .removed: return "minus.circle.fill"
-        case .unknown: return "questionmark.circle.fill"
-        case .conflict: return "exclamationmark.triangle.fill"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .added: return .green
-        case .modified: return .blue
-        case .deleted: return .red
-        case .renamed: return .orange
-        case .untracked: return .gray
-        case .ignored: return .gray
-        case .removed: return .red
-        case .copied: return .yellow
-        case .unknown: return .purple
-        case .conflict: return .purple
-        }
-    }
-
-    var shortDescription: String {
-        switch self {
-        case .modified: return "M"
-        case .added: return "A"
-        case .removed: return "R"
-        case .renamed: return "Ren"
-        case .copied: return "C"
-        case .unknown: return "?"
-        case .untracked: return "U"
-        case .ignored: return "I"
-        case .deleted: return "D"
-        case .conflict: return "!"
-        }
-    }
-}
 
 struct FileDiff: Identifiable, Hashable {
     var id: String { raw }

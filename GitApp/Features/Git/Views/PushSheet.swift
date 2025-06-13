@@ -32,7 +32,12 @@ struct PushSheet: View {
                 .font(.subheadline)
                 .padding(.bottom, 2)
 
-            TableHeader()
+            TableHeader(columns: [
+                .init(title: "", width: 30),
+                .init(title: "Local Branch", width: nil),
+                .init(title: "Remote Branch", width: nil),
+                .init(title: "", width: 30)
+            ])
 
             ScrollView {
                 VStack(spacing: 0) {
@@ -98,19 +103,6 @@ struct PushSheet: View {
             if let current = currentBranch {
                 selectedBranches = [current.name]
             }
-        }        
-    }
-}
-
-private struct TableHeader: View {
-    var body: some View {
-        HStack {
-            Text("").frame(width: 30)
-            Text("Local branch").font(.caption).frame(maxWidth: .infinity, alignment: .leading)
-            Text("Remote branch").font(.caption).frame(maxWidth: .infinity, alignment: .leading)
-            Text("Track?").font(.caption).frame(width: 40)
         }
-        .padding(.vertical, 2)
-        .background(Color(.secondaryLabelColor))
     }
 }

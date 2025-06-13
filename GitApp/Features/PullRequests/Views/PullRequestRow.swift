@@ -2,46 +2,71 @@ import SwiftUI
 
 struct PullRequestRow: View {
     let pullRequest: PullRequest
+    var onView: (() -> Void)? = nil
+    var onClose: (() -> Void)? = nil
+    var onReopen: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(pullRequest.title)
-                    .font(.headline)
-                    .lineLimit(2)
-                Spacer()
-                Text("#\(pullRequest.number)")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
+        ListRow(onTap: onView) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(pullRequest.title)
+                        .font(.headline)
+                        .lineLimit(2)
+                    Spacer()
+                    Text("#\(pullRequest.number)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
 
-            HStack(spacing: 4) {
-                Image(systemName: pullRequest.prStatusIconName)
-                    .foregroundColor(pullRequest.prStatusColor)
-                Text(pullRequest.prState.displayName)
-                    .font(.caption)
-                    .padding(.vertical, 2)
-                    .padding(.horizontal, 6)
-                    .background(pullRequest.prStatusColor.opacity(0.2))
-                    .cornerRadius(4)
+                HStack(spacing: 4) {
+                    TagView(
+                        text: pullRequest.prState.displayName,
+                        color: pullRequest.prStatusColor,
+                        systemImage: pullRequest.prStatusIconName
+                    )
 
-                Text("by \(pullRequest.user.login) · \(pullRequest.createdAt, style: .relative) ago")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+                    Text("by \(pullRequest.user.login) · \(pullRequest.createdAt, style: .relative) ago")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
 
-            if let body = pullRequest.body, !body.isEmpty {
-                 Text(body)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
+                if let body = pullRequest.body, !body.isEmpty {
+                     Text(body)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
             }
         }
-        .padding(.vertical, 6)
+        .withContextMenu(type: createContextMenuType())
     }
 
+    private func createContextMenuType() -> ContextMenuItems.MenuType {
+        if let onView = onView {
+            let canClose = pullRequest.prState == .open && onClose != nil
+            let canReopen = pullRequest.prState == .closed && pullRequest.mergedAt == nil && onReopen != nil
 
+            return .pullRequest(
+                onView: onView,
+                onClose: canClose ? onClose : nil,
+                onReopen: canReopen ? onReopen : nil
+            )
+        } else {
+            // If no actions are available, provide at least a copy option
+            return .custom(items: [
+                ContextMenuItems.MenuItem(label: "Copy PR Number", icon: "doc.on.clipboard", action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("#\(pullRequest.number)", forType: .string)
+                }),
+                ContextMenuItems.MenuItem(label: "Copy PR URL", icon: "link", action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(pullRequest.htmlUrl, forType: .string)
+                })
+            ])
+        }
+    }
 }
 
 #if DEBUG

@@ -11,85 +11,86 @@ struct FileDiffContainerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 12) {
-                Image(systemName: fileDiff.status.icon)
-                    .foregroundColor(fileDiff.status.color)
-                    .font(.system(size: 22, weight: .bold))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(fileDiff.fromFilePath.components(separatedBy: "/").last ?? fileDiff.fromFilePath)
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(fileDiff.fromFilePath)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
+        Card(
+            cornerRadius: 14,
+            shadowRadius: 3,
+            padding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+        ) {
+            VStack(spacing: 0) {
+                // Header
+                HStack(spacing: 12) {
+                    Image(systemName: fileDiff.status.icon)
+                        .foregroundColor(fileDiff.status.color)
+                        .font(.system(size: 22, weight: .bold))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(fileDiff.fromFilePath.components(separatedBy: "/").last ?? fileDiff.fromFilePath)
+                            .font(.system(size: 16, weight: .semibold))
+                        Text(fileDiff.fromFilePath)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
 
-                if fileDiff.status == .conflict {
-                    ConflictResolutionButtons(fileDiff: fileDiff, viewModel: viewModel)
-                } else {
-                    // Stats for non-conflict files
-                    if fileDiff.lineStats.added > 0 {
-                        Text("+\(fileDiff.lineStats.added)")
-                            .font(.caption2.bold())
-                            .foregroundStyle(.green)
-                            .padding(.horizontal, 6)
-                            .background(Color.green.opacity(0.12))
-                            .cornerRadius(5)
+                    if fileDiff.status == .conflict {
+                        ConflictResolutionButtons(fileDiff: fileDiff, viewModel: viewModel)
+                    } else {
+                        // Stats for non-conflict files
+                        if fileDiff.lineStats.added > 0 {
+                            CountBadge(
+                                count: fileDiff.lineStats.added,
+                                prefix: "+",
+                                textColor: .green,
+                                backgroundColor: Color.green.opacity(0.12)
+                            )
+                        }
+                        if fileDiff.lineStats.removed > 0 {
+                            CountBadge(
+                                count: fileDiff.lineStats.removed,
+                                prefix: "-",
+                                textColor: .red,
+                                backgroundColor: Color.red.opacity(0.12)
+                            )
+                        }
                     }
-                    if fileDiff.lineStats.removed > 0 {
-                        Text("-\(fileDiff.lineStats.removed)")
-                            .font(.caption2.bold())
-                            .foregroundStyle(.red)
-                            .padding(.horizontal, 6)
-                            .background(Color.red.opacity(0.12))
-                            .cornerRadius(5)
-                    }
+                    StatusBadge(status: fileDiff.status)
                 }
-                StatusBadge(status: fileDiff.status)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color(.controlBackgroundColor))
+                .cornerRadius(12)
+                Divider()
+                // Diff content
+                FileDiffView(
+                    fileDiff: fileDiff,
+                    onStage: { chunk in
+                        viewModel.stageChunk(chunk, in: fileDiff)
+                    },
+                    onUnstage: { chunk in
+                        viewModel.unstageChunk(chunk, in: fileDiff)
+                    },
+                    onReset: { chunk in
+                        viewModel.resetChunk(chunk, in: fileDiff)
+                    },
+                    onResolveOurs: fileDiff.status == .conflict ? { chunk in
+                        // Resolve using "our" changes
+                        let path = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+                        Task { await viewModel.resolveConflictUsingOurs(filePath: path) }
+                    } : nil,
+                    onResolveTheirs: fileDiff.status == .conflict ? { chunk in
+                        // Resolve using "their" changes
+                        let path = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+                        Task { await viewModel.resolveConflictUsingTheirs(filePath: path) }
+                    } : nil,
+                    onMarkResolved: fileDiff.status == .conflict ? { chunk in
+                        // Mark as resolved after manual edits
+                        let path = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+                        Task { await viewModel.markConflictResolved(filePath: path) }
+                    } : nil,
+                    isStaged: isFileStaged
+                )
+                .background(Color(.windowBackgroundColor))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Color(.controlBackgroundColor))
-            .cornerRadius(12)
-            Divider()
-            // Diff content
-            FileDiffView(
-                fileDiff: fileDiff,
-                onStage: { chunk in
-                    viewModel.stageChunk(chunk, in: fileDiff)
-                },
-                onUnstage: { chunk in
-                    viewModel.unstageChunk(chunk, in: fileDiff)
-                },
-                onReset: { chunk in
-                    viewModel.resetChunk(chunk, in: fileDiff)
-                },
-                onResolveOurs: fileDiff.status == .conflict ? { chunk in
-                    // Resolve using "our" changes
-                    let path = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
-                    Task { await viewModel.resolveConflictUsingOurs(filePath: path) }
-                } : nil,
-                onResolveTheirs: fileDiff.status == .conflict ? { chunk in
-                    // Resolve using "their" changes
-                    let path = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
-                    Task { await viewModel.resolveConflictUsingTheirs(filePath: path) }
-                } : nil,
-                onMarkResolved: fileDiff.status == .conflict ? { chunk in
-                    // Mark as resolved after manual edits
-                    let path = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
-                    Task { await viewModel.markConflictResolved(filePath: path) }
-                } : nil,
-                isStaged: isFileStaged
-            )
-            .background(Color(.windowBackgroundColor))
         }
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color(.controlBackgroundColor))
-                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
-        )
         .padding(8)
     }
 }

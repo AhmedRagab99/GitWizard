@@ -286,31 +286,6 @@ struct PullRequestDetailView: View {
     }
 }
 
-// Helper View for centered messages (like "No description")
-struct CenteredContentMessage: View {
-    let systemImage: String
-    var title: String? = nil // Optional title
-    let message: String
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 40))
-                .foregroundColor(.secondary.opacity(0.6))
-            if let title = title, !title.isEmpty {
-                 Text(title)
-                    .font(.title3)
-                    .fontWeight(.medium)
-            }
-            Text(message)
-                .font(.callout)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
-    }
-}
 
 // Extension to PullRequest to get status display info (should be in PullRequest.swift)
 extension PullRequest {

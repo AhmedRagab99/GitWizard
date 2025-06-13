@@ -19,43 +19,23 @@ struct PullRequestsListView: View {
                 ProgressView("Loading Pull Requests...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let errorMessage = viewModel.pullRequestListError, viewModel.pullRequests.isEmpty {
-                VStack(spacing: 15) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.largeTitle)
-                        .foregroundColor(.red)
-                    Text("Error Loading Pull Requests")
-                        .font(.title2)
-                    Text(errorMessage)
-                        .font(.callout)
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal)
-                    Button {
+                EmptyListView(
+                    title: "Error Loading Pull Requests",
+                    message: errorMessage,
+                    systemImage: "exclamationmark.triangle.fill",
+                    action: {
                         Task {
                             await viewModel.loadPullRequests(refresh: true)
                         }
-                    } label: {
-                        Label("Retry", systemImage: "arrow.clockwise")
-                            .padding(.horizontal)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    },
+                    actionTitle: "Retry"
+                )
             } else if viewModel.pullRequests.isEmpty {
-                VStack(spacing: 15) {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary)
-                    Text("No Pull Requests")
-                        .font(.title2)
-                    Text("No pull requests found matching the current filter.")
-                        .font(.callout)
-                        .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
-                        .padding(.horizontal)
-                     // Optionally, a Retry button here as well if applicable
-                }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EmptyListView(
+                    title: "No Pull Requests",
+                    message: "No pull requests found matching the current filter.",
+                    systemImage: "doc.text.magnifyingglass"
+                )
             } else {
                 listContentView
             }
