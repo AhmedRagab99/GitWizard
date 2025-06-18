@@ -420,4 +420,15 @@ actor GitService {
             try await Process.output(GitAddPathspec(directory: directory, pathspec: file))
         }
     }
+
+    // MARK: - Blame Operations
+    func getBlame(in directory: URL, filePath: String) async throws -> [BlameLine] {
+        try await Process.output(GitBlame(directory: directory, filePath: filePath))
+    }
+
+    // MARK: - Search Operations
+    func searchFileContent(in directory: URL, pattern: String) async throws -> [FileSearchResult] {
+        try await Process.output(GitGrep(directory: directory, pattern: pattern))
+    }
+
 }

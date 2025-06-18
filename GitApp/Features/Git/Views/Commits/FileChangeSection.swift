@@ -15,11 +15,13 @@ struct FileChangeSection: View {
     @Bindable var viewModel: GitViewModel
     @State private var isExpanded: Bool
     @State private var language: Language = .other
+    var showBlameInfo: Bool = false
 
-    init(fileDiff: FileDiff, viewModel: GitViewModel, isExpanded: Bool = false) {
+    init(fileDiff: FileDiff, viewModel: GitViewModel, isExpanded: Bool = false, showBlameInfo: Bool = false) {
         self.fileDiff = fileDiff
         self.viewModel = viewModel
         self._isExpanded = State(initialValue: isExpanded)
+        self.showBlameInfo = showBlameInfo
     }
 
     private var statusColor: Color {
@@ -28,6 +30,12 @@ struct FileChangeSection: View {
 
     private var statusIcon: String {
         return fileDiff.status.icon
+    }
+
+    private var blameInfo: [Int: BlameLine]? {
+        // Get blame info for this file if available
+        let filePath = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+        return viewModel.fileBlameInfo[filePath]
     }
 
     var body: some View {
@@ -42,7 +50,14 @@ struct FileChangeSection: View {
                 LazyVStack(spacing: 0) {
                     ForEach(fileDiff.chunks) { chunk in
                         ChunkView(
-                            chunk: chunk
+                            chunk: chunk,
+                            blameInfo: showBlameInfo ? blameInfo : nil,
+                            onBlameSelected: { commitHash in
+                                if let commit = viewModel.commits.first(where: { $0.hash == commitHash }) {
+                                    viewModel.selectedCommit = commit
+                                    viewModel.loadCommitDetails(commit)
+                                }
+                            }
                         )
                     }
                 }
@@ -58,6 +73,14 @@ struct FileChangeSection: View {
             // Load language based on file extension
             let fileExtension = (fileDiff.filePathDisplay as NSString).pathExtension
             language = Language.language(for: fileExtension)
+
+            // Preload blame info if needed
+            if showBlameInfo {
+                let filePath = fileDiff.fromFilePath.isEmpty ? fileDiff.toFilePath : fileDiff.fromFilePath
+                Task {
+                    _ = await viewModel.getBlameForFile(filePath: filePath)
+                }
+            }
         }
     }
 
@@ -79,6 +102,13 @@ struct FileChangeSection: View {
             Text(fileDiff.fromFilePath)
                 .font(.headline)
             Spacer()
+
+            // Blame indicator if enabled
+            if showBlameInfo {
+                Image(systemName: "person.text.rectangle")
+                    .foregroundColor(.blue)
+                    .opacity(0.8)
+            }
 
             // Open file button
             Button(action: {
@@ -117,6 +147,9 @@ struct FileChangeSection: View {
 
 struct ChunkView: View {
     let chunk: Chunk
+    var blameInfo: [Int: BlameLine]?
+    var onBlameSelected: ((String) -> Void)?
+
     private var enumeratedLines: [(offset: Int, element: Line)] {
         Array(chunk.lines.enumerated())
     }
@@ -138,7 +171,9 @@ struct ChunkView: View {
                     LineView(
                         line: line,
                         isAdded: line.kind == .added,
-                        isRemoved: line.kind == .removed
+                        isRemoved: line.kind == .removed,
+                        blameInfo: blameInfo != nil && line.toFileLineNumber != nil ? blameInfo?[line.toFileLineNumber!] : nil,
+                        onBlameSelected: onBlameSelected
                     )
                 }
             }
@@ -151,6 +186,8 @@ struct LineView: View {
     let line: Line
     let isAdded: Bool
     let isRemoved: Bool
+    let blameInfo: BlameLine?
+    var onBlameSelected: ((String) -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -161,12 +198,23 @@ struct LineView: View {
                 .foregroundColor(.secondary)
 
             // Line content
-                Text(line.raw)
-                    .font(.system(.body, design: .monospaced))
-                    .padding(.leading, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(lineBackground)
+            Text(line.raw)
+                .font(.system(.body, design: .monospaced))
+                .padding(.leading, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(lineBackground)
 
+            // Blame info if available
+            if let blame = blameInfo, !isAdded, !isRemoved {
+                LineBlameView(
+                    author: blame.author,
+                    commitHash: blame.commitHash,
+                    date: blame.date,
+                    onTap: {
+                        onBlameSelected?(blame.commitHash)
+                    }
+                )
+            }
         }
         .padding(.horizontal)
     }

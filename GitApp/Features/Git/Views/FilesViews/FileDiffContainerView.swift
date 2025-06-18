@@ -3,6 +3,9 @@ import SwiftUI
 struct FileDiffContainerView: View {
     @Bindable var viewModel: GitViewModel
     let fileDiff: FileDiff
+    @State private var showBlame: Bool = false
+    @State private var isBlameLoaded: Bool = false
+    @State private var blameViewHeight: CGFloat = 400
 
     // Determine if this file is staged based on where it appears in the view model
     private var isFileStaged: Bool {

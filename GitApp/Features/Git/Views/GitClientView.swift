@@ -26,6 +26,22 @@ private struct FirstAppear: ViewModifier {
     }
 }
 
+// Update WorkspaceSidebarItem to include blame and search
+enum WorkspaceSidebarItem: String, CaseIterable, Identifiable {
+    case workingCopy = "Working Copy"
+    case history = "History"
+    case pullRequests = "Pull Requests"
+
+    var id: String { self.rawValue }
+
+    var icon: String {
+        switch self {
+        case .workingCopy: return "arrow.triangle.branch"
+        case .history: return "clock"
+        case .pullRequests: return "arrow.triangle.pull"
+        }
+    }
+}
 
 struct GitClientView: View {
     @Bindable var viewModel: GitViewModel
@@ -46,6 +62,7 @@ struct GitClientView: View {
     @State private var showMergeSheet = false
     @State private var showFetchSheet = false
     @State private var showSearchFilters = false
+    @State private var selectedFilePath: String?
 
     var body: some View {
         mainContent
@@ -128,7 +145,6 @@ struct GitClientView: View {
             } else if selectedWorkspaceItem == .history {
                 HistoryView(viewModel: viewModel)
             } else if selectedWorkspaceItem == .pullRequests {
-
                 PullRequestsListView(viewModel: getVM(), accountManager: accountManager)
             } else {
                 Text("Coming soon...")
@@ -194,6 +210,13 @@ struct GitClientView: View {
         }
     }
 
+    
+    
+    
+    
+    
+    
+    
     // Toolbar buttons content
     private var toolbarButtonsContent: some View {
         Group {

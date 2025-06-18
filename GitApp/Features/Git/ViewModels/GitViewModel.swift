@@ -3,6 +3,30 @@ import Combine
 import Foundation
 import Observation
 
+struct BlameLine: Identifiable {
+    let id = UUID()
+    let lineNumber: Int
+    let author: String
+    let commitHash: String
+    let date: Date
+    let content: String
+}
+
+enum CommitSearchType: String, CaseIterable, Identifiable {
+    case commitMessage = "Commit Message"
+    case author = "Author"
+    case sha = "SHA"
+    case tagOrBranch = "Tags/Branches"
+
+    var id: String { self.rawValue }
+}
+
+struct FileSearchResult: Identifiable {
+    let id = UUID()
+    let filePath: String
+    let matchContent: String
+    let lineNumber: Int
+}
 @Observable
 class GitViewModel {
     // --- Published Properties (State) ---
@@ -25,7 +49,7 @@ class GitViewModel {
      var selectedMergeCommit: Commit?
      var isMergeDetailsVisible: Bool = false
 
-     var repositoryURL: URL? 
+     var repositoryURL: URL?
 
     // Search related properties
     var searchText: String = ""
@@ -64,18 +88,36 @@ class GitViewModel {
     private var cancellables = Set<AnyCancellable>()
     private let gitService = GitService()
 
+    // New models for Blame and Search
+
+
+    // New properties for blame and search
+    var blameLines: [BlameLine] = []
+    var selectedFilePath: String?
+    var isLoadingBlame = false
+    var blameErrorMessage: String?
+
+    var searchType = CommitSearchType.commitMessage
+    var searchResults: [Commit] = []
+    var fileSearchResults: [FileSearchResult] = []
+    var isSearching = false
+    var searchErrorMessage: String?
+
+    // Add this property to the GitViewModel class
+    var fileBlameInfo: [String: [Int: BlameLine]] = [:] // Maps filepath to a dictionary of line numbers -> blame info
+
     init(url: URL) {
         self.repositoryURL = url
         loadWorkspaceCommands()
 
     }
-    
+
     func selectRepository() async {
         guard let url = repositoryURL else {
             errorMessage = "No repository selected"
             return
         }
-        
+
         await loadRepositoryData(from: url)
         // Cache the URL for future operations
     }
@@ -1305,6 +1347,105 @@ class GitViewModel {
             await loadRepositoryData(from: url)
         } catch {
             errorMessage = "Error creating branch: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Blame Operations
+    func loadBlame(filePath: String) {
+        guard let url = repositoryURL else {
+            blameErrorMessage = "No repository selected"
+            return
+        }
+
+        isLoadingBlame = true
+        blameErrorMessage = nil
+
+        Task {
+            do {
+                blameLines = try await gitService.getBlame(in: url, filePath: filePath)
+                selectedFilePath = filePath
+            } catch {
+                blameErrorMessage = "Failed to load blame: \(error.localizedDescription)"
+            }
+            isLoadingBlame = false
+        }
+    }
+
+    // MARK: - Search Operations
+    func performSearch(query: String) {
+        guard !query.isEmpty else {
+            searchErrorMessage = "Empty search query"
+            return
+        }
+
+        isSearching = true
+        searchErrorMessage = nil
+
+        // Search in the existing commits array based on the search type
+        let filteredCommits = commits.filter { commit in
+            switch searchType {
+            case .commitMessage:
+                return commit.message.localizedCaseInsensitiveContains(query)
+            case .author:
+                return commit.author.localizedCaseInsensitiveContains(query)
+            case .sha:
+                return commit.hash.localizedCaseInsensitiveContains(query)
+            case .tagOrBranch:
+                // Check if the commit is pointed to by a tag or branch with matching name
+                let matchingTags = self.tags.filter { $0.name.localizedCaseInsensitiveContains(query) }
+                let matchingBranches = self.branches.filter { $0.name.localizedCaseInsensitiveContains(query) }
+
+                return matchingTags.contains(where: { $0.commitHash == commit.hash }) ||
+                      matchingBranches.contains(where: { $0.point == commit.hash })
+            }
+        }
+
+        // Update the searchResults with the filtered commits
+        searchResults = filteredCommits
+        isSearching = false
+    }
+
+    func searchFileContent(pattern: String) {
+        guard let url = repositoryURL, !pattern.isEmpty else {
+            searchErrorMessage = "No repository selected or empty pattern"
+            return
+        }
+
+        isSearching = true
+        searchErrorMessage = nil
+
+        Task {
+            do {
+                fileSearchResults = try await gitService.searchFileContent(in: url, pattern: pattern)
+            } catch {
+                searchErrorMessage = "File content search failed: \(error.localizedDescription)"
+            }
+            isSearching = false
+        }
+    }
+
+    // MARK: - Blame Operations
+    func getBlameForFile(filePath: String) async -> [Int: BlameLine]? {
+        // Check if we already have blame info cached
+        if let cachedBlame = fileBlameInfo[filePath] {
+            return cachedBlame
+        }
+
+        guard let url = repositoryURL else { return nil }
+
+        do {
+            let blameLines = try await gitService.getBlame(in: url, filePath: filePath)
+
+            // Create a dictionary mapping line numbers to blame info
+            let blameByLine = Dictionary(uniqueKeysWithValues: blameLines.map { ($0.lineNumber, $0) })
+
+            // Cache the blame info
+            fileBlameInfo[filePath] = blameByLine
+
+            return blameByLine
+        } catch {
+            print("Failed to get blame for \(filePath): \(error)")
+            return nil
         }
     }
 }

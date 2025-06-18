@@ -14,6 +14,7 @@ struct CommitDetailView: View {
     @State private var isLoading = true
     @Bindable var viewModel: GitViewModel
     @State private var detailHeight: CGFloat = 480 // Increased default height
+    var showBlameInfo: Bool = false
     var onClose: () -> Void
     @Environment(\.openURL) private var openURL
 
@@ -33,6 +34,16 @@ struct CommitDetailView: View {
         .onAppear {
             withAnimation(.easeInOut(duration: 0.3)) {
                 isLoading = false
+            }
+
+            // Load blame info if enabled
+            if showBlameInfo, let details = details {
+                for file in details.diff.fileDiffs {
+                    
+                    Task {
+                        _ = await viewModel.getBlameForFile(filePath: file.fromFilePath)
+                    }
+                }
             }
         }
         .onDisappear {
@@ -184,6 +195,13 @@ struct CommitDetailView: View {
                     Text("Changed files")
                         .font(.headline)
                     Spacer()
+
+                    if showBlameInfo {
+                        Image(systemName: "person.text.rectangle")
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                    }
+
                     Text("\(details.diff.fileDiffs.count) files")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -200,7 +218,8 @@ struct CommitDetailView: View {
                     FileChangeSection(
                         fileDiff: file,
                         viewModel: viewModel,
-                        isExpanded: file.id == expandedFile?.id
+                        isExpanded: file.id == expandedFile?.id,
+                        showBlameInfo: showBlameInfo
                     )
                     .onTapGesture {
                         withAnimation(.spring()) {

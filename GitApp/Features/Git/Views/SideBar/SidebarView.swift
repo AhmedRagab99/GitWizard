@@ -70,26 +70,6 @@ struct BranchNode: Identifiable {
     }
 }
 
-// Workspace items for the top section
-enum WorkspaceSidebarItem: String, CaseIterable, Identifiable {
-    case workingCopy = "Working Copy"
-    case history = "History"
-    case pullRequests = "Pull Requests"
-//    case stashes = "Stashes"
-//    case branchesReview = "Branches Review"
-//    case settings = "Settings"
-    var id: String { rawValue }
-    var icon: String {
-        switch self {
-        case .workingCopy: return "folder"
-        case .history: return "clock"
-        case .pullRequests: return "arrow.triangle.pull"
-//        case .stashes: return "archivebox"
-//        case .branchesReview: return "point.topleft.down.curvedto.point.bottomright.up"
-//        case .settings: return "gearshape"
-        }
-    }
-}
 
 struct SidebarView: View {
     @Bindable var viewModel: GitViewModel

@@ -10,6 +10,9 @@ struct FileDiffView: View {
     var onMarkResolved: ((Chunk) -> Void)?
     var isStaged: Bool = false
     var title: String? = nil
+    var blameInfo: [Int: BlameLine]? = nil
+    var onBlameSelected: ((String) -> Void)? = nil
+    var showBlameInfo: Bool = false
 
     @State private var expandedChunks: Set<String> = []
     @State private var fontSize: CGFloat = 13
@@ -19,7 +22,33 @@ struct FileDiffView: View {
     var body: some View {
         ScrollView(.vertical) {
             VStack(spacing: 8) {
-              
+                // Optional title
+                if let title = title {
+                    HStack {
+                        Text(title)
+                            .font(.headline)
+
+                        Spacer()
+
+                        // Toggle for showing/hiding blame
+                        if blameInfo != nil {
+                            Toggle(isOn: .constant(showBlameInfo)) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "person.text.rectangle")
+                                        .imageScale(.small)
+
+                                    Text("Blame")
+                                        .font(.caption)
+                                }
+                            }
+                            .toggleStyle(.button)
+                            .buttonStyle(.bordered)
+                            .disabled(true) // This is just for display, actual toggling happens in parent view
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                }
 
                 // Chunks
                 ForEach(fileDiff.chunks) { chunk in
@@ -53,7 +82,6 @@ struct FileDiffView: View {
                                 }
                             }
                         }
-//                        .background(RoundedRectangle(cornerRadius: 8))
                     }
                     .padding(.horizontal, 8)
                 }
@@ -107,7 +135,7 @@ struct FileDiffView: View {
                 normalButtons(for: chunk)
             }
         }
-        
+
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
     }
@@ -191,11 +219,28 @@ struct FileDiffView: View {
                         .font(.system(size: fontSize, design: .monospaced))
                         .padding(.trailing, 4)
                 }
+
+                // Line content
                 Text(line.raw)
                     .font(.system(size: fontSize, design: .monospaced))
                     .foregroundColor(lineTextColor(line))
                     .padding(.vertical, 1.5)
+
                 Spacer()
+
+                // Show blame information if available and enabled
+                if showBlameInfo,
+                   let lineNumber = line.toFileLineNumber,
+                   let blame = blameInfo?[lineNumber] {
+                    LineBlameView(
+                        author: blame.author,
+                        commitHash: blame.commitHash,
+                        date: blame.date,
+                        onTap: {
+                            onBlameSelected?(blame.commitHash)
+                        }
+                    )
+                }
             }
             .padding(.horizontal, 8)
         }

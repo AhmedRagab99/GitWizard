@@ -3,6 +3,12 @@ import SwiftUI
 struct DeleteBranchesView: View {
     @Binding var isPresented: Bool
     let branches: [Branch]
+    
+    
+    
+    
+    
+    
     let onDelete: ([Branch], Bool, Bool, Bool) async -> Void
 
     @State private var selectedBranches: Set<Branch> = []
