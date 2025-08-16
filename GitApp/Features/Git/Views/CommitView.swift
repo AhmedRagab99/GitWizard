@@ -24,7 +24,7 @@ struct CommitView: View {
     @State private var isStagedExpanded: Bool = true
     @State private var isModifiedExpanded: Bool = true
     @State private var isUntrackedExpanded: Bool = true
-
+    @State var currentTask:Task<(), Never>?
     var body: some View {
         VStack(spacing: 0) {
             if !viewModel.conflictedFileDiffs.isEmpty {
@@ -41,8 +41,8 @@ struct CommitView: View {
 
             mainContent
         }
-        .onAppear {
-            Task {
+        .onFirstAppear {
+            currentTask = Task {
                 await viewModel.loadChanges()
                 // Delay loading diff content until after initial UI rendering
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -55,6 +55,8 @@ struct CommitView: View {
             selectedFileItem = nil
             viewModel.selectedFileDiff = nil
             shouldLoadDiff = false
+            currentTask?.cancel()
+            currentTask = nil
         }
         .loading(viewModel.isLoading)
         .errorAlert(viewModel.errorMessage)
@@ -65,7 +67,7 @@ struct CommitView: View {
         ) {
             Button("Reset File", role: .destructive) {
                 if let path = fileToReset {
-                    Task {
+                    currentTask = Task {
                         await viewModel.resetFile(path: path)
                         fileToReset = nil
                     }
@@ -102,7 +104,7 @@ struct CommitView: View {
             HSplitView {
                 // Left pane - Staged, Modified, and Untracked changes
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
+                    LazyVStack(alignment: .leading, spacing: 12) {
                         // Conflicts Section
                         if !viewModel.conflictedFileDiffs.isEmpty {
                             ChangesSection(
@@ -118,15 +120,15 @@ struct CommitView: View {
                                 action: { _ in },
                                 onResolveWithMine: { file in
                                     let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                    Task { await viewModel.resolveConflictUsingOurs(filePath: path) }
+                                    currentTask = Task { await viewModel.resolveConflictUsingOurs(filePath: path) }
                                 },
                                 onResolveWithTheirs: { file in
                                     let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                    Task { await viewModel.resolveConflictUsingTheirs(filePath: path) }
+                                    currentTask = Task { await viewModel.resolveConflictUsingTheirs(filePath: path) }
                                 },
                                 onMarkAsResolved: { file in
                                     let path = file.fromFilePath.isEmpty ? file.toFilePath : file.fromFilePath
-                                    Task { await viewModel.markConflictResolved(filePath: path) }
+                                    currentTask = Task { await viewModel.markConflictResolved(filePath: path) }
                                 }
                             )
                         }
@@ -207,7 +209,7 @@ struct CommitView: View {
                 stagedCount: viewModel.stagedDiff?.fileDiffs.count ?? 0,
                 onCommit: {
                     isCommitting = true
-                    Task {
+                    currentTask = Task {
                         await viewModel.commitChanges(message: commitMessage)
                         commitMessage = ""
                         isCommitting = false
@@ -490,7 +492,7 @@ struct OptimizedFileListView: View {
                             isStaged: isStaged
                         )
                         .onTapGesture { selectedFile = file }
-                        .onAppear { visibleFiles.insert(file.id) }
+                        .onFirstAppear { visibleFiles.insert(file.id) }
                         .onDisappear { visibleFiles.remove(file.id) }
                     }
                 }

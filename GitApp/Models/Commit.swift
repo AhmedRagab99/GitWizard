@@ -1,9 +1,37 @@
 import Foundation
 import SwiftUI
 
-struct Commit: Identifiable, Hashable {
+
+final class Commit: Identifiable, Hashable  {
     
-    let id = UUID()
+    
+    static func == (lhs: Commit, rhs: Commit) -> Bool {
+        return lhs.id == rhs.id
+    }
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    init(id: UUID = UUID(), hash: String, shortHash: String, author: String, message: String, date: Date, branches: [String] = [], isSelected: Bool = false, isCurrent: Bool = false, parentHashes: [String] = [], authorEmail: String, authorDate: String, authorAvatar: String, title: String, body: String, tags: [String], commitType: CommitType = .normal) {
+        self.id = id
+        self.hash = hash
+        self.shortHash = shortHash
+        self.author = author
+        self.message = message
+        self.date = date
+        self.branches = branches
+        self.isSelected = isSelected
+        self.isCurrent = isCurrent
+        self.parentHashes = parentHashes
+        self.authorEmail = authorEmail
+        self.authorDate = authorDate
+        self.authorAvatar = authorAvatar
+        self.title = title
+        self.body = body
+        self.tags = tags
+        self.commitType = commitType
+    }
+    var id = UUID()
     let hash: String
     let shortHash: String
     let author: String
@@ -45,7 +73,7 @@ struct Commit: Identifiable, Hashable {
     var tags: [String]
     var commitType: CommitType = .normal
 
-    enum CommitType: String, Hashable {
+    enum CommitType: String, Hashable,Codable {
         case normal
         case merge
         case rebase

@@ -54,7 +54,7 @@ struct AccountsListView: View {
                 fetchRepos(for: account)
             }
         }
-        .onAppear {
+        .onFirstAppear {
             // If an account is already selected on appear (e.g. from previous state)
             if let currentSelectedID = selectedAccountID,
                let account = accountManager.accounts.first(where: { $0.id == currentSelectedID }) {

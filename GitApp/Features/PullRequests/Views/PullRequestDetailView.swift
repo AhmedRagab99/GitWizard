@@ -198,7 +198,7 @@ struct PullRequestDetailView: View {
                 ForEach(viewModel.comments) { comment in
                     PullRequestCommentView(comment: comment)
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                        .onAppear {
+                        .onFirstAppear {
                             if comment.id == viewModel.comments.last?.id && viewModel.canLoadMoreComments && !viewModel.isLoadingMoreComments {
                                 Task {
                                     await viewModel.loadComments(refresh: false)
@@ -239,7 +239,7 @@ struct PullRequestDetailView: View {
                         comments: viewModel.lineCommentsByFile[file.filename] ?? []
                     )
                     .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                    .onAppear {
+                    .onFirstAppear {
                         if file.id == viewModel.files.last?.id && viewModel.canLoadMoreFiles && !viewModel.isLoadingMoreFiles {
                             Task {
                                 await viewModel.loadFiles(refresh: false)

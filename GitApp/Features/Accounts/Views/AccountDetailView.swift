@@ -86,7 +86,7 @@ struct AccountDetailView: View {
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.textBackgroundColor)) // Use a suitable background
-        .onAppear {
+        .onFirstAppear {
             fetchInitialData()
         }
         .onChange(of: account) { _, newAccount in

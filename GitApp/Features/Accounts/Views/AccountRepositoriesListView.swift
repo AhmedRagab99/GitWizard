@@ -62,7 +62,7 @@ struct AccountRepositoriesListView: View {
                 accountSelectionAndContentView
             }
         }
-        .onAppear { // This onAppear is for the whole AccountRepositoriesListView
+        .onFirstAppear { // This onAppear is for the whole AccountRepositoriesListView
             if selectedAccount == nil, let firstAccount = accountManager.accounts.first {
                 selectedAccount = firstAccount // Select first account automatically
             }

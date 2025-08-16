@@ -1,8 +1,19 @@
 import Foundation
+import SwiftUI
+import UniformTypeIdentifiers
 
 
-struct Branch: Hashable, Identifiable {
-    let detachedPrefix = "(HEAD detached at "
+extension UTType {
+    static let commitTypeObject = UTType(exportedAs: "com.ahmedRagab.GitApp")
+}
+
+struct Branch: Hashable, Identifiable,Codable ,Transferable {
+    
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .commitTypeObject )
+    }
+    
+    var detachedPrefix = "(HEAD detached at "
 
     var id: String {
         name

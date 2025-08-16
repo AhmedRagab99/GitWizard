@@ -89,7 +89,7 @@ struct RepositorySelectionView: View {
         } message: {
             Text(errorMessage)
         }
-        .onAppear {
+        .onFirstAppear {
 
             viewModel.loadRepositoryList()
             // Ensure selectedTab is valid if accounts are initially empty

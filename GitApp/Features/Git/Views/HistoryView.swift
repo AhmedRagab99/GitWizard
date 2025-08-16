@@ -108,11 +108,11 @@ struct HistoryView: View {
                                     }
                                 }
                             )
-                            .id(commit.id)
+//                            .id(commit.id)
                             .padding(.vertical, 1)
                             .background(Color.clear)
                             // Track visibility for memory optimization
-                            .onAppear {
+                            .onFirstAppear {
                                 visibleCommitIDs.insert(commit.id)
 
                                 // Trigger pagination when reaching end

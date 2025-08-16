@@ -121,7 +121,7 @@ struct PushSheet: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(.windowBackgroundColor))
         )
-        .onAppear {
+        .onFirstAppear {
             if let current = currentBranch {
                 selectedBranches = [current.name]
             }

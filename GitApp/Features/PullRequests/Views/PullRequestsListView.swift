@@ -107,7 +107,7 @@ struct PullRequestsListView: View {
             ForEach(viewModel.pullRequests) { pr in
                 PullRequestRow(pullRequest: pr)
                     .tag(pr)
-                    .onAppear {
+                    .onFirstAppear {
                         if pr.id == viewModel.pullRequests.last?.id && viewModel.canLoadMorePullRequests && !viewModel.isLoadingPullRequests {
                             Task {
                                 await viewModel.loadPullRequests(refresh: false) // Correctly call for pagination

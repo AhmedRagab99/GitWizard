@@ -21,7 +21,7 @@ struct FileDiffView: View {
 
     var body: some View {
         ScrollView(.vertical) {
-            VStack(spacing: 8) {
+            LazyVStack(spacing: 8) {
                 // Optional title
                 if let title = title {
                     HStack {
@@ -58,7 +58,7 @@ struct FileDiffView: View {
                         shadowRadius: 1,
                         padding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
                     ) {
-                        VStack(spacing: 0) {
+                        LazyVStack(spacing: 0) {
                             chunkHeader(chunk)
                                 .onTapGesture {
                                     withAnimation(.easeInOut(duration: 0.18)) {
@@ -100,7 +100,7 @@ struct FileDiffView: View {
             .padding(.vertical, 6)
         }
         .background(Color(.windowBackgroundColor))
-        .onAppear {
+        .onFirstAppear {
             // Expand the first chunk by default if there's only one
             if fileDiff.chunks.count == 1, let chunkId = fileDiff.chunks.first?.id {
                 expandedChunks.insert(chunkId)

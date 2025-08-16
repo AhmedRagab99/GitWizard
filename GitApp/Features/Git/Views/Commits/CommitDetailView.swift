@@ -31,7 +31,7 @@ struct CommitDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 2)
         .animation(.easeOut(duration: 0.25), value: detailHeight)
-        .onAppear {
+        .onFirstAppear {
             withAnimation(.easeInOut(duration: 0.3)) {
                 isLoading = false
             }

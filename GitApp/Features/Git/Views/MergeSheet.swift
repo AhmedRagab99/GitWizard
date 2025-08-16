@@ -108,7 +108,7 @@ struct MergeSheet: View {
         }
         .frame(width: 500)
         .padding()
-        .onAppear {
+        .onFirstAppear {
             // Set default branch selections on appear
             if branchType == .local {
                 // Filter out current branch and select the first available branch

@@ -15,6 +15,8 @@ struct SwiftUISidebarView: View {
     // Add providers for context menus or specific actions if needed
     // var menuProvider: ((SidebarItem) -> Menu<Button<Label<Text, Image>>>)? = nil
     // var branchContextMenuProvider: ((BranchNode) -> Menu<Button<Label<Text, Image>>>)? = nil // Example
+    
+    @State var rectangleIsTargeted = false
 
     var body: some View {
         // Use a List with hierarchical data support
@@ -144,14 +146,25 @@ struct SwiftUISidebarView: View {
                  textColor: isSelected ? .white : .primary,
                  badge: node.branch?.isCurrent ?? false ? "HEAD" : nil
              )
+             .dropDestination(for: Branch.self) { items, location in
+                 guard let branch = items.first else { return false}
+                 onBranchAction(.checkout,branch)
+                 return true
+                        
+             } isTargeted: { isTargeted  in
+                 rectangleIsTargeted = isTargeted
+
+             }
+
         case .remote(let node):
-             SidebarCellView(
-                 icon: node.isFolder ? "folder.fill" : "arrow.triangle.branch", // Or specific remote icon
-                 text: node.name,
-                 isSelected: isSelected,
-                 iconColor: .secondary,
-                 textColor: isSelected ? .white : .primary
-             )
+                SidebarCellView(
+                    icon: node.isFolder ? "folder.fill" : "arrow.triangle.branch", // Or specific remote icon
+                    text: node.name,
+                    isSelected: isSelected,
+                    iconColor: .secondary,
+                    textColor: isSelected ? .white : .primary
+                    )
+             
         case .tag(let tag):
             SidebarCellView(
                 icon: "tag.fill", // Use filled version maybe
