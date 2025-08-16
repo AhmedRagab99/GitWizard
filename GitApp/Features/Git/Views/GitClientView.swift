@@ -44,9 +44,9 @@ enum WorkspaceSidebarItem: String, CaseIterable, Identifiable {
 }
 
 struct GitClientView: View {
-    @Bindable var viewModel: GitViewModel
+     var viewModel: GitViewModel
     var themeManager : ThemeManager
-    @Bindable var accountManager: AccountManager
+     var accountManager: AccountManager
     var repoViewModel : RepositoryViewModel // Add view model
     var pullRequestViewModel: PullRequestViewModel?
     @State private var selectedWorkspaceItem: WorkspaceSidebarItem = .history
@@ -123,7 +123,7 @@ struct GitClientView: View {
         } detail: {
             detailContent
         }
-        .searchable(text: $viewModel.searchText, prompt: "Search commits...")
+        .searchable(text: Binding(get:{viewModel.searchText},set:{viewModel.searchText = $0}), prompt: "Search commits...")
         .searchScopes($showSearchFilters) {
             SearchFilterView(viewModel: viewModel)
         }

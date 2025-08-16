@@ -10,7 +10,7 @@ import Foundation
 struct CommitDetailHeader: View {
     let commit: Commit
     let refs: [String]
-    @Bindable var viewModel: GitViewModel
+     var viewModel: GitViewModel
     let onClose: () -> Void
     @StateObject private var toastManager = ToastManager()
     @State private var isDescriptionExpanded = false

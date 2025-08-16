@@ -28,7 +28,7 @@ struct FileSearchResult: Identifiable {
     let lineNumber: Int
 }
 @Observable
-final class GitViewModel {
+class GitViewModel {
     // --- Published Properties (State) ---
      var repoInfo: RepoInfo = RepoInfo()
      var branches: [Branch] = []

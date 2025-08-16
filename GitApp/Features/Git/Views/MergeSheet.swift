@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MergeSheet: View {
-    @Bindable var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @Binding var isPresented: Bool
     @State private var selectedBranch: String = ""
     @State private var mergingInProgress = false

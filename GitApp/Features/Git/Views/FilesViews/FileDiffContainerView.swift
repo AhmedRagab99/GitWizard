@@ -103,7 +103,7 @@ struct FileDiffContainerView: View {
 
 struct ConflictResolutionButtons: View {
     let fileDiff: FileDiff
-    @Bindable var viewModel: GitViewModel
+     var viewModel: GitViewModel
 
     var body: some View {
         HStack(spacing: 8) {

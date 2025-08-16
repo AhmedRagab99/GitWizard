@@ -3,7 +3,7 @@ import Foundation
 import os.log
 
 struct CommitView: View {
-    @Bindable var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @State private var commitMessage: String = ""
     @State private var selectedFileItem: FileDiff?
     @State private var isCommitting: Bool = false

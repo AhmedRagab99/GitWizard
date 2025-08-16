@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SearchView: View {
-    @Bindable var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @State private var searchQuery: String = ""
     @State private var selectedTab: SearchTab = .commits
 
@@ -55,7 +55,7 @@ struct SearchView: View {
 
             // Search filters
             if selectedTab == .commits {
-                Picker("Search in:", selection: $viewModel.searchType) {
+                Picker("Search in:", selection: Binding(get:{viewModel.searchType}, set:{viewModel.searchType = $0})) {
                     ForEach(CommitSearchType.allCases) { type in
                         Text(type.rawValue).tag(type)
                     }

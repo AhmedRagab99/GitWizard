@@ -8,7 +8,7 @@ import SwiftUI
 import Foundation
 
 struct HistoryView: View {
-    @Bindable var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @State private var selectedCommit: Commit?
     @State private var isLoadingMore = false
     @State private var showBlameInfo: Bool = false

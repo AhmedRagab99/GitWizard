@@ -72,7 +72,7 @@ struct BranchNode: Identifiable {
 
 
 struct SidebarView: View {
-    @Bindable var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @Binding var selectedWorkspaceItem: WorkspaceSidebarItem
     @State private var filterText: String = ""
     @State private var selectedSidebarItem: SidebarItem? = .workspace(.history)

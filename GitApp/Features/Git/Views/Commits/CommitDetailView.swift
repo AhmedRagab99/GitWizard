@@ -12,7 +12,7 @@ struct CommitDetailView: View {
     let details: CommitDetails?
     @State private var expandedFile: FileDiff?
     @State private var isLoading = true
-    @Bindable var viewModel: GitViewModel
+     var viewModel: GitViewModel
     @State private var detailHeight: CGFloat = 480 // Increased default height
     var showBlameInfo: Bool = false
     var onClose: () -> Void
@@ -31,7 +31,7 @@ struct CommitDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 2)
         .animation(.easeOut(duration: 0.25), value: detailHeight)
-        .onFirstAppear {
+        .onAppear {
             withAnimation(.easeInOut(duration: 0.3)) {
                 isLoading = false
             }
@@ -39,7 +39,7 @@ struct CommitDetailView: View {
             // Load blame info if enabled
             if showBlameInfo, let details = details {
                 for file in details.diff.fileDiffs {
-                    
+
                     Task {
                         _ = await viewModel.getBlameForFile(filePath: file.fromFilePath)
                     }
