@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct SearchTokensHandler {
+class SearchTokensHandler {
     static private func newToken(old: [SearchToken], new: [SearchToken]) -> SearchToken? {
         new.first { !old.contains($0) }
     }

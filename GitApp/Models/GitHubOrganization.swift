@@ -1,6 +1,14 @@
 import Foundation
 
-struct GitHubOrganization: Identifiable, Codable, Hashable {
+class GitHubOrganization: Identifiable, Codable, Hashable {
+    static func == (lhs: GitHubOrganization, rhs: GitHubOrganization) -> Bool {
+        return lhs.id == rhs.id
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
     let id: Int
     let login: String
     let avatarUrl: String?

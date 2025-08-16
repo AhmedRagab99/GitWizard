@@ -1,7 +1,15 @@
 import Foundation
 
 // Model for a GitHub Branch, named GitHubBranchs as per user's decode line
-struct GitHubBranchs: Codable, Identifiable, Hashable {
+class GitHubBranchs: Codable, Identifiable, Hashable {
+    static func == (lhs: GitHubBranchs, rhs: GitHubBranchs) -> Bool {
+        lhs.name == rhs.name
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+    }
+    
     let name: String
     let commit: GitHubBranchCommit
     let protected: Bool? // Protected status might not always be present or relevant

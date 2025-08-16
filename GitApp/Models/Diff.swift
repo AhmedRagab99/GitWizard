@@ -8,7 +8,15 @@
 
 import Foundation
 
-struct Diff: Hashable {
+class Diff: Hashable {
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(raw)
+    }
+    
+    static func == (lhs: Diff, rhs: Diff) -> Bool {
+        lhs.raw == rhs.raw
+    }
+    
     var fileDiffs: [FileDiff]
     var raw: String
 

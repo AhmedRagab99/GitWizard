@@ -1,6 +1,14 @@
 import Foundation
 
-struct Stash: Identifiable, Hashable {
+class Stash: Identifiable, Hashable {
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(index)
+    }
+    static func == (lhs: Stash, rhs: Stash) -> Bool {
+        lhs.index == rhs.index
+    }
+    
     var id: Int { index }
     var index: Int
     var message: String

@@ -9,7 +9,7 @@ import Foundation
 import SwiftUI
 
 
-struct FileDiff: Identifiable, Hashable {
+class FileDiff: Identifiable, Hashable {
     var id: String { raw }
     var header: String
     var status: FileStatus

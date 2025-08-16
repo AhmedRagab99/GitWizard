@@ -7,7 +7,17 @@
 
 import Foundation
 
-struct Status: Hashable {
+class Status: Hashable {
+    
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    static func == (lhs: Status, rhs: Status) -> Bool {
+        return lhs.id == rhs.id
+    }
+    
+    var id = UUID()
     var untrackedFiles: [String] = []
     var conflicted: [String] = []
 

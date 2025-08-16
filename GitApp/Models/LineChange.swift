@@ -7,11 +7,18 @@
 
 
 import Foundation
-struct LineChange: Identifiable, Hashable {
+class LineChange: Identifiable, Hashable {
     let id: UUID
     let lineNumber: Int
     let content: String
     let type: ChangeType
+    
+    init(id: UUID, lineNumber: Int, content: String, type: ChangeType) {
+        self.id = id
+        self.lineNumber = lineNumber
+        self.content = content
+        self.type = type
+    }
 
     enum ChangeType: String {
         case added = "+"

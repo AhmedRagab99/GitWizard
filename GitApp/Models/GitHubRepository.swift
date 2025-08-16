@@ -1,6 +1,14 @@
 import Foundation
 
 struct GitHubRepository: Identifiable, Codable, Hashable, Equatable {
+    static func == (lhs: GitHubRepository, rhs: GitHubRepository) -> Bool {
+        return lhs.id == rhs.id
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
     let id: Int
     let name: String
     let fullName: String
@@ -17,6 +25,7 @@ struct GitHubRepository: Identifiable, Codable, Hashable, Equatable {
     let license: GitHubLicense?
     let isPrivate: Bool
     let defaultBranch: String?
+    
 
     enum CodingKeys: String, CodingKey {
         case id

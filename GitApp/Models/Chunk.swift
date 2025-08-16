@@ -6,50 +6,47 @@
 //
 
 import Foundation
-struct Line: Identifiable, Hashable, Equatable {
+class Line: Identifiable, Hashable, Equatable {
+    static func == (lhs: Line, rhs: Line) -> Bool {
+        return lhs.id == rhs.id
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
     enum Kind {
         case removed, added, unchanged, header
         case conflictStart, conflictMiddle, conflictEnd, conflictOurs, conflictTheirs
     }
+    var marker: String     // "+", "-", "<<<<<<<", etc.
     var id: Int
-    var kind: Kind {
-        if raw.starts(with: "<<<<<<<") {
-            return .conflictStart
-        } else if raw.starts(with: "=======") {
-            return .conflictMiddle
-        } else if raw.starts(with: ">>>>>>>") {
-            return .conflictEnd
-        } else if isInOurConflict {
-            return .conflictOurs
-        } else if isInTheirConflict {
-            return .conflictTheirs
-        } else {
-        switch raw.first {
-        case "-":
-            return .removed
-        case "+":
-            return .added
-        case " ":
-            return .unchanged
-        case "@":
-            return .header
-        default:
-            return .unchanged
-            }
-        }
-    }
+    var kind: Kind 
     var toFileLineNumber: Int?
     var raw: String
     var isInOurConflict: Bool = false
     var isInTheirConflict: Bool = false
 
-    init(id: Int, raw: String) {
-        self.id = id
-        self.raw = raw
-    }
+    
+    init(id: Int, raw: String, marker: String, kind: Kind) {
+          self.id = id
+          self.raw = raw
+          self.marker = marker
+          self.kind = kind
+      }
 }
-struct Chunk: Identifiable, Hashable {
+class Chunk: Identifiable, Hashable {
 
+    
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(raw)
+    }
+    
+    static func == (lhs: Chunk, rhs: Chunk) -> Bool {
+        return lhs.raw == rhs.raw
+    }
+    
+    
     var id: String { raw }
     var lines: [Line]
     var lineNumbers: [String]
@@ -129,11 +126,72 @@ struct Chunk: Identifiable, Hashable {
         return result
     }
 
+//    init(raw: String) {
+//        let toFileRange = raw.split(separator: "+", maxSplits: 1)[safe: 1]?.split(separator: " ", maxSplits: 1)[safe: 0]
+//        let splitedRange = toFileRange?.split(separator: ",", maxSplits: 1)
+//        let startLine = splitedRange?[safe: 0].map { String($0) }
+//        var currnetLine = startLine.map{ Int($0) } ?? nil
+//
+//        self.raw = raw
+//        var linesArray = [Line]()
+//        var inOurConflict = false
+//        var inTheirConflict = false
+//
+//        let rawLines = raw.split(separator: "\n").enumerated()
+//        for (offset, element) in rawLines {
+//            let rawLine = String(element)
+//            var line = Line(id: offset, raw: rawLine)
+//
+//            // A line is part of a conflict's content if the state is already set,
+//            // but the line itself is not a marker.
+//            if !rawLine.starts(with: "<<<<<<<") && !rawLine.starts(with: "=======") && !rawLine.starts(with: ">>>>>>>") {
+//                line.isInOurConflict = inOurConflict
+//                line.isInTheirConflict = inTheirConflict
+//            }
+//
+//            // Update the state for subsequent lines based on markers.
+//            if rawLine.starts(with: "<<<<<<<") {
+//                inOurConflict = true
+//                inTheirConflict = false
+//            } else if rawLine.starts(with: "=======") {
+//                inOurConflict = false
+//                inTheirConflict = true
+//            } else if rawLine.starts(with: ">>>>>>>") {
+//                inOurConflict = false
+//                inTheirConflict = false
+//            }
+//
+//            // Set line numbers for non-conflict lines
+//            switch line.kind {
+//            case .removed:
+//                break
+//            case .added, .unchanged:
+//                if let currnetLine1 = currnetLine {
+//                    line.toFileLineNumber = currnetLine1
+//                    currnetLine = currnetLine1 + 1
+//                }
+//            case .header, .conflictStart, .conflictMiddle, .conflictEnd, .conflictOurs, .conflictTheirs:
+//                break
+//            }
+//
+//            linesArray.append(line)
+//        }
+//
+//        self.lines = linesArray
+//        self.lineNumbers = linesArray.map({ line in
+//            if let toFileLineNumber = line.toFileLineNumber {
+//                return "\(toFileLineNumber)"
+//            }
+//            return ""
+//        })
+//    }
+    
+    
     init(raw: String) {
         let toFileRange = raw.split(separator: "+", maxSplits: 1)[safe: 1]?.split(separator: " ", maxSplits: 1)[safe: 0]
         let splitedRange = toFileRange?.split(separator: ",", maxSplits: 1)
         let startLine = splitedRange?[safe: 0].map { String($0) }
-        var currnetLine = startLine.map{ Int($0) } ?? nil
+        var currnetLine = startLine.map { Int($0) } ?? nil
 
         self.raw = raw
         var linesArray = [Line]()
@@ -142,38 +200,65 @@ struct Chunk: Identifiable, Hashable {
 
         let rawLines = raw.split(separator: "\n").enumerated()
         for (offset, element) in rawLines {
-            let rawLine = String(element)
-            var line = Line(id: offset, raw: rawLine)
+            var text = String(element)
+            var marker = " "
+            var kind: Line.Kind = .unchanged
 
-            // A line is part of a conflict's content if the state is already set,
-            // but the line itself is not a marker.
-            if !rawLine.starts(with: "<<<<<<<") && !rawLine.starts(with: "=======") && !rawLine.starts(with: ">>>>>>>") {
+            if text.hasPrefix("<<<<<<<") {
+                marker = "<<<<<<<"
+                text = ""
+                kind = .conflictStart
+            } else if text.hasPrefix("=======") {
+                marker = "======="
+                text = ""
+                kind = .conflictMiddle
+            } else if text.hasPrefix(">>>>>>>") {
+                marker = ">>>>>>>"
+                text = ""
+                kind = .conflictEnd
+            } else if text.hasPrefix("+") {
+                marker = "+"
+                text.removeFirst()
+                kind = .added
+            } else if text.hasPrefix("-") {
+                marker = "-"
+                text.removeFirst()
+                kind = .removed
+            } else if text.hasPrefix("@") {
+                marker = "@"
+                kind = .header
+            } else {
+                marker = " "
+                kind = .unchanged
+            }
+
+            var line = Line(id: offset, raw: text, marker: marker, kind: kind)
+
+            // Update conflict state
+            if !element.hasPrefix("<<<<<<<") && !element.hasPrefix("=======") && !element.hasPrefix(">>>>>>>") {
                 line.isInOurConflict = inOurConflict
                 line.isInTheirConflict = inTheirConflict
             }
 
-            // Update the state for subsequent lines based on markers.
-            if rawLine.starts(with: "<<<<<<<") {
+            if element.hasPrefix("<<<<<<<") {
                 inOurConflict = true
                 inTheirConflict = false
-            } else if rawLine.starts(with: "=======") {
+            } else if element.hasPrefix("=======") {
                 inOurConflict = false
                 inTheirConflict = true
-            } else if rawLine.starts(with: ">>>>>>>") {
+            } else if element.hasPrefix(">>>>>>>") {
                 inOurConflict = false
                 inTheirConflict = false
             }
 
-            // Set line numbers for non-conflict lines
-            switch line.kind {
-            case .removed:
-                break
+            // Assign line numbers for added/unchanged
+            switch kind {
             case .added, .unchanged:
-                if let currnetLine1 = currnetLine {
-                    line.toFileLineNumber = currnetLine1
-                    currnetLine = currnetLine1 + 1
+                if let currentLine1 = currnetLine {
+                    line.toFileLineNumber = currentLine1
+                    currnetLine = currentLine1 + 1
                 }
-            case .header, .conflictStart, .conflictMiddle, .conflictEnd, .conflictOurs, .conflictTheirs:
+            default:
                 break
             }
 
@@ -181,13 +266,9 @@ struct Chunk: Identifiable, Hashable {
         }
 
         self.lines = linesArray
-        self.lineNumbers = linesArray.map({ line in
-            if let toFileLineNumber = line.toFileLineNumber {
-                return "\(toFileLineNumber)"
-            }
-            return ""
-        })
+        self.lineNumbers = linesArray.map { $0.toFileLineNumber.map(String.init) ?? "" }
     }
+    
 
     // Resolve conflict using "ours" (our changes)
     func resolveUsingOurs() -> Chunk {
